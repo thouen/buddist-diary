@@ -352,6 +352,7 @@ img{max-width:100%;display:block}
   letter-spacing:.5px;
 }
 .dbtn:active{background:var(--accent-soft);color:var(--accent)}
+.dbtn:disabled{opacity:.36;color:var(--ink3);background:var(--card2);border-color:var(--line)}
 .dbtn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
 
 /* ---------- 汇总模式 ---------- */
@@ -10933,10 +10934,12 @@ function renderDiaryInto(box) {
   var rec = getRec(UI.date, true);
   applyDefaultPlace(rec, UI.date);
   if (!rec.d.length) rec.d = [{ t: 'p', x: '' }];
+  var dateChanged = diaryDate !== UI.date;
   diaryBlocks = rec.d;
   diaryDate = UI.date;
   box.innerHTML = diaryMetaHTML(rec) + '<div id="blocks"></div>' + diaryBarHTML();
   paintBlocks();
+  if (dateChanged) resetHistory();
   fitDiaryHeight(box);
 }
 
@@ -10966,13 +10969,160 @@ function diaryMetaHTML(rec) {
 
 function diaryBarHTML() {
   return '<div class="diary-bar">' +
-    '<button class="dbtn" data-newblk="o" aria-label="新增序号" title="序号">' +
-      '<svg viewBox="0 0 24 24"><path d="M4.6 7.4 6.4 6.2v5.4"/><path d="M10.5 7h9M10.5 12h9M10.5 17h9"/></svg></button>' +
-    '<button class="dbtn" data-newblk="b" aria-label="新增圆点" title="圆点">' +
-      '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.8" fill="currentColor" stroke="none"/><path d="M10.5 7h9M10.5 12h9M10.5 17h9"/></svg></button>' +
+    '<button class="dbtn" data-undo="1" aria-label="撤回" title="撤回" disabled>' +
+      '<svg viewBox="0 0 24 24"><path d="M9 14.5 4.2 9.7 9 4.9"/><path d="M4.2 9.7h9.3a6.3 6.3 0 0 1 0 12.6H11"/></svg></button>' +
+    '<button class="dbtn" data-redo="1" aria-label="重做" title="重做" disabled>' +
+      '<svg viewBox="0 0 24 24"><path d="m15 14.5 4.8-4.8L15 4.9"/><path d="M19.8 9.7h-9.3a6.3 6.3 0 0 0 0 12.6H13"/></svg></button>' +
+    '<button class="dbtn" data-bullet="1" aria-label="无序列表" title="无序列表">' +
+      '<svg viewBox="0 0 24 24"><circle cx="5.6" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="5.6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5.6" cy="17" r="1.5" fill="currentColor" stroke="none"/><path d="M10.6 7h9M10.6 12h9M10.6 17h9"/></svg></button>' +
     '<button class="dbtn" data-nowtime="1" aria-label="插入当前时间" title="插入时间">' +
       '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.8V12l3.1 1.9"/></svg></button>' +
     '</div>';
+}
+
+/* ---------- 撤回 / 重做 ----------
+   paintBlocks() 每次都重建 #blocks，浏览器原生的撤销栈会失效，
+   所以这里自己存内容快照（一次连续输入算一步，最多 50 步） */
+var histStack = [];
+var histIdx = -1;
+var HIST_MAX = 50;
+var histTimer = null;
+
+function histSnap() {
+  var ae = document.activeElement;
+  var i = -1, off = 0;
+  if (ae && ae.classList && ae.classList.contains('ed')) {
+    i = +ae.dataset.i;
+    off = caretOffset(ae);
+  }
+  var arr = diaryBlocks.map(function (b) { return { t: b.t, x: b.x || '' }; });
+  return { d: JSON.stringify(arr), i: i, o: off };
+}
+
+function resetHistory() {
+  clearTimeout(histTimer);
+  histTimer = null;
+  histStack = [histSnap()];
+  histIdx = 0;
+  updateHistoryButtons();
+}
+
+function pushHistory() {
+  clearTimeout(histTimer);
+  histTimer = null;
+  var s = histSnap();
+  var top = histStack[histIdx];
+  if (top && top.d === s.d) return;
+  histStack = histStack.slice(0, histIdx + 1);
+  histStack.push(s);
+  if (histStack.length > HIST_MAX) histStack.shift();
+  histIdx = histStack.length - 1;
+  updateHistoryButtons();
+}
+
+/* 打字时防抖合并：停手 400ms 记一步 */
+function pushHistorySoon() {
+  clearTimeout(histTimer);
+  histTimer = setTimeout(pushHistory, 400);
+}
+
+function restoreSnap(s) {
+  var arr = [];
+  try { arr = JSON.parse(s.d) || []; } catch (e) { arr = []; }
+  diaryBlocks.length = 0;
+  arr.forEach(function (b) { diaryBlocks.push(b); });
+  if (!diaryBlocks.length) diaryBlocks.push({ t: 'p', x: '' });
+  saveNow();
+  paintBlocks();
+  updateHistoryButtons();
+  if (s.i != null && s.i >= 0 && s.i < diaryBlocks.length) {
+    var idx = s.i, off = s.o || 0;
+    setTimeout(function () { setCaretAt(document.querySelector('#blocks .ed[data-i="' + idx + '"]'), off); }, 0);
+  }
+}
+
+function undoDiary() {
+  if (histIdx <= 0) return;
+  histIdx--;
+  restoreSnap(histStack[histIdx]);
+}
+
+function redoDiary() {
+  if (histIdx >= histStack.length - 1) return;
+  histIdx++;
+  restoreSnap(histStack[histIdx]);
+}
+
+function updateHistoryButtons() {
+  var u = document.querySelector('[data-undo]');
+  var r = document.querySelector('[data-redo]');
+  if (u) u.disabled = histIdx <= 0;
+  if (r) r.disabled = histIdx >= histStack.length - 1;
+}
+
+/* 把光标放到块内第 off 个字符处（块内可能有换行） */
+function setCaretAt(el, off) {
+  if (!el) return;
+  el.focus();
+  try {
+    var r = document.createRange();
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+    var left = off || 0, node = null, tn;
+    while ((tn = walker.nextNode())) {
+      var len = tn.textContent.length;
+      if (left <= len) { node = tn; break; }
+      left -= len;
+    }
+    if (node) r.setStart(node, Math.min(left, node.textContent.length));
+    else r.selectNodeContents(el);
+    r.collapse(true);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  } catch (e) { }
+}
+
+/* 无序列表：在光标所在行的行首加 / 去「• 」 */
+function toggleBullet() {
+  ensureDiaryRec();
+  var idx = -1, off = 0;
+  if (pendingCaret && pendingCaret.ds === UI.date && diaryBlocks[pendingCaret.i]) {
+    idx = pendingCaret.i;
+    off = pendingCaret.off || 0;
+  }
+  if (idx < 0) {
+    var ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains('ed')) {
+      idx = +ae.dataset.i;
+      off = caretOffset(ae);
+    }
+  }
+  if (idx < 0 || !diaryBlocks[idx]) idx = diaryBlocks.length - 1;
+  var b = diaryBlocks[idx];
+  if (!b) return;
+  var ed = document.querySelector('#blocks .ed[data-i="' + idx + '"]');
+  if (ed && (!pendingCaret || pendingCaret.i !== idx)) off = caretOffset(ed);
+
+  var x = b.x || '';
+  var ls = off > 0 ? x.lastIndexOf('\n', off - 1) + 1 : 0;
+  var le = x.indexOf('\n', ls);
+  if (le < 0) le = x.length;
+  var line = x.slice(ls, le);
+
+  if (/^• /.test(line)) {
+    x = x.slice(0, ls) + line.slice(2) + x.slice(le);
+    off = Math.max(ls, off - 2);
+  } else {
+    x = x.slice(0, ls) + '• ' + line + x.slice(le);
+    off = off + 2;
+  }
+  b.x = x;
+  if (ed) ed.innerText = x;
+  saveNow();
+  setCaretAt(ed, off);
+  updateDiaryMetaCount();
+  if (diaryDate === UI.date) refreshTabDots();
+  pushHistory();
 }
 
 function paintBlocks() {
@@ -10996,6 +11146,7 @@ function paintBlocks() {
   });
   host.innerHTML = html;
   updateDiaryMetaCount();
+  updateHistoryButtons();
 }
 
 function updateDiaryMetaCount() {
@@ -11012,15 +11163,6 @@ function ensureDiaryRec() {
   diaryBlocks = rec.d;
   diaryDate = UI.date;
   return rec;
-}
-
-function newBlock(type, afterIdx) {
-  var rec = ensureDiaryRec();
-  var idx = typeof afterIdx === 'number' ? afterIdx : diaryBlocks.length - 1;
-  diaryBlocks.splice(idx + 1, 0, { t: type, x: '' });
-  saveSoon();
-  paintBlocks();
-  focusBlock(idx + 1, 0);
 }
 
 function focusBlock(idx, offset) {
@@ -11064,20 +11206,8 @@ function onBlockInput(e) {
   diaryBlocks[i].x = txt;
   saveSoon();
   updateDiaryMetaCount();
+  pushHistorySoon();
   if (diaryDate === UI.date) refreshTabDots();
-}
-
-/* 删除某一块文字，focusIdx 给出时，删完把光标落到那一块（toEnd 为真则落到末尾） */
-function removeBlockAt(idx, focusIdx, toEnd) {
-  var b = diaryBlocks[idx];
-  if (!b) return;
-  diaryBlocks.splice(idx, 1);
-  if (!diaryBlocks.length) diaryBlocks.push({ t: 'p', x: '' });
-  saveNow();
-  paintBlocks();
-  if (focusIdx == null) return;
-  var t = diaryBlocks[focusIdx];
-  if (t) focusBlock(focusIdx, toEnd ? (t.x || '').length : 0);
 }
 
 function onBlockKey(e) {
@@ -11094,10 +11224,11 @@ function onBlockKey(e) {
     var before = text.slice(0, off);
     var after = text.slice(off);
     b.x = before;
-    diaryBlocks.splice(i + 1, 0, { t: b.t === 'p' ? 'p' : b.t, x: after });
+    diaryBlocks.splice(i + 1, 0, { t: 'p', x: after });
     saveSoon();
     paintBlocks();
     focusBlock(i + 1, 0);
+    pushHistory();
     return;
   }
 
@@ -11113,6 +11244,7 @@ function onBlockKey(e) {
         saveSoon();
         paintBlocks();
         focusBlock(i - 1, prevLen);
+        pushHistory();
       }
     }
     return;
@@ -11167,6 +11299,7 @@ function insertTimeStamp() {
   saveNow();
   paintBlocks();
   focusBlock(idx, s.length);
+  pushHistory();
 }
 
 /* 让日记工具条贴近屏幕底部 */
@@ -12569,14 +12702,6 @@ function bindEvents() {
   document.getElementById('mask').addEventListener('click', closeSheet);
   document.getElementById('modal').addEventListener('click', function (e) {
     if (e.target.id === 'modal') { closeModal(); return; }
-    var imgdel = e.target.closest('[data-imgdel]');
-    if (imgdel) {
-      var gidx = +imgdel.dataset.imgdel;
-      closeModal();
-      removeBlockAt(gidx, null);
-      toast('已删除图片');
-      return;
-    }
     if (e.target.closest('[data-mclose]')) { closeModal(); return; }
     var mk = e.target.closest('[data-mdkind]');
     if (mk) {
@@ -12951,13 +13076,10 @@ function bindEvents() {
     if (e.target.closest('[data-loc]')) { chooseLocation(); return; }
     if (e.target.closest('[data-nowtime]')) { insertTimeStamp(); return; }
 
-    /* 日记工具条 */
-    el = e.target.closest('[data-newblk]');
-    if (el) {
-      var idxNow = diaryBlocks.length - 1;
-      newBlock(el.dataset.newblk, idxNow);
-      return;
-    }
+    /* 日记工具条：撤回 / 重做 / 无序列表 */
+    if (e.target.closest('[data-undo]')) { undoDiary(); return; }
+    if (e.target.closest('[data-redo]')) { redoDiary(); return; }
+    if (e.target.closest('[data-bullet]')) { toggleBullet(); return; }
     /* 顶部按钮 */
     if (e.target.closest('#btn-mode')) { toggleMode(); return; }
     if (e.target.closest('#btn-menu')) { openMenu(); return; }
