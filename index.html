@@ -10001,13 +10001,29 @@ function freshDB() {
   return db;
 }
 
+/* 读取失败时：原件另存一份、置位 loadError，并且不再写回（避免把原件盖掉） */
+var loadError = false;
+
+function keepBrokenRaw(raw) {
+  loadError = true;
+  try {
+    var d = new Date();
+    var ts = d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+      pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+    localStorage.setItem('xuefo.diary.broken.' + ts, raw);
+  } catch (e) { }
+}
+
 function loadDB() {
   var raw = null;
   try { raw = localStorage.getItem(STORE_KEY); } catch (e) { }
   if (!raw) return freshDB();
   try {
     var db = JSON.parse(raw);
-    if (!db || typeof db !== 'object') return freshDB();
+    if (!db || typeof db !== 'object' || Array.isArray(db)) {
+      keepBrokenRaw(raw);
+      return freshDB();
+    }
     db.settings = normalizeSettings(db.settings);
     if (!Array.isArray(db.tasks)) db.tasks = [];
     db.tasks.forEach(function (t) {
@@ -10037,13 +10053,17 @@ function loadDB() {
       }
     }
     migrateBuiltin(db);
+    invalidateTotals();
     return db;
   } catch (e) {
+    keepBrokenRaw(raw);
     return freshDB();
   }
 }
 
 function saveDB() {
+  /* 数据没读出来时不要写：写下去就把原件覆盖了 */
+  if (loadError) return false;
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(DB));
     return true;
@@ -13607,7 +13627,10 @@ function importData() {
           DB.settings.defaultPlaceId = '';
         }
         if (!Array.isArray(DB.tasks)) DB.tasks = [];
-        migrateImages();
+        /* 用户明确选择覆盖：解除“读取失败不写回”的保护 */
+        loadError = false;
+        invalidateTotals();
+        LunarCache = {};
         saveNow();
         renderView();
         toast('导入成功');
@@ -13619,6 +13642,21 @@ function importData() {
   inp.click();
 }
 
+/* 清空本机所有与本应用相关的痕迹：localStorage 的 xuefo.* 与旧图片库 */
+function wipeAllLocal() {
+  var keys = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('xuefo.') === 0) keys.push(k);
+    }
+  } catch (e) { }
+  keys.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { } });
+  try {
+    if (window.indexedDB && indexedDB.deleteDatabase) indexedDB.deleteDatabase('xuefo-img');
+  } catch (e) { }
+}
+
 function wipeData() {
   openSheet('清空全部数据？', [
     {
@@ -13626,8 +13664,10 @@ function wipeData() {
       fn: function () {
         setTimeout(function () {
           if (!confirm('最后确认：清空后不可恢复，是否继续？')) return;
-          try { localStorage.removeItem(STORE_KEY); } catch (e) { }
+          wipeAllLocal();
+          loadError = false;
           DB = defaultDB();
+          invalidateTotals();
           saveNow();
           LunarCache = {};
           UI.date = TODAY; UI.tab = 'nianfo'; UI.view = 'home';
@@ -13716,6 +13756,19 @@ function checkDayChange() {
   renderView();
 }
 
+/* 数据读坏时的提示：说明原件已保留、暂不写入 */
+function showLoadError() {
+  openModal(
+    '<h4>数据没能读出来</h4>' +
+    '<div style="font-size:13px;line-height:1.9;color:#5a5145">' +
+      '本机保存的数据这次无法解析，原始内容已经原样另存了一份，没有被覆盖。<br><br>' +
+      '为防止覆盖原件，现在暂时不保存任何新记录。可以到「设置 → 导入备份」恢复；' +
+      '如果确认原数据已损坏，也可以到「设置 → 清空全部数据」重新开始。' +
+    '</div>' +
+    '<div class="modal-actions"><button data-mclose="1">知道了</button></div>'
+  );
+}
+
 /* ---------- 初始化 ---------- */
 var __inited = false;
 function init() {
@@ -13731,6 +13784,7 @@ function init() {
 
   bindEvents();
   renderView();
+  if (loadError) showLoadError();
 
   /* 跨天刷新：定时检查 + 回到前台时检查 */
   setInterval(checkDayChange, 20000);
@@ -13739,10 +13793,11 @@ function init() {
   });
   window.addEventListener('focus', checkDayChange);
 
-  /* 图片从 IndexedDB 异步载入，完成后刷新日记区并迁移旧数据 */
-
   /* 恢复上次浏览的日期（当天无记录时默认今天） */
-  if (!localStorage.getItem('xuefo.seen')) {
+  var seen = '';
+  try { seen = localStorage.getItem('xuefo.seen') || ''; }
+  catch (e) { seen = '1'; }          /* 读不到就当已经见过，别打断后面的初始化 */
+  if (!seen) {
     try { localStorage.setItem('xuefo.seen', '1'); } catch (e) { }
     setTimeout(function () { toast('点击右上角菜单，可管理功课与节日'); }, 600);
   }
