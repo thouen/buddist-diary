@@ -9917,7 +9917,8 @@ function normalizeSettings(src) {
   return out;
 }
 
-/* 常用地点：{ id, name, prov, city, lat?, lng? } */
+/* 常用地点：{ id, name, prov, city }。
+   旧版本可能带 lat/lng，这里只做只读兼容（不再写入、不显示、不外发） */
 function normalizePlaces(list) {
   if (!Array.isArray(list)) return [];
   return list.filter(function (x) {
@@ -11463,8 +11464,6 @@ function applyPlaceToRec(p, ds) {
   rec.place = p.id;
   delete rec.locOff;
   notePlaceUsed(p.id);
-  if (p.lat != null && p.lng != null) rec.geo = { lat: p.lat, lng: p.lng };
-  else delete rec.geo;
   saveNow();
   refreshDiary();
   toast('地点：' + p.name);
@@ -11478,7 +11477,6 @@ function applyDefaultPlace(rec, ds) {
   rec.loc = p.name;
   rec.place = p.id;
   notePlaceUsed(p.id);
-  if (p.lat != null && p.lng != null) rec.geo = { lat: p.lat, lng: p.lng };
 }
 
 function provOptions(cur) {
@@ -11506,7 +11504,6 @@ function openPlaceForm(opts) {
   var prov = opts.prov || (editing ? editing.prov : '');
   var city = opts.city || (editing ? editing.city : '');
   var name = opts.name != null ? opts.name : (editing ? editing.name : '');
-  var geo = opts.geo || (editing && editing.lat != null ? { lat: editing.lat, lng: editing.lng } : null);
   var isDef = editing ? DB.settings.defaultPlaceId === editing.id : !DB.settings.defaultPlaceId;
   var head = mode === 'apply' ? '选择地点' : (editing ? '编辑常用地点' : '添加常用地点');
 
@@ -11524,7 +11521,6 @@ function openPlaceForm(opts) {
       ? '<label class="chk"><input type="checkbox" id="p-save"' + (editing ? ' checked disabled' : ' checked') + '><span>加入常用地点</span></label>'
       : '') +
     '<label class="chk"><input type="checkbox" id="p-def"' + (isDef ? ' checked' : '') + '><span>设为默认地点<em>新日记自动填写</em></span></label>' +
-    (geo ? '<div class="field-note">已记录经纬度，可随地点一起保存</div>' : '') +
     (editing && mode === 'manage'
       ? '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-pdel="' + esc(editing.id) + '">删除这个地点</button></div>'
       : '') +
@@ -11552,8 +11548,6 @@ function openPlaceForm(opts) {
           if (p) { p.name = nm; p.prov = pv; p.city = ct; }
         }
         if (p) {
-          if (geo && geo.lat != null) { p.lat = +geo.lat; p.lng = +geo.lng; }
-          else { delete p.lat; delete p.lng; }
           /* 改名后，引用这个地点的日记跟着改称呼 */
           Object.keys(DB.records || {}).forEach(function (ds) {
             var rr = DB.records[ds];
@@ -11573,8 +11567,6 @@ function openPlaceForm(opts) {
         rec.loc = nm;
         delete rec.locOff;
         if (id) { rec.place = id; notePlaceUsed(id); } else delete rec.place;
-        if (geo && geo.lat != null) rec.geo = { lat: +geo.lat, lng: +geo.lng };
-        else if (!id) delete rec.geo;
       }
 
       saveNow();
@@ -11666,17 +11658,16 @@ function chooseLocation() {
     });
   }
   items.push({ head: '选一个地点' });
-  items.push({ t: '按省 / 市选择', s: '不用看经纬度，直接挑省市', icon: grid, fn: function () { openPlaceForm({ mode: 'apply' }); } });
-  items.push({ t: '使用当前位置', s: '读取手机定位，自动填写地名', icon: pin, fn: locateNow });
+  items.push({ t: '按省 / 市选择', s: '从列表里挑省和市', icon: grid, fn: function () { openPlaceForm({ mode: 'apply' }); } });
   items.push({ t: rec.loc ? '输入临时地点' : '手动输入地点', s: '如：家中佛堂、灵隐寺', icon: pen, fn: editLocation });
   if (rec.loc && !rec.place) {
     items.push({ t: '存为常用地点', s: '把「' + rec.loc + '」加入常用地点', icon: star, fn: function () {
-      openPlaceForm({ mode: 'apply', name: rec.loc, geo: rec.geo });
+      openPlaceForm({ mode: 'apply', name: rec.loc });
     } });
   }
   items.push({ t: '管理常用地点', s: places.length ? '共 ' + places.length + ' 个' : '还没有常用地点', icon: gear, fn: function () { showView('places'); } });
   if (rec.loc) {
-    items.push({ t: '清除地点', warn: true, fn: function () { setRecMeta({ loc: '', geo: '' }); } });
+    items.push({ t: '清除地点', warn: true, fn: function () { setRecMeta({ loc: '' }); } });
   }
   openSheet('记录地点', items);
 }
@@ -11700,51 +11691,6 @@ function editLocation() {
     }
   );
   setTimeout(function () { var el = $('#f-loc'); if (el) { el.focus(); el.select(); } }, 120);
-}
-
-function locateNow() {
-  if (!navigator.geolocation) { toast('此设备不支持定位'); return; }
-  toast('正在定位…');
-  var ds = UI.date;
-  navigator.geolocation.getCurrentPosition(function (pos) {
-    var lat = pos.coords.latitude, lng = pos.coords.longitude;
-    if (ds !== UI.date) return;
-    var rec = getRec(ds, true);
-    rec.geo = { lat: +lat.toFixed(5), lng: +lng.toFixed(5) };
-    rec.loc = '当前位置';
-    delete rec.place;
-    delete rec.locOff;
-    saveNow();
-    refreshDiary();
-    toast('正在识别地名…');
-    reverseGeocode(lat, lng, ds);
-  }, function (err) {
-    toast(err && err.code === 1 ? '定位权限被拒绝，可手动输入' : '定位失败，可手动输入');
-  }, { enableHighAccuracy: false, timeout: 9000, maximumAge: 60000 });
-}
-
-function reverseGeocode(lat, lng, ds) {
-  if (!window.fetch) return;
-  var ctrl = window.AbortController ? new AbortController() : null;
-  var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 4500);
-  var url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=zh-CN&zoom=16&lat=' +
-    encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lng);
-  fetch(url, ctrl ? { signal: ctrl.signal } : {}).then(function (r) {
-    return r.json();
-  }).then(function (j) {
-    clearTimeout(timer);
-    var a = (j && j.address) || {};
-    var main = a.city || a.town || a.county || a.state || a.province || '';
-    var sub = a.suburb || a.neighbourhood || a.village || a.road || a.attraction || '';
-    var name = main && sub ? main + '·' + sub : (main || sub || '');
-    if (!name) return;
-    var rec = DB.records[ds];
-    if (!rec || ds !== UI.date) return;
-    rec.loc = name;
-    saveNow();
-    refreshDiary();
-    toast('地点：' + name);
-  }).catch(function () { clearTimeout(timer); });
 }
 
 /* ---------- 计数操作 ---------- */
@@ -12560,7 +12506,7 @@ function renderPlaces() {
 
   html += '<div style="padding:12px 20px calc(100px + var(--safe-b));font-size:11px;color:#b5a992;line-height:1.9">' +
     '默认地点会在新的一天的日记里自动填好，手动清除后当天不再自动填。' +
-    '用「当前位置」时才会记录经纬度，日常记录只需选省市。' +
+    '地点只保存在本机，应用不联网、也不读取定位。' +
     '</div>';
 
   scroll.innerHTML = html;
