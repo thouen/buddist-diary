@@ -53,6 +53,7 @@ img{max-width:100%;display:block}
   position:relative;
   max-width:460px;
   margin:0 auto;
+  height:100vh;      /* 老 WebView 不认 dvh，先用视口高度兜底 */
   height:100dvh;
   display:flex;
   flex-direction:column;
@@ -164,7 +165,8 @@ img{max-width:100%;display:block}
 .cal-legend i{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--gold);margin-right:3px;vertical-align:1px}
 .cal-legend i.shuo,
 .cal-legend i.z6,
-.cal-legend i.z10{background:#3f6fa8}
+.cal-legend i.z10,
+.cal-legend i.yz{background:#3f6fa8}
 .cal-legend .r{color:var(--accent);opacity:.8}
 
 /* ---------- 日期信息条 ---------- */
@@ -717,7 +719,8 @@ img{max-width:100%;display:block}
 /* 斋日：蓝色 */
 .cell .mks .shuo,
 .cell .mks .z6,
-.cell .mks .z10{background:#3f6fa8}
+.cell .mks .z10,
+.cell .mks .yz{background:#3f6fa8}
 /* 佛教节日：金色 */
 .cell .mks .fd{background:var(--gold)}
 /* 二十四节气：绿色 */
@@ -9832,6 +9835,9 @@ var ZHAI6_S = [8, 14, 15, 23, 28, 29];
 var ZHAI10 = [1, 8, 14, 15, 18, 23, 24, 28, 29, 30];
 var ZHAI10_S = [1, 8, 14, 15, 18, 23, 24, 27, 28, 29];
 
+/* 月斋 = 三长斋月：农历正月、五月、九月整月持斋（可与其他斋日叠加） */
+var YUEZHAI_MONTHS = [1, 5, 9];
+
 /* 斋日显示：单选，一次只在日历上标一类 */
 var ZHAI_MODES = [
   { k: 'none', n: '不显示', s: '不在日历上标记', d: '不在日历上标记斋日' },
@@ -9839,7 +9845,7 @@ var ZHAI_MODES = [
   { k: 'z6', n: '六斋日', s: '农历初八、十四、十五、廿三、廿九、三十', d: '大月：初八、十四、十五、廿三、廿九、三十\n小月无三十：初八、十四、十五、廿三、廿八、廿九' },
   { k: 'z10', n: '十斋日', s: '农历初一、初八、十四…共十日', d: '大月：初一、初八、十四、十五、十八、廿三、廿四、廿八、廿九、三十\n小月无三十：初一、初八、十四、十五、十八、廿三、廿四、廿七、廿八、廿九' }
 ];
-var ZHAI_LABEL = { shuo: '朔望日', z6: '六斋日', z10: '十斋日' };
+var ZHAI_LABEL = { shuo: '朔望日', z6: '六斋日', z10: '十斋日', yz: '月斋' };
 
 /* ---------- 基础工具 ---------- */
 function $(s) { return document.querySelector(s); }
@@ -9883,6 +9889,7 @@ function defaultDB() {
       showFest: true,
       showTrad: true,
       showJq: true,
+      showYueZhai: false,
       showTabTotal: false,
       showSumMeta: true,
       defaultPlaceId: '',
@@ -9934,6 +9941,8 @@ function normalizeSettings(src) {
   if (typeof out.useLastPlace !== 'boolean') out.useLastPlace = true;
   /* 总览卡片上的地点 / 天气，默认显示 */
   if (typeof out.showSumMeta !== 'boolean') out.showSumMeta = true;
+  /* 月斋（三长斋月）默认不显示，独立开关，不受上面斋日单选影响 */
+  if (typeof out.showYueZhai !== 'boolean') out.showYueZhai = false;
   if (typeof out.lastPlaceId !== 'string') out.lastPlaceId = '';
   return out;
 }
@@ -10256,6 +10265,12 @@ function zhaiKeyOf(info) {
   return info.isShiZhai ? 'z10' : '';
 }
 
+/* 月斋（三长斋月）：独立开关，可与上面单选的一类斋日叠加 */
+function yueZhaiOn(info) {
+  if (!DB.settings.showYueZhai) return false;
+  return YUEZHAI_MONTHS.indexOf(+info.m) >= 0;
+}
+
 /* ---------- 自定义重要日 ---------- */
 function myDaysOn(ds) {
   var list = DB.mydays || [];
@@ -10463,6 +10478,7 @@ function renderCalHTML() {
   /* 图例自左至右：佛教节日、斋日、传统节日、节气、功课、重要日 */
   if (DB.settings.showFest) legs.push('<span><i class="fd"></i>佛教节日</span>');
   if (zm !== 'none') legs.push('<span><i class="' + zm + '"></i>' + (zm === 'shuo' ? '朔望' : (zm === 'z6' ? '六斋' : '十斋')) + '</span>');
+  if (DB.settings.showYueZhai) legs.push('<span><i class="yz"></i>月斋</span>');
   if (DB.settings.showTrad !== false) legs.push('<span><i class="tr"></i>传统节日</span>');
   if (DB.settings.showJq) legs.push('<span><i class="jq"></i>节气</span>');
   legs.push('<span><i class="hw"></i>功课</span>');
@@ -10553,6 +10569,7 @@ function cellHTML(ds, dayNum, out) {
   var zk = zhaiKeyOf(info);
   if (fest) botMks.push('fd');
   if (zk) botMks.push(zk);
+  if (yueZhaiOn(info)) botMks.push('yz');
   if (trad) botMks.push('tr');
   if (jq) botMks.push('jq');
   if (customs.length) botMks.push('my');
@@ -10585,6 +10602,7 @@ function dayBadgesHTML(info, ds) {
   if (DB.settings.showFest && info.fest) h += '<span class="badge gold">' + esc(info.fest) + '</span>';
   var zk = zhaiKeyOf(info);
   if (zk) h += '<span class="badge blue">' + ZHAI_LABEL[zk] + '</span>';
+  if (yueZhaiOn(info)) h += '<span class="badge blue">' + ZHAI_LABEL.yz + '</span>';
   if (DB.settings.showTrad !== false && info.trad) h += '<span class="badge trd">' + esc(info.trad) + '</span>';
   if (DB.settings.showJq && info.jq) h += '<span class="badge green">' + esc(info.jq) + '</span>';
   myDaysOn(ds).forEach(function (m) {
@@ -12646,6 +12664,9 @@ function renderSettings() {
     '<div class="set-row" data-set="zhai">' +
       '<div class="lbl">斋日显示<em>' + zMode.s + '</em></div>' +
       '<span class="val">' + zMode.n + '</span><span class="chev">›</span></div>' +
+    '<div class="set-row" data-toggle="showYueZhai">' +
+      '<div class="lbl">月斋（三长斋月）<em>农历正月、五月、九月整月持斋，可与上面单选的一类斋日同时显示</em></div>' +
+      '<span class="switch ' + (s.showYueZhai ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">日历</div><div class="set-card">' +
@@ -12703,7 +12724,7 @@ function renderSettings() {
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">关于</div><div class="set-card">' +
-    '<div class="set-row"><div class="lbl">学佛日记<em>版本 2.0 · 数据保存在本机，不上传</em></div></div>' +
+    '<div class="set-row"><div class="lbl">学佛日记<em>版本 2.1 · 数据保存在本机，不上传</em></div></div>' +
     '<div class="set-row" data-actx="wipe"><div class="lbl" style="color:#b8442f">清空全部数据<em>不可恢复，请先导出备份</em></div><span class="chev" style="color:#b8442f">›</span></div>' +
     '</div></div>';
 
