@@ -1026,6 +1026,24 @@ img{max-width:100%;display:block}
 .detail-stats{margin-top:12px}
 .detail-stats .seg{padding:0 14px 8px}
 
+/* ---------- 2.0 交互补充 ---------- */
+/* 「回到今天」：只在这一天不是今天时出现，靠右贴在公历日期后 */
+.dr-today{
+  flex:0 0 auto;align-self:center;margin-left:auto;padding:2px 9px;border-radius:20px;
+  font-size:11px;line-height:1.6;letter-spacing:.5px;color:var(--accent);
+  background:var(--accent-soft);border:1px solid #ecd0c8;
+}
+.dr-today:active{background:#f1d6ce}
+
+/* 未来的日期不能记功课：按钮置灰 */
+.btn:disabled,.cbtn:disabled{
+  opacity:.42;color:var(--ink3);background:var(--card2);border-color:var(--line);
+}
+.bigadd:disabled{
+  opacity:.42;color:var(--ink3);background:var(--card2);
+  border:1px solid var(--line);box-shadow:none;
+}
+
 </style>
 </head>
 <body>
@@ -10459,7 +10477,6 @@ function renderCalHTML() {
         '<button class="ctb" data-cmonth="1"><b>' + m + '</b>月<i class="car"></i></button>' +
       '</div>' +
       '<button class="navbtn" data-cal="1" aria-label="下一月"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-cal="today">今</button>' +
     '</div>' +
     '<div class="week-row">' +
       WEEK_CN.map(function (w, idx) {
@@ -10581,6 +10598,7 @@ function dateRowsHTML(info, ds) {
   return '<div class="dr1">' +
       '<span class="dr-fen">佛历 ' + buddhaYear(info.shy) + ' 年</span>' +
       '<span class="dr-gd gd">' + info.shy + '年' + info.shm + '月' + info.shd + '日</span>' +
+      (ds !== TODAY ? '<button class="dr-today" data-gotoday="1">回到今天</button>' : '') +
     '</div>' +
     '<div class="dr2">' +
       '<span class="dr-lun">农历' + esc(info.monthCn) + esc(info.dayCn) + '</span>' +
@@ -10647,6 +10665,7 @@ function renderTaskListInto(box, cat) {
   var r = DB.records[UI.date];
   var showTot = !!DB.settings.showTotal;
   var showMtot = !!DB.settings.showMonthTotal;
+  var dis = UI.date > TODAY ? ' disabled' : '';
   box.innerHTML = list.map(function (t) {
     var n = (r && r.c[t.id]) || 0;
     var g = taskGoal(t);
@@ -10674,11 +10693,11 @@ function renderTaskListInto(box, cat) {
         goalHTML +
         statsHTML +
         '<div class="btns">' +
-          '<button class="btn mid" data-act="add" data-n="1">+1</button>' +
-          '<button class="btn mid" data-act="add" data-n="10">+10</button>' +
-          '<button class="btn mid" data-act="add" data-n="100">+100</button>' +
-          '<button class="btn mid" data-act="add" data-n="1000">+1000</button>' +
-          '<button class="btn step" data-act="step" data-dir="1">+</button>' +
+          '<button class="btn mid" data-act="add" data-n="1"' + dis + '>+1</button>' +
+          '<button class="btn mid" data-act="add" data-n="10"' + dis + '>+10</button>' +
+          '<button class="btn mid" data-act="add" data-n="100"' + dis + '>+100</button>' +
+          '<button class="btn mid" data-act="add" data-n="1000"' + dis + '>+1000</button>' +
+          '<button class="btn step" data-act="step" data-dir="1"' + dis + '>+</button>' +
         '</div>' +
       '</div>';
   }).join('');
@@ -11703,7 +11722,15 @@ function editLocation() {
 }
 
 /* ---------- 计数操作 ---------- */
+/* 未来的日期只能翻看，不能记功课 */
+function isFutureDate(ds) {
+  return String(ds || UI.date) > TODAY;
+}
+function blockFuture() {
+  toast('未来的日期还不能记录功课');
+}
 function addCount(taskId, delta) {
+  if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
   var rec = getRec(UI.date, true);
@@ -11720,6 +11747,7 @@ function addCount(taskId, delta) {
 
 /* 直接把某功课当天的数量设为指定值（长按「+」「−」→「设为」） */
 function setTaskCount(taskId, v) {
+  if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
   var rec = getRec(UI.date, true);
@@ -11733,6 +11761,7 @@ function setTaskCount(taskId, v) {
 }
 
 function openCountEditor(taskId) {
+  if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
   var rec = getRec(UI.date, true);
@@ -11765,6 +11794,7 @@ function openCountEditor(taskId) {
 /* 长按「+」「−」：可直接增减，也可把当天数量设为指定值 */
 var deltaSign = 1;   /* 1 增加 / -1 减少 / 0 设为 */
 function openDeltaModal(taskId, defSign) {
+  if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
   var rec = getRec(UI.date, true);
@@ -11990,6 +12020,7 @@ function detailCountHTML(t) {
   var rec = DB.records[UI.date];
   var n = (rec && rec.c[t.id]) || 0;
   var g = taskGoal(t);
+  var futDis = UI.date > TODAY ? ' disabled' : '';
   var pct = g ? Math.min(100, Math.round(n / g * 100)) : 0;
   var goalHTML = g ? (
     '<div class="cc-goal">' +
@@ -12011,12 +12042,12 @@ function detailCountHTML(t) {
       '<b>' + esc(n) + '</b><small>' + esc(t.unit) + '</small></div>' +
     goalHTML +
     totHTML +
-    '<button class="bigadd" data-dct="1">+1</button>' +
+    '<button class="bigadd" data-dct="1"' + futDis + '>+1</button>' +
     '<div class="cc-row">' +
-      '<button class="cbtn" data-dct="n" data-n="10">+10</button>' +
-      '<button class="cbtn" data-dct="n" data-n="100">+100</button>' +
-      '<button class="cbtn" data-dct="n" data-n="1000">+1000</button>' +
-      '<button class="cbtn step" data-dct="step" data-dir="1">+</button>' +
+      '<button class="cbtn" data-dct="n" data-n="10"' + futDis + '>+10</button>' +
+      '<button class="cbtn" data-dct="n" data-n="100"' + futDis + '>+100</button>' +
+      '<button class="cbtn" data-dct="n" data-n="1000"' + futDis + '>+1000</button>' +
+      '<button class="cbtn step" data-dct="step" data-dir="1"' + futDis + '>+</button>' +
     '</div>' +
     '</div>';
 }
@@ -12307,6 +12338,7 @@ function renderTaskSettings() {
           '<em>' + esc(t.unit) + ' · 增减 ' + t.step + (taskGoal(t) ? ' · 日目标 ' + taskGoal(t) : '') +
             (taskTarget(t) ? ' · 总目标 ' + taskTarget(t) : '') + '</em>' +
         '</div>' +
+        '<button class="mini" data-ttop="1" aria-label="置顶"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M12 20V9"/><path d="M8 12l4-4 4 4"/></svg></button>' +
         '<button class="mini" data-tmove="-1">↑</button>' +
         '<button class="mini" data-tmove="1">↓</button>' +
         '<button class="mini" data-tedit="' + esc(t.id) + '"><svg viewBox="0 0 24 24"><path d="M4 20h3.5L18 9.5a2.4 2.4 0 0 0-3.4-3.4L4 16.5V20z"/></svg></button>' +
@@ -12832,17 +12864,11 @@ function bindEvents() {
     el = e.target.closest('[data-cal]');
     if (el) {
       var v = el.dataset.cal;
-      if (v === 'today') {
-        var td = parseYmd(TODAY);
-        UI.calY = td.getFullYear(); UI.calM = td.getMonth() + 1;
-        selectDate(TODAY);
-      } else {
-        var nm = UI.calM + (+v);
-        if (nm < 1) { nm = 12; UI.calY--; }
-        if (nm > 12) { nm = 1; UI.calY++; }
-        UI.calM = nm;
-        renderHome();
-      }
+      var nm = UI.calM + (+v);
+      if (nm < 1) { nm = 12; UI.calY--; }
+      if (nm > 12) { nm = 1; UI.calY++; }
+      UI.calM = nm;
+      renderHome();
       return;
     }
 
@@ -12859,6 +12885,16 @@ function bindEvents() {
       return;
     }
 
+    /* 回到今天：日信息第一行的按钮，先于日期选择器处理 */
+    if (e.target.closest('[data-gotoday]')) {
+      if (UI.view === 'detail') { gotoDetailDate(TODAY); return; }
+      setMode('record');
+      UI.view = 'home'; UI.viewStack = [];
+      renderView();
+      selectDate(TODAY);
+      return;
+    }
+
     /* 日期条 -> 系统日期选择器 */
     el = e.target.closest('#home-date');
     if (el) { openDatePicker(false); return; }
@@ -12871,9 +12907,9 @@ function bindEvents() {
     el = e.target.closest('[data-tab]');
     if (el) { switchTab(el.dataset.tab, 0); return; }
 
-    /* 打开功课详情：整张卡片都可点（加减按钮与计数数字除外） */
+    /* 打开功课详情：只有标题、本月/累计、日目标进度条可点 */
     el = e.target.closest('[data-open]');
-    if (el && !e.target.closest('.btns') && !e.target.closest('[data-count]') && !e.target.closest('button')) {
+    if (el && e.target.closest('.task-name, .task-stats, .task-goal')) {
       openDetail(el.dataset.open);
       return;
     }
@@ -12988,6 +13024,14 @@ function bindEvents() {
     /* 功课管理 tab */
     el = e.target.closest('[data-tcat]');
     if (el) { UI.taskCat = el.dataset.tcat; renderTaskSettings(); return; }
+
+    /* 置顶 */
+    el = e.target.closest('[data-ttop]');
+    if (el) {
+      var topRow = el.closest('[data-tid]');
+      if (topRow) topTask(topRow.dataset.tid);
+      return;
+    }
 
     /* 移动排序 */
     el = e.target.closest('[data-tmove]');
@@ -13506,6 +13550,22 @@ function openMenu() {
 }
 
 /* ---------- 功课维护 ---------- */
+/* 置顶：移到同一分类的最前面（DB.tasks 里混着 5 个分类） */
+function topTask(id) {
+  var idx = DB.tasks.findIndex(function (t) { return t.id === id; });
+  if (idx < 0) return;
+  var t = DB.tasks[idx];
+  var firstIdx = -1;
+  for (var i = 0; i < DB.tasks.length; i++) {
+    if (DB.tasks[i].cat === t.cat) { firstIdx = i; break; }
+  }
+  if (firstIdx < 0 || firstIdx === idx) return;
+  DB.tasks.splice(idx, 1);
+  DB.tasks.splice(firstIdx, 0, t);
+  saveNow();
+  renderTaskSettings();
+}
+
 function moveTask(id, dir) {
   var idx = DB.tasks.findIndex(function (t) { return t.id === id; });
   if (idx < 0) return;
