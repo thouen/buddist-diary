@@ -2,7 +2,7 @@
    ⚠️ 发布须知：每次发布新的 index.html，必须把下面 CACHE 的版本号 +1
    （例如 v25 → v26），否则老用户会一直读到缓存里的旧页面。
    发布检查清单见 README 的「发布检查清单」一节。 */
-var CACHE = 'xuefo-diary-v26';
+var CACHE = 'xuefo-diary-v27';
 var ASSETS = [
   './',
   './index.html',
