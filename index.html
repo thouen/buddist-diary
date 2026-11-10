@@ -1051,13 +1051,21 @@ img{max-width:100%;display:block}
 .detail-stats .seg{padding:0 14px 8px}
 
 /* ---------- 2.0 交互补充 ---------- */
-/* 「回到今天」：只在这一天不是今天时出现，靠右贴在公历日期后 */
+/* 「今」：只在这一天不是今天时出现，靠右，与上面两行整体垂直居中 */
+.dl-rows{position:relative;display:flex;flex-direction:column;gap:3px}
+.dl-rows.has-today{padding-right:30px}
 .dr-today{
-  flex:0 0 auto;align-self:center;margin-left:auto;padding:2px 9px;border-radius:20px;
-  font-size:11px;line-height:1.6;letter-spacing:.5px;color:var(--accent);
-  background:var(--accent-soft);border:1px solid #ecd0c8;
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+  width:23px;height:23px;padding:0;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;font-family:var(--serif);font-size:12.5px;line-height:1;
+  color:var(--accent);background:var(--accent-soft);border:1px solid #ecd0c8;
 }
-.dr-today:active{background:#f1d6ce}
+.dr-today:active{background:#f1d6ce;transform:translateY(-50%) scale(.92)}
+/* 窄屏：佛历与公历同降一档，公历年月日才不会被截断 */
+@media (max-width:345px){
+  .dr1{gap:5px}
+  .dr-fen,.dr-gd{font-size:14px}
+}
 
 /* 未来的日期不能记功课：按钮置灰 */
 .btn:disabled,.cbtn:disabled{
@@ -10630,14 +10638,22 @@ function cellHTML(ds, dayNum, out) {
 }
 
 /* 日期信息条：三行
-   一、佛历年 · 公历年月日 · 昨/今/明天
+   一、佛历年 · 公历年月日 · 相对日
    二、农历月日 · 星期
    三、佛教节日 · 斋日 · 传统节日 · 节气 · 重要日 */
+function daysFromToday(ds) {
+  return Math.round((parseYmd(ds).setHours(12, 0, 0, 0) - parseYmd(TODAY).setHours(12, 0, 0, 0)) / 86400000);
+}
+/* 相对日：今天/昨天/前天/明天/后天，再远就是 N 天前 / N 天后 */
 function relDayName(ds) {
-  if (ds === TODAY) return '今天';
-  if (ds === addDays(TODAY, -1)) return '昨天';
-  if (ds === addDays(TODAY, 1)) return '明天';
-  return '';
+  var d = daysFromToday(ds);
+  if (d === 0) return '今天';
+  if (d === -1) return '昨天';
+  if (d === -2) return '前天';
+  if (d === 1) return '明天';
+  if (d === 2) return '后天';
+  var n = Math.abs(d);
+  return n + '天' + (d < 0 ? '前' : '后');
 }
 function dayBadgesHTML(info, ds) {
   var h = '';
@@ -10652,24 +10668,31 @@ function dayBadgesHTML(info, ds) {
   });
   return h;
 }
-/* 公历日期：默认省略年份（这一行还要放「回到今天」，太长会被挤掉）；
-   只有翻到别的年份时才把年份补回来，免得看不出是哪一年 */
+/* 公历日期：带年份，翻到别的年份也不会看不出是哪一年 */
 function gregDateText(info) {
-  var md = info.shm + '月' + info.shd + '日';
-  return String(info.shy) === TODAY.slice(0, 4) ? md : info.shy + '年' + md;
+  return info.shy + '年' + info.shm + '月' + info.shd + '日';
+}
+/* 「今」按钮：只在这一天不是今天时出现，靠右、与上面两行垂直居中 */
+function todayBtnHTML(ds) {
+  return ds !== TODAY
+    ? '<button class="dr-today" data-gotoday="1" aria-label="回到今天" title="回到今天">今</button>'
+    : '';
 }
 function dateRowsHTML(info, ds) {
   var rel = relDayName(ds);
   var badges = dayBadgesHTML(info, ds);
-  return '<div class="dr1">' +
-      '<span class="dr-fen">佛历 ' + buddhaYear(info.shy) + ' 年</span>' +
-      '<span class="dr-gd gd">' + gregDateText(info) + '</span>' +
-      (ds !== TODAY ? '<button class="dr-today" data-gotoday="1">回到今天</button>' : '') +
-    '</div>' +
-    '<div class="dr2">' +
-      '<span class="dr-lun">农历' + esc(info.monthCn) + esc(info.dayCn) + '</span>' +
-      '<span class="dr-wk">星期' + WEEK_CN[info.week] + '</span>' +
-      (rel ? '<span class="dr-rel' + (rel === '今天' ? ' now' : '') + '">' + rel + '</span>' : '') +
+  var hasToday = ds !== TODAY;
+  return '<div class="dl-rows' + (hasToday ? ' has-today' : '') + '">' +
+      '<div class="dr1">' +
+        '<span class="dr-fen">佛历 ' + buddhaYear(info.shy) + ' 年</span>' +
+        '<span class="dr-gd gd">' + gregDateText(info) + '</span>' +
+      '</div>' +
+      '<div class="dr2">' +
+        '<span class="dr-lun">农历' + esc(info.monthCn) + esc(info.dayCn) + '</span>' +
+        '<span class="dr-wk">星期' + WEEK_CN[info.week] + '</span>' +
+        (rel ? '<span class="dr-rel' + (rel === '今天' ? ' now' : '') + '">' + rel + '</span>' : '') +
+      '</div>' +
+      todayBtnHTML(ds) +
     '</div>' +
     (badges ? '<div class="dr3">' + badges + '</div>' : '');
 }
