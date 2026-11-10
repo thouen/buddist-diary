@@ -26,7 +26,7 @@
 - **删掉全部权限声明**：`INTERNET`、`ACCESS_FINE_LOCATION`、`ACCESS_COARSE_LOCATION`、`READ_MEDIA_IMAGES`、`READ_MEDIA_VISUAL_USER_SELECTED`、`READ_EXTERNAL_STORAGE` 均已移除，`aapt2 dump permissions` 为空
 - 外壳不再弹定位授权：`onGeolocationPermissionsShowPrompt` 直接拒绝
 - 返回键接入页面新钩子：先关弹窗 → 关菜单 → 关日期层 → 退二级页面 → 再退出（2.1 里留的「待外壳接入」已补齐）
-- 内嵌 `assets/index.html` 与仓库 `index.html` 逐字节一致（SHA256 `de341b19…`）
+- 内嵌 `assets/index.html` 与仓库 `index.html` 逐字节一致
 
 ## 2.1（2026-11-10）
 
