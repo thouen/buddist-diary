@@ -10031,7 +10031,18 @@ function loadDB() {
       if (t.name === '南无药师琉璃光如来') { t.name = '南无消灾延寿药师佛'; __dbMigrated = true; }
       if (t.name === '文殊师利菩萨心咒') { t.name = '文殊菩萨心咒'; __dbMigrated = true; }
     });
-    if (!db.records || typeof db.records !== 'object') db.records = {};
+    if (!db.records || typeof db.records !== 'object' || Array.isArray(db.records)) db.records = {};
+    /* 计数一律收口为非负整数：手改或导入的数据里可能有字符串 */
+    Object.keys(db.records).forEach(function (ds) {
+      var rr = db.records[ds];
+      if (!rr || typeof rr !== 'object' || Array.isArray(rr)) { delete db.records[ds]; return; }
+      if (!rr.c || typeof rr.c !== 'object' || Array.isArray(rr.c)) rr.c = {};
+      Object.keys(rr.c).forEach(function (k) {
+        var v = Math.floor(Number(rr.c[k]));
+        if (!isFinite(v) || v <= 0) delete rr.c[k];
+        else rr.c[k] = v;
+      });
+    });
     db.mydays = normalizeMyDays(db.mydays);
     db.places = normalizePlaces(db.places);
     if (!db.places.some(function (p) { return p.id === db.settings.defaultPlaceId; })) {
@@ -10142,7 +10153,7 @@ function taskTotal(id) {
       var c = DB.records[ds] && DB.records[ds].c;
       if (!c) return;
       Object.keys(c).forEach(function (k) {
-        _totals[k] = (_totals[k] || 0) + (c[k] || 0);
+        _totals[k] = (_totals[k] || 0) + (Number(c[k]) || 0);
       });
     });
   }
@@ -10160,7 +10171,7 @@ function monthTotals(ym) {
       var c = DB.records[ds] && DB.records[ds].c;
       if (!c) return;
       Object.keys(c).forEach(function (k) {
-        map[k] = (map[k] || 0) + (c[k] || 0);
+        map[k] = (map[k] || 0) + (Number(c[k]) || 0);
       });
     });
     _mtotals = { ym: ym, map: map };
@@ -10591,7 +10602,7 @@ function catSumHTML(cat, ds) {
   DB.tasks.forEach(function (t) {
     if (t.cat !== cat || t.hidden) return;
     var n = r.c[t.id] || 0;
-    if (n > 0) parts.push(esc(t.name) + '×<b>' + n + '</b>');
+    if (n > 0) parts.push(esc(t.name) + '×<b>' + esc(n) + '</b>');
   });
   return parts.length ? parts.join('；') + '。' : '';
 }
@@ -10648,12 +10659,12 @@ function renderTaskListInto(box, cat) {
             (taskTarget(t) ? ' / ' + taskTarget(t) : '') + '</span>' : '') +
       '</div>') : '';
     return '' +
-      '<div class="task' + (n > 0 ? ' done' : '') + (g && n >= g ? ' goal-done' : '') + '" data-id="' + t.id + '" data-open="' + t.id + '">' +
+      '<div class="task' + (n > 0 ? ' done' : '') + (g && n >= g ? ' goal-done' : '') + '" data-id="' + esc(t.id) + '" data-open="' + esc(t.id) + '">' +
         '<div class="task-top">' +
           '<div class="task-name"><span>' + esc(t.name) + '</span></div>' +
           '<div class="task-nums">' +
-            '<div class="task-num' + (n > 0 ? '' : ' zero') + '" data-count="' + t.id + '">' +
-              n + '<i>' + esc(t.unit) + '</i></div>' +
+            '<div class="task-num' + (n > 0 ? '' : ' zero') + '" data-count="' + esc(t.id) + '">' +
+              esc(n) + '<i>' + esc(t.unit) + '</i></div>' +
           '</div>' +
         '</div>' +
         goalHTML +
@@ -10689,7 +10700,7 @@ function refreshTaskRow(taskId) {
   var r = DB.records[UI.date];
   var n = (r && r.c && r.c[taskId]) || 0;
   var numEl = row.querySelector('.task-num');
-  numEl.innerHTML = n + '<i>' + esc(t ? t.unit : '') + '</i>';
+  numEl.innerHTML = esc(n) + '<i>' + esc(t ? t.unit : '') + '</i>';
   numEl.classList.toggle('zero', n === 0);
   row.classList.toggle('done', n > 0);
   var totEl = row.querySelector('.st-a');
@@ -11515,7 +11526,7 @@ function openPlaceForm(opts) {
     '<label class="chk"><input type="checkbox" id="p-def"' + (isDef ? ' checked' : '') + '><span>设为默认地点<em>新日记自动填写</em></span></label>' +
     (geo ? '<div class="field-note">已记录经纬度，可随地点一起保存</div>' : '') +
     (editing && mode === 'manage'
-      ? '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-pdel="' + editing.id + '">删除这个地点</button></div>'
+      ? '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-pdel="' + esc(editing.id) + '">删除这个地点</button></div>'
       : '') +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
@@ -11921,6 +11932,7 @@ function detailItems(t, d) {
 
 /* 格子里的数字过大时用「万 / 亿」，避免撑破小格 */
 function shortNum(n) {
+  n = Number(n) || 0;
   if (n < 1000000) return String(n);
   if (n < 100000000) {
     var w = n / 10000;
@@ -12027,7 +12039,7 @@ function detailCountHTML(t) {
   var goalHTML = g ? (
     '<div class="cc-goal">' +
       '<div class="cc-bar' + (n >= g ? ' full' : '') + '"><i style="width:' + pct + '%"></i></div>' +
-      '<span class="cg-txt">' + n + ' / ' + g + (n >= g ? ' ✓' : '') + '</span>' +
+      '<span class="cg-txt">' + esc(n) + ' / ' + esc(g) + (n >= g ? ' ✓' : '') + '</span>' +
     '</div>') : '';
 
   var totHTML = '<div class="cc-tot' + (DB.settings.showMonthTotal ? '' : ' one') + '">' +
@@ -12040,8 +12052,8 @@ function detailCountHTML(t) {
 
   return '<div class="count-card' + (n > 0 ? ' has' : '') + '">' +
     '<div class="cc-lbl">今日' + esc(CAT_MAP[t.cat].n) + '</div>' +
-    '<div class="cc-num' + numClass(n) + '" data-count="' + t.id + '" role="button" aria-label="修改今日遍数">' +
-      '<b>' + n + '</b><small>' + esc(t.unit) + '</small></div>' +
+    '<div class="cc-num' + numClass(n) + '" data-count="' + esc(t.id) + '" role="button" aria-label="修改今日遍数">' +
+      '<b>' + esc(n) + '</b><small>' + esc(t.unit) + '</small></div>' +
     goalHTML +
     totHTML +
     '<button class="bigadd" data-dct="1">+1</button>' +
@@ -12334,15 +12346,15 @@ function renderTaskSettings() {
     html += '<div class="empty-state" style="padding:40px 20px;font-size:12.5px">还没有功课，点下方按钮添加</div>';
   } else {
     list.forEach(function (t) {
-      html += '<div class="tk-row" data-tid="' + t.id + '">' +
-        '<div class="nm" data-tedit="' + t.id + '">' +
+      html += '<div class="tk-row" data-tid="' + esc(t.id) + '">' +
+        '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
           '<em>' + esc(t.unit) + ' · 增减 ' + t.step + (taskGoal(t) ? ' · 日目标 ' + taskGoal(t) : '') +
             (taskTarget(t) ? ' · 总目标 ' + taskTarget(t) : '') + '</em>' +
         '</div>' +
         '<button class="mini" data-tmove="-1">↑</button>' +
         '<button class="mini" data-tmove="1">↓</button>' +
-        '<button class="mini" data-tedit="' + t.id + '"><svg viewBox="0 0 24 24"><path d="M4 20h3.5L18 9.5a2.4 2.4 0 0 0-3.4-3.4L4 16.5V20z"/></svg></button>' +
+        '<button class="mini" data-tedit="' + esc(t.id) + '"><svg viewBox="0 0 24 24"><path d="M4 20h3.5L18 9.5a2.4 2.4 0 0 0-3.4-3.4L4 16.5V20z"/></svg></button>' +
         '</div>';
     });
   }
@@ -12371,10 +12383,10 @@ function openTaskEditor(taskId, cat) {
     '<h4>' + (isNew ? '添加功课' : '编辑功课') + '</h4>' +
     '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '" placeholder="如：南无阿弥陀佛"></div>' +
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
-    '<div class="field"><label>默认增量（＋ / － 按钮一次的数量）</label><input id="f-step" type="number" inputmode="numeric" value="' + step + '"></div>' +
+    '<div class="field"><label>默认增量（＋ / － 按钮一次的数量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
     '<div class="field"><label>总目标（可选，累计到多少）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
-    (isNew ? '' : '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-tdel="' + t.id + '">删除这项功课</button></div>') +
+    (isNew ? '' : '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-tdel="' + esc(t.id) + '">删除这项功课</button></div>') +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
       '<button class="primary" data-tsave="1">保存</button>' +
@@ -12507,7 +12519,7 @@ function renderMyDays() {
         var away = dayGap(TODAY, nd);
         extra += away === 0 ? ' · 今天' : ' · ' + away + ' 天后';
       }
-      html += '<div class="md-row" data-mdedit="' + m.id + '">' +
+      html += '<div class="md-row" data-mdedit="' + esc(m.id) + '">' +
         '<div class="nm"><b>' + esc(m.name) + '</b>' +
           '<em>' + myDayText(m) + '</em></div>' +
         '<div class="rt"><span class="nx">' + esc(extra) + '</span><span class="chev">›</span></div>' +
@@ -12538,7 +12550,7 @@ function renderPlaces() {
     html += '<div class="set-card" style="margin:0 12px">';
     list.forEach(function (p) {
       var isDef = DB.settings.defaultPlaceId === p.id;
-      html += '<div class="md-row" data-pedit="' + p.id + '">' +
+      html += '<div class="md-row" data-pedit="' + esc(p.id) + '">' +
         '<div class="nm"><b>' + esc(p.name) + '</b><em>' + esc(placeSub(p) || '未填省市') + '</em></div>' +
         '<div class="rt">' + (isDef ? '<span class="tag-def">默认</span>' : '') +
         '<span class="chev">›</span></div></div>';
@@ -12583,7 +12595,7 @@ function openMyDayEditor(id) {  var m = null;
       '<div class="field"><label>日</label><select id="f-mdd">' + opts(maxD, Math.min(dd, maxD)) + '</select></div>' +
     '</div>' +
     (isNew ? '' : '<div style="text-align:center;padding:4px 0 0">' +
-      '<button style="color:#b8442f;font-size:12.5px" data-mddel="' + m.id + '">删除这个重要日</button></div>') +
+      '<button style="color:#b8442f;font-size:12.5px" data-mddel="' + esc(m.id) + '">删除这个重要日</button></div>') +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
       '<button class="primary" data-mdsave="1">保存</button>' +
@@ -12639,7 +12651,7 @@ function renderSettings() {
   html += '<div class="set-sec"><div class="set-title">历法</div><div class="set-card">' +
     '<div class="set-row" data-set="buddha">' +
       '<div class="lbl">佛历基准<em>佛历 = 公历年 + 基准年数</em></div>' +
-      '<span class="val">+ ' + s.buddhaOffset + ' 年</span><span class="chev">›</span></div>' +
+      '<span class="val">+ ' + esc(s.buddhaOffset) + ' 年</span><span class="chev">›</span></div>' +
     '</div></div>';
 
   var zMode = ZHAI_MODES.filter(function (z) { return z.k === (s.zhaiMode || 'z10'); })[0] || ZHAI_MODES[3];
@@ -12669,14 +12681,14 @@ function renderSettings() {
       '<div class="lbl">常用地点<em>' + (function () {
         var dp = defaultPlace();
         if (!DB.places || !DB.places.length) return '还没有常用地点，可添加家或寺院';
-        return dp ? '默认：' + dp.name : '尚未指定默认地点';
+        return dp ? '默认：' + esc(dp.name) : '尚未指定默认地点';
       })() + '</em></div>' +
       '<span class="val">' + ((DB.places || []).length) + ' 个</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-toggle="useLastPlace">' +
       '<div class="lbl">始终使用最近一次地点<em>' + (function () {
         var lp = lastPlace();
         return s.useLastPlace
-          ? (lp ? '新日记自动填「' + lp.name + '」' : '还没有可用地点，先添加一个常用地点')
+          ? (lp ? '新日记自动填「' + esc(lp.name) + '」' : '还没有可用地点，先添加一个常用地点')
           : '新日记自动填默认地点';
       })() + '</em></div>' +
       '<span class="switch ' + (s.useLastPlace ? 'on' : '') + '"></span></div>' +
@@ -13604,6 +13616,78 @@ function exportData() {
   } catch (e) { toast('导出失败'); }
 }
 
+/* 导入前体检：结构不对就不收，字段一律收口到合法范围（防止把网页代码当数据带进来） */
+function sanitizeImport(src) {
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return null;
+  if (!Array.isArray(src.tasks)) return null;
+  if (!src.records || typeof src.records !== 'object' || Array.isArray(src.records)) return null;
+
+  var out = {
+    v: 1,
+    builtinRev: BUILTIN_REV,
+    orderRev: 1,
+    settings: normalizeSettings(src.settings),
+    tasks: [],
+    mydays: normalizeMyDays(src.mydays),
+    places: normalizePlaces(src.places),
+    records: {}
+  };
+  var catSet = {};
+  CATS.forEach(function (c) { catSet[c.k] = 1; });
+
+  src.tasks.forEach(function (t) {
+    if (!t || typeof t !== 'object' || Array.isArray(t)) return;
+    if (typeof t.id !== 'string' || !t.id.trim()) return;
+    if (!catSet[t.cat]) return;
+    if (typeof t.name !== 'string' || !t.name.trim()) return;
+    out.tasks.push({
+      id: t.id.slice(0, 64),
+      cat: t.cat,
+      name: t.name.slice(0, 60),
+      unit: (typeof t.unit === 'string' ? t.unit : '').slice(0, 8),
+      step: Math.min(100000, Math.max(1, Math.floor(Number(t.step)) || 1)),
+      goal: Math.max(0, Math.floor(Number(t.goal)) || 0),
+      tgoal: Math.max(0, Math.floor(Number(t.tgoal)) || 0),
+      builtin: !!t.builtin,
+      hidden: !!t.hidden
+    });
+  });
+  if (!out.tasks.length) return null;
+
+  var idSet = {};
+  out.tasks.forEach(function (t) { idSet[t.id] = 1; });
+
+  Object.keys(src.records).slice(0, 20000).forEach(function (ds) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return;
+    var r = src.records[ds];
+    if (!r || typeof r !== 'object' || Array.isArray(r)) return;
+    var rec = { c: {}, d: [] };
+    if (r.c && typeof r.c === 'object' && !Array.isArray(r.c)) {
+      Object.keys(r.c).forEach(function (k) {
+        if (!idSet[k]) return;
+        var v = Math.floor(Number(r.c[k]));
+        if (isFinite(v) && v > 0) rec.c[k] = v;
+      });
+    }
+    if (Array.isArray(r.d)) {
+      r.d.slice(0, 500).forEach(function (b) {
+        if (!b || typeof b !== 'object' || Array.isArray(b)) return;
+        if (['p', 'o', 'b'].indexOf(b.t) < 0) return;   /* 图片块（i）不再接收 */
+        var x = typeof b.x === 'string' ? b.x : '';
+        if (x.length > 20000) x = x.slice(0, 20000);
+        rec.d.push({ t: b.t, x: x });
+      });
+    }
+    if (typeof r.loc === 'string' && r.loc.trim()) rec.loc = r.loc.slice(0, 40);
+    if (typeof r.w === 'string' && r.w.trim()) rec.w = r.w.slice(0, 20);
+    if (typeof r.place === 'string') rec.place = r.place.slice(0, 64);
+    if (r.locOff) rec.locOff = 1;
+    out.records[ds] = rec;
+  });
+
+  return out;
+}
+
 function importData() {
   var inp = document.createElement('input');
   inp.type = 'file';
@@ -13616,17 +13700,17 @@ function importData() {
     var fr = new FileReader();
     fr.onload = function () {
       try {
-        var db = JSON.parse(fr.result);
-        if (!db || !Array.isArray(db.tasks) || !db.records) throw new Error('bad');
+        var db = sanitizeImport(JSON.parse(fr.result));
+        if (!db) {
+          toast('备份文件格式不正确，未导入任何数据');
+          inp.remove();
+          return;
+        }
         if (!confirm('导入将覆盖当前全部数据，确定继续？')) { inp.remove(); return; }
         DB = db;
-        DB.settings = normalizeSettings(DB.settings);
-        DB.mydays = normalizeMyDays(DB.mydays);
-        DB.places = normalizePlaces(DB.places);
         if (!DB.places.some(function (x) { return x.id === DB.settings.defaultPlaceId; })) {
           DB.settings.defaultPlaceId = '';
         }
-        if (!Array.isArray(DB.tasks)) DB.tasks = [];
         /* 用户明确选择覆盖：解除“读取失败不写回”的保护 */
         loadError = false;
         invalidateTotals();
@@ -13634,7 +13718,9 @@ function importData() {
         saveNow();
         renderView();
         toast('导入成功');
-      } catch (e) { toast('文件格式不正确'); }
+      } catch (e) {
+        toast('备份文件格式不正确，未导入任何数据');
+      }
       inp.remove();
     };
     fr.readAsText(f);
@@ -13768,6 +13854,21 @@ function showLoadError() {
     '<div class="modal-actions"><button data-mclose="1">知道了</button></div>'
   );
 }
+
+/* 给外壳用的返回键钩子：先关最上层，没人接才让外壳退出。
+   当前 APK 外壳尚未调用它，接入后才会生效 */
+window.__closeTopLayer = function () {
+  if (document.querySelector('#modal.on')) { closeModal(); return true; }
+  if (document.querySelector('#sheet.on')) { closeSheet(); return true; }
+  var nd = document.getElementById('native-date');
+  if (nd) { nd.remove(); return true; }
+  var backs = document.querySelectorAll('[data-back]');
+  for (var i = 0; i < backs.length; i++) {
+    var el = backs[i];
+    if (el && el.offsetParent !== null) { el.click(); return true; }
+  }
+  return false;
+};
 
 /* ---------- 初始化 ---------- */
 var __inited = false;
