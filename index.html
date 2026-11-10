@@ -10732,7 +10732,7 @@ function renderCatSumHTML(cat, ds) {
   if (!DB.settings.showTabTotal) return '';
   var body = catSumHTML(cat, ds);
   if (!body) return '';
-  return '<div class="cat-sum"><span class="cs-k">明细</span>' + body + '</div>';
+  return '<div class="cat-sum"><span class="cs-k">汇总</span>' + body + '</div>';
 }
 function refreshCatSum() {
   var box = $('#cat-sum');
