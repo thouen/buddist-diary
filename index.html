@@ -301,6 +301,8 @@ img{max-width:100%;display:block}
 .task.done{border-color:#e6cfc6;background:linear-gradient(180deg,#fffdf8,#fffaf6)}
 .task:active{border-color:#e0d0b6;box-shadow:0 1px 4px rgba(90,70,40,.07)}
 .task-top{display:flex;align-items:center;justify-content:space-between;padding:0 3px 7px;gap:8px}
+/* 只有标题行与统计行点了才进详情 */
+.task-top[data-open],.task-stats[data-open]{cursor:pointer}
 .task-name{
   font-family:var(--serif);font-size:16.5px;letter-spacing:.5px;line-height:1.34;
   display:flex;align-items:center;gap:5px;min-width:0;
@@ -10774,14 +10776,14 @@ function renderTaskListInto(box, cat) {
         '<span class="gtxt">' + n + ' / ' + g + (n >= g ? ' ✓' : '') + '</span>' +
       '</div>') : '';
     var statsHTML = (showTot || showMtot) ? (
-      '<div class="task-stats' + (showMtot && showTot ? '' : ' solo') + '">' +
+      '<div class="task-stats' + (showMtot && showTot ? '' : ' solo') + '" data-open="' + esc(t.id) + '">' +
         (showMtot ? '<span class="st-m">本月 ' + taskMonthTotal(t.id) + '</span>' : '') +
         (showTot ? '<span class="st-a">总计 ' + taskTotal(t.id) +
             (taskTarget(t) ? ' / ' + taskTarget(t) : '') + '</span>' : '') +
       '</div>') : '';
     return '' +
-      '<div class="task' + (n > 0 ? ' done' : '') + (g && n >= g ? ' goal-done' : '') + '" data-id="' + esc(t.id) + '" data-open="' + esc(t.id) + '">' +
-        '<div class="task-top">' +
+      '<div class="task' + (n > 0 ? ' done' : '') + (g && n >= g ? ' goal-done' : '') + '" data-id="' + esc(t.id) + '">' +
+        '<div class="task-top" data-open="' + esc(t.id) + '">' +
           '<div class="task-name"><span>' + esc(t.name) + '</span></div>' +
           '<div class="task-nums">' +
             '<div class="task-num' + (n > 0 ? '' : ' zero') + '" data-count="' + esc(t.id) + '">' +
@@ -13166,16 +13168,16 @@ function bindEvents() {
     el = e.target.closest('[data-tab]');
     if (el) { switchTab(el.dataset.tab, 0); return; }
 
-    /* 打开功课详情：只有标题、本月/累计、日目标进度条可点 */
-    el = e.target.closest('[data-open]');
-    if (el && e.target.closest('.task-name, .task-stats, .task-goal')) {
-      openDetail(el.dataset.open);
-      return;
-    }
+    /* 计数按钮区（+1 / +10 …）：只做加减，绝不触发行上的其他动作 */
+    if (e.target.closest('.btns')) return;
 
-    /* 点击计数 -> 手动输入 */
+    /* 点击计数 -> 手动输入（在标题行里，优先级高于「打开详情」） */
     el = e.target.closest('[data-count]');
     if (el) { openCountEditor(el.dataset.count); return; }
+
+    /* 打开功课详情：只有标题行与本日/累计统计行可点 */
+    el = e.target.closest('[data-open]');
+    if (el) { openDetail(el.dataset.open); return; }
 
     /* 汇总卡片 -> 切回 5 tab 模式并跳到该日 */
     el = e.target.closest('[data-goto]');
