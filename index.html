@@ -9866,6 +9866,7 @@ function defaultDB() {
       showTrad: true,
       showJq: true,
       showTabTotal: false,
+      showSumMeta: true,
       defaultPlaceId: '',
       useLastPlace: true,
       lastPlaceId: ''
@@ -9913,6 +9914,8 @@ function normalizeSettings(src) {
   if (typeof out.defaultPlaceId !== 'string') out.defaultPlaceId = '';
   /* 1.18：日记默认沿用最近一次用过的地点 */
   if (typeof out.useLastPlace !== 'boolean') out.useLastPlace = true;
+  /* 总览卡片上的地点 / 天气，默认显示 */
+  if (typeof out.showSumMeta !== 'boolean') out.showSumMeta = true;
   if (typeof out.lastPlaceId !== 'string') out.lastPlaceId = '';
   return out;
 }
@@ -10840,8 +10843,10 @@ function renderSummaryHTML() {
     else if (fest) tag = fest;
 
     var meta = [];
-    if (rec.loc) meta.push(esc(rec.loc));
-    if (rec.w) meta.push('<i class="wdot ' + weatherClass(rec.w) + '"></i>' + esc(rec.w));
+    if (DB.settings.showSumMeta !== false) {
+      if (rec.loc) meta.push(esc(rec.loc));
+      if (rec.w) meta.push('<i class="wdot ' + weatherClass(rec.w) + '"></i>' + esc(rec.w));
+    }
     html += '<div class="sum-day" data-goto="' + ds + '" data-ds="' + ds + '">' +
       '<div class="sum-head">' +
         '<span class="gd' + (isToday ? ' today' : '') + '">' + gd + '</span>' +
@@ -10964,7 +10969,6 @@ function weatherClass(k) {
 
 function renderDiaryInto(box) {
   var rec = getRec(UI.date, true);
-  applyDefaultPlace(rec, UI.date);
   if (!rec.d.length) rec.d = [{ t: 'p', x: '' }];
   var dateChanged = diaryDate !== UI.date;
   diaryBlocks = rec.d;
@@ -11190,7 +11194,6 @@ function updateDiaryMetaCount() {
 
 function ensureDiaryRec() {
   var rec = getRec(UI.date, true);
-  applyDefaultPlace(rec, UI.date);
   if (!Array.isArray(rec.d) || !rec.d.length) rec.d = [{ t: 'p', x: '' }];
   diaryBlocks = rec.d;
   diaryDate = UI.date;
@@ -11468,15 +11471,21 @@ function applyPlaceToRec(p, ds) {
   refreshDiary();
   toast('地点：' + p.name);
 }
-/* 新的一天还没有地点时，套用默认常用地点（只对今天及以后生效，不改动旧日记） */
-function applyDefaultPlace(rec, ds) {
+/* 自动补地点：只在「当天」且用户真的点进日记正文之后才做。
+   只翻到日记页不会凭空填地点，也不会污染「最近一次地点」 */
+function maybeAutoPlace() {
+  if (UI.view !== 'home' || UI.tab !== 'diary' || UI.mode !== 'record') return;
+  if (UI.date !== TODAY) return;
+  var rec = getRec(UI.date, false);
   if (!rec || rec.loc || rec.locOff) return;
-  if (ds && ds < TODAY) return;
   var p = autoPlace();
   if (!p) return;
   rec.loc = p.name;
   rec.place = p.id;
   notePlaceUsed(p.id);
+  saveNow();
+  var meta = document.querySelector('.diary-meta');
+  if (meta) meta.outerHTML = diaryMetaHTML(getRec(UI.date, true));
 }
 
 function provOptions(cur) {
@@ -12620,6 +12629,9 @@ function renderSettings() {
     '<div class="set-row" data-actx="mydays">' +
       '<div class="lbl">我的重要日<em>自定义农历 / 公历纪念日</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
+    '<div class="set-row" data-toggle="showSumMeta">' +
+      '<div class="lbl">总览显示地点与天气<em>关闭后汇总卡片只留功课与日记</em></div>' +
+      '<span class="switch ' + (s.showSumMeta !== false ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">地点</div><div class="set-card">' +
@@ -13001,10 +13013,6 @@ function bindEvents() {
     if (el) {
       var key = el.dataset.toggle;
       DB.settings[key] = !DB.settings[key];
-      if (key === 'useLastPlace' && DB.settings[key] && UI.date >= TODAY) {
-        var r0 = DB.records[UI.date];
-        if (r0 && !r0.loc && !r0.locOff) applyDefaultPlace(r0, UI.date);
-      }
       saveNow();
       renderSettings();
       return;
@@ -13049,6 +13057,9 @@ function bindEvents() {
       return;
     }
 
+    /* 点进日记正文：这时才自动补地点 */
+    if (e.target.closest('#blocks')) maybeAutoPlace();
+
     /* 日记：天气 / 地点 / 插入时间 */
     if (e.target.closest('[data-wx]')) { chooseWeather(); return; }
     if (e.target.closest('[data-loc]')) { chooseLocation(); return; }
@@ -13064,6 +13075,11 @@ function bindEvents() {
     if (e.target.closest('#btn-add-task')) { openTaskEditor(null, UI.taskCat); return; }
     if (e.target.closest('#btn-add-myday')) { openMyDayEditor(null); return; }
     if (e.target.closest('#btn-add-place')) { openPlaceForm({ mode: 'manage' }); return; }
+  });
+
+  /* 点进日记正文：这时才自动补地点（工具条、天气/地点 chip 不算） */
+  app.addEventListener('focusin', function (e) {
+    if (e.target.closest('#blocks')) maybeAutoPlace();
   });
 
   /* 日记块事件 */
