@@ -803,6 +803,14 @@ img{max-width:100%;display:block}
 }
 .chip .wdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:#c3b8a2}
 .diary-meta .meta-n{margin-left:auto;font-size:10px;color:var(--ink3);padding-right:2px}
+/* 复制全文 */
+.meta-copy{
+  flex:0 0 auto;width:25px;height:25px;border-radius:50%;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--ink3);background:var(--card);border:1px solid var(--line);
+}
+.meta-copy svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.meta-copy:active{background:var(--accent-soft);color:var(--accent);border-color:#e8ccc3}
 
 .wdot{display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:#c3b8a2}
 .w-sun{background:#e0a94a}
@@ -879,9 +887,10 @@ img{max-width:100%;display:block}
 
 /* 日记工具条四项均分 */
 .diary-bar .dbtn{flex:1}
+.diary-bar .dbtn svg{width:15px;height:15px}
 /* 未来的日期：工具条只留一句说明，按钮全部置灰 */
 .diary-bar.ro{gap:0;justify-content:center}
-.diary-bar.ro .dbtn{flex:0 0 auto;width:38px}
+.diary-bar.ro .bar-ro{margin-left:0}
 .diary-empty{padding:16px 2px 7px;font-size:12px;color:#b5a992;line-height:1.9;letter-spacing:.3px}
 .bar-ro{
   margin-left:10px;font-size:11px;color:var(--ink3);letter-spacing:.3px;
@@ -11123,22 +11132,32 @@ function diaryMetaHTML(rec) {
       (w ? '<i class="wdot ' + weatherClass(w) + '"></i><span>' + esc(w) + '</span>' : sun + '<span>天气</span>') +
     '</button>' +
     '<span class="meta-n">' + (n > 1 ? n + ' 条' : '') + '</span>' +
+    '<button class="meta-copy" data-copyall="1" aria-label="复制全文" title="复制全文">' +
+      '<svg viewBox="0 0 24 24"><rect x="8.6" y="8.6" width="11" height="11" rx="2.2"/><path d="M15.4 5.2H6.6A1.4 1.4 0 0 0 5.2 6.6v8.8"/></svg>' +
+    '</button>' +
   '</div>';
 }
 
 function diaryBarHTML() {
-  var ro = diaryRO;
-  var dis = ro ? ' disabled' : '';
-  return '<div class="diary-bar' + (ro ? ' ro' : '') + '">' +
+  /* 未来的日期：按钮一个也用不上，只留一句说明 */
+  if (diaryRO) {
+    return '<div class="diary-bar ro">' +
+      '<span class="bar-ro">未来的日期还不能写日记</span>' +
+      '</div>';
+  }
+  return '<div class="diary-bar">' +
     '<button class="dbtn" data-undo="1" aria-label="撤回" title="撤回" disabled>' +
       '<svg viewBox="0 0 24 24"><path d="M9 14.5 4.2 9.7 9 4.9"/><path d="M4.2 9.7h9.3a6.3 6.3 0 0 1 0 12.6H11"/></svg></button>' +
     '<button class="dbtn" data-redo="1" aria-label="重做" title="重做" disabled>' +
       '<svg viewBox="0 0 24 24"><path d="m15 14.5 4.8-4.8L15 4.9"/><path d="M19.8 9.7h-9.3a6.3 6.3 0 0 0 0 12.6H13"/></svg></button>' +
-    '<button class="dbtn" data-bullet="1" aria-label="无序列表" title="无序列表"' + dis + '>' +
+    '<button class="dbtn" data-bullet="1" aria-label="无序列表" title="无序列表">' +
       '<svg viewBox="0 0 24 24"><circle cx="5.6" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="5.6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5.6" cy="17" r="1.5" fill="currentColor" stroke="none"/><path d="M10.6 7h9M10.6 12h9M10.6 17h9"/></svg></button>' +
-    '<button class="dbtn" data-nowtime="1" aria-label="插入当前时间" title="插入时间"' + dis + '>' +
+    '<button class="dbtn" data-line="-1" aria-label="上方插入新行" title="上方插入新行">' +
+      '<svg viewBox="0 0 24 24"><path d="M4.2 4.4h15.6"/><path d="M12 20.2V8.4"/><path d="m7.4 13 4.6-4.6 4.6 4.6"/></svg></button>' +
+    '<button class="dbtn" data-line="1" aria-label="下方插入新行" title="下方插入新行">' +
+      '<svg viewBox="0 0 24 24"><path d="M4.2 19.6h15.6"/><path d="M12 3.8v11.8"/><path d="m7.4 11 4.6 4.6 4.6-4.6"/></svg></button>' +
+    '<button class="dbtn" data-nowtime="1" aria-label="插入当前时间" title="插入时间">' +
       '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.8V12l3.1 1.9"/></svg></button>' +
-    (ro ? '<span class="bar-ro">未来的日期还不能写日记</span>' : '') +
     '</div>';
 }
 
@@ -11246,10 +11265,8 @@ function setCaretAt(el, off) {
   } catch (e) { }
 }
 
-/* 无序列表：在光标所在行的行首加 / 去「• 」 */
-function toggleBullet() {
-  if (diaryRO) { toast('未来的日期还不能写日记'); return; }
-  ensureDiaryRec();
+/* 光标所在的块：优先用工具条按下时记下的位置（点按钮会让编辑区失焦） */
+function currentBlockIdx() {
   var idx = -1, off = 0;
   if (pendingCaret && pendingCaret.ds === UI.date && diaryBlocks[pendingCaret.i]) {
     idx = pendingCaret.i;
@@ -11263,6 +11280,15 @@ function toggleBullet() {
     }
   }
   if (idx < 0 || !diaryBlocks[idx]) idx = diaryBlocks.length - 1;
+  return { idx: idx, off: off };
+}
+
+/* 无序列表：在光标所在行的行首加 / 去「• 」 */
+function toggleBullet() {
+  if (diaryRO) { toast('未来的日期还不能写日记'); return; }
+  ensureDiaryRec();
+  var c = currentBlockIdx();
+  var idx = c.idx, off = c.off;
   var b = diaryBlocks[idx];
   if (!b) return;
   var ed = document.querySelector('#blocks .ed[data-i="' + idx + '"]');
@@ -11379,6 +11405,11 @@ function onBlockKey(e) {
   if (diaryRO) return;
   var ed = e.target.closest('.ed');
   if (!ed) return;
+  /* Ctrl/Cmd+A：选中整篇，方便整体复制（原生只会选当前块） */
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+    if (selectWholeDiary()) e.preventDefault();
+    return;
+  }
   var i = +ed.dataset.i;
   var b = diaryBlocks[i];
   if (!b) return;
@@ -11426,48 +11457,135 @@ function onBlockPaste(e) {
   document.execCommand('insertText', false, text);
 }
 
-/* ---------- 插入时间 / 天气 / 地点 ---------- */
+/* ---------- 插入时间 / 插入新行 / 天气 / 地点 ---------- */
 var pendingCaret = null;
 
 function stampNow() {
   var d = new Date();
-  return '[' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '] ';
+  return '[' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ']';
 }
 
+/* 时间按钮：只在光标处插入形如「[05:01]」的文字，不另起一行、不改动已有内容 */
 function insertTimeStamp() {
   if (diaryRO) { toast('未来的日期还不能写日记'); return; }
   var s = stampNow();
-  var ds = UI.date;
-  var pc = pendingCaret;
-  pendingCaret = null;
   ensureDiaryRec();
-
-  var idx = -1;
-  if (pc && pc.ds === ds && diaryBlocks[pc.i]) idx = pc.i;
-  if (idx < 0) {
-    for (var i = diaryBlocks.length - 1; i >= 0; i--) {
-      if (diaryBlocks[i]) { idx = i; break; }
-    }
-  }
-
-  var cur = idx >= 0 ? diaryBlocks[idx] : null;
-  var stampOnly = /^\[\d{2}:\d{2}\]\s*$/;
-  if (cur && stampOnly.test((cur.x || '').trim())) {
-    cur.x = s;                                  // 连点只刷新时间
-  } else if (cur && (cur.x || '').trim()) {
-    diaryBlocks.splice(idx + 1, 0, { t: 'p', x: s });   // 另起一条
-    idx = idx + 1;
-  } else if (cur) {
-    cur.x = s;
+  var c = currentBlockIdx();
+  pendingCaret = null;
+  var ed = document.querySelector('#blocks .ed[data-i="' + c.idx + '"]');
+  if (ed) {
+    ed.focus();
+    setCaretAt(ed, c.off);
+    document.execCommand('insertText', false, s);
   } else {
-    diaryBlocks.push({ t: 'p', x: s });
-    idx = diaryBlocks.length - 1;
+    var b = diaryBlocks[c.idx] || diaryBlocks[diaryBlocks.length - 1];
+    b.x = (b.x || '') + s;
+    paintBlocks();
+    focusBlock(c.idx, (b.x || '').length);
   }
+  saveNow();
+  updateDiaryMetaCount();
+  pushHistory();
+}
 
+/* 在光标所在块的上方（dir=-1）/ 下方（dir=1）插入一个空行 */
+function insertDiaryLine(dir) {
+  if (diaryRO) { toast('未来的日期还不能写日记'); return; }
+  ensureDiaryRec();
+  var c = currentBlockIdx();
+  pendingCaret = null;
+  var at = c.idx + (dir < 0 ? 0 : 1);
+  if (at < 0) at = 0;
+  diaryBlocks.splice(at, 0, { t: 'p', x: '' });
   saveNow();
   paintBlocks();
-  focusBlock(idx, s.length);
+  focusBlock(at, 0);
+  updateDiaryMetaCount();
   pushHistory();
+}
+
+/* ---------- 整体复制 ----------
+   日记按块存，但复制出去应该是整篇连续的文字：不带序号、不带 • 之外的装饰，
+   块与块之间只留一个换行 */
+function diaryPlainText() {
+  var out = [];
+  diaryBlocks.forEach(function (b) {
+    if (!b || b.t === 'i') return;
+    out.push(b.x || '');
+  });
+  return out.join('\n').replace(/[\s\u00a0]+$/, '');
+}
+
+function legacyCopy(txt) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, txt.length);
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+
+function copyAllDiary() {
+  var txt = diaryPlainText();
+  if (!txt) { toast('这一天还没有内容'); return; }
+  var done = function () { toast('已复制全文'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(done, function () {
+      if (legacyCopy(txt)) done(); else toast('复制失败，请长按选中后复制');
+    });
+  } else if (legacyCopy(txt)) {
+    done();
+  } else {
+    toast('复制失败，请长按选中后复制');
+  }
+}
+
+/* 全选整篇日记（Ctrl/Cmd+A 只选一个块，这里改成整块区域） */
+function selectWholeDiary() {
+  var host = document.getElementById('blocks');
+  if (!host) return false;
+  try {
+    var r = document.createRange();
+    r.selectNodeContents(host);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* 跨块选中时，把选区还原成干净文本（块之间一个换行，不含序号） */
+function diarySelectionText() {
+  var host = document.getElementById('blocks');
+  if (!host) return '';
+  var sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return '';
+  var r = sel.getRangeAt(0);
+  var root = r.commonAncestorContainer;
+  if (root !== host && !host.contains(root)) return '';
+  var parts = [];
+  var eds = host.querySelectorAll('.ed');
+  Array.prototype.forEach.call(eds, function (ed) {
+    if (!r.intersectsNode(ed)) return;
+    var whole = document.createRange();
+    whole.selectNodeContents(ed);
+    var inter = r.cloneRange();
+    if (inter.compareBoundaryPoints(Range.START_TO_START, whole) < 0) {
+      inter.setStart(whole.startContainer, whole.startOffset);
+    }
+    if (inter.compareBoundaryPoints(Range.END_TO_END, whole) > 0) {
+      inter.setEnd(whole.endContainer, whole.endOffset);
+    }
+    parts.push(inter.toString());
+  });
+  if (!parts.length) return '';
+  return parts.join('\n').replace(/[\s\u00a0]+$/, '');
 }
 
 /* 让日记工具条贴近屏幕底部 */
@@ -13260,6 +13378,9 @@ function bindEvents() {
     if (e.target.closest('[data-wx]')) { chooseWeather(); return; }
     if (e.target.closest('[data-loc]')) { chooseLocation(); return; }
     if (e.target.closest('[data-nowtime]')) { insertTimeStamp(); return; }
+    if (e.target.closest('[data-copyall]')) { copyAllDiary(); return; }
+    var ln = e.target.closest('[data-line]');
+    if (ln) { insertDiaryLine(+ln.dataset.line || 1); return; }
 
     /* 日记工具条：撤回 / 重做 / 无序列表 */
     if (e.target.closest('[data-undo]')) { undoDiary(); return; }
@@ -13316,6 +13437,15 @@ function bindEvents() {
   });
   app.addEventListener('paste', function (e) {
     if (e.target.closest('.ed')) onBlockPaste(e);
+  });
+  /* 复制：跨块选中时输出干净全文（不带序号，块间只留一个换行）
+     copy 的 target 不一定是编辑块（全选后焦点会落到别处），所以只看选区 */
+  app.addEventListener('copy', function (e) {
+    if (!e.clipboardData || !document.getElementById('blocks')) return;
+    var txt = diarySelectionText();
+    if (!txt) return;
+    e.clipboardData.setData('text/plain', txt);
+    e.preventDefault();
   });
   app.addEventListener('blur', function (e) {
     if (e.target.closest && e.target.closest('.ed')) saveNow();
