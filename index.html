@@ -736,6 +736,7 @@ img{max-width:100%;display:block}
 }
 .cell .mks i{width:4px;height:4px;border-radius:50%;display:block}
 /* 斋日：蓝色 */
+.cell .mks .zd,
 .cell .mks .shuo,
 .cell .mks .z6,
 .cell .mks .z10,
@@ -10567,17 +10568,17 @@ function renderCalHTML() {
 
   var legend = '';
   var legs = [];
-  /* 图例自左至右：佛教节日、斋日、传统节日、节气、功课、重要日
-     斋日只占一项：朔望 / 六斋 / 十斋 / 观音斋 / 月斋 都叫「斋日」，不再逐类列出 */
+  /* 图例自左至右：佛教节日、斋戒日、传统节日、节气、纪念日、功课
+     斋戒日只占一项：朔望 / 六斋 / 十斋 / 观音斋 / 月斋 都叫「斋戒日」，不再逐类列出 */
   if (DB.settings.showFest) legs.push('<span><i class="fd"></i>佛教节日</span>');
   var st0 = DB.settings;
   if (st0.showShuo || st0.showZhai6 || st0.showZhai10 || st0.showGuanyin || st0.showYueZhai) {
-    legs.push('<span><i class="zd"></i>斋日</span>');
+    legs.push('<span><i class="zd"></i>斋戒日</span>');
   }
   if (DB.settings.showTrad !== false) legs.push('<span><i class="tr"></i>传统节日</span>');
   if (DB.settings.showJq) legs.push('<span><i class="jq"></i>节气</span>');
+  if ((DB.mydays || []).length) legs.push('<span><i class="my"></i>纪念日</span>');
   legs.push('<span><i class="hw"></i>功课</span>');
-  if ((DB.mydays || []).length) legs.push('<span><i class="my"></i>重要日</span>');
   if (legs.length) legend = '<div class="cal-legend">' + legs.join('') + '</div>';
 
   return '<div class="cal-wrap"><div class="cal-card">' +
@@ -10662,7 +10663,8 @@ function cellHTML(ds, dayNum, out) {
   /* 功课：标在日期右上方；下方一行自左至右：佛教节日、斋日、传统节日、节气、重要日 */
   var botMks = [];
   if (fest) botMks.push('fd');
-  zhaiKeysOf(info).forEach(function (k) { botMks.push(k); });
+  /* 斋戒日只占一个点：同一天既是六斋又是十斋，也只画一颗 */
+  if (zhaiKeysOf(info).length) botMks.push('zd');
   if (trad) botMks.push('tr');
   if (jq) botMks.push('jq');
   if (customs.length) botMks.push('my');
@@ -12807,7 +12809,7 @@ function renderSettings() {
       '<span class="val">+ ' + esc(s.buddhaOffset) + ' 年</span><span class="chev">›</span></div>' +
     '</div></div>';
 
-  html += '<div class="set-sec"><div class="set-title">斋日（可多选）</div><div class="set-card">' +
+  html += '<div class="set-sec"><div class="set-title">斋戒日（可多选）</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showShuo">' +
       '<div class="lbl">朔望日<em>农历初一、十五</em></div>' +
       '<span class="switch ' + (s.showShuo ? 'on' : '') + '"></span></div>' +
