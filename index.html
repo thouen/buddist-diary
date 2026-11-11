@@ -923,12 +923,13 @@ img{max-width:100%;display:block}
 #blocks .ed[readonly]{cursor:default}
 
 /* ---------- 重要日（自定义） ---------- */
-.cell .mks .my{background:#b8432f}
+/* 纪念日：粉色，与功课红、佛教节日的金色区分开 */
+.cell .mks .my{background:#d8789f}
 .cell.trd .l{color:#b8860b}
-.cell.myd .l{color:#b8432f;font-weight:600}
+.cell.myd .l{color:#c1577f;font-weight:600}
 .cell.sel.myd .l{color:#fff}
-.cal-legend i.my{background:#b8432f}
-.badge.myd{background:#f7e5df;color:#a63a2a;border-color:#eccfc8}
+.cal-legend i.my{background:#d8789f}
+.badge.myd{background:#fbe9f0;color:#ad4870;border-color:#f0ceda}
 .md-row{
   display:flex;align-items:center;gap:10px;padding:11px 13px;
   border-bottom:1px solid var(--line2);font-size:14px;
@@ -1189,18 +1190,18 @@ img{max-width:100%;display:block}
     <div class="scroll" id="fest-scroll"></div>
   </section>
 
-  <!-- ============ 我的重要日 ============ -->
+  <!-- ============ 我的纪念日 ============ -->
   <section id="view-mydays" class="view hidden">
     <div class="page-head">
       <button class="back" data-back="1" aria-label="返回">
         <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
-      <div class="page-title">我的重要日</div>
+      <div class="page-title">我的纪念日</div>
     </div>
     <div class="scroll" id="mydays-scroll"></div>
     <button class="addbtn" id="btn-add-myday">
       <svg viewBox="0 0 24 24" width="15" height="15" stroke="#fff" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      添加重要日
+      添加纪念日
     </button>
   </section>
 
@@ -10062,12 +10063,15 @@ function normalizeMyDays(list) {
   return list.filter(function (x) {
     return x && String(x.name || '').trim() && +x.m >= 1 && +x.m <= 12 && +x.d >= 1 && +x.d <= 31;
   }).map(function (x) {
+    var y = +x.y;
     return {
       id: x.id || uid('md'),
       name: String(x.name).trim(),
       kind: x.kind === 'lunar' ? 'lunar' : 'solar',
       m: +x.m,
-      d: +x.d
+      d: +x.d,
+      /* 0 / 缺省 = 年年重复；填了年份就只在那一年出现一次 */
+      y: y >= 1900 && y <= 2100 ? Math.floor(y) : 0
     };
   });
 }
@@ -10363,7 +10367,7 @@ function zhaiKeysOf(info) {
   return out;
 }
 
-/* ---------- 自定义重要日 ---------- */
+/* ---------- 自定义纪念日 ---------- */
 function myDaysOn(ds) {
   var list = DB.mydays || [];
   if (!list.length) return [];
@@ -10372,19 +10376,24 @@ function myDaysOn(ds) {
   for (var i = 0; i < list.length; i++) {
     var m = list[i];
     if (m.kind === 'lunar') {
+      if (+m.y && +m.y !== info.y) continue;
       if (+m.m === info.m && +m.d === info.d) out.push(m);
-    } else if (+m.m === info.shm && +m.d === info.shd) {
-      out.push(m);
+    } else {
+      if (+m.y && +m.y !== info.shy) continue;
+      if (+m.m === info.shm && +m.d === info.shd) out.push(m);
     }
   }
   return out;
 }
 
 function myDayText(m) {
-  return (m.kind === 'lunar' ? '农历 ' : '公历 ') + (+m.m) + ' 月 ' + (+m.d) + ' 日';
+  return (m.kind === 'lunar' ? '农历 ' : '公历 ') +
+    (+m.y ? (+m.y) + ' 年 ' : '') + (+m.m) + ' 月 ' + (+m.d) + ' 日';
 }
+/* 只在某一年出现一次的纪念日，跨年后就不再参与「最近到来」排序 */
+function myDayOnce(m) { return !!+m.y; }
 
-/* 从 fromDs 起，为每个重要日找最近一次出现的日期 */
+/* 从 fromDs 起，为每个纪念日找最近一次出现的日期 */
 function nextOccurrences(fromDs, days) {
   var map = {};
   var list = DB.mydays || [];
@@ -12682,16 +12691,16 @@ function renderFestivals() {
   }
 }
 
-/* ---------- 我的重要日 ---------- */
+/* ---------- 我的纪念日 ---------- */
 function renderMyDays() {
   var list = DB.mydays || [];
   var scroll = $('#mydays-scroll');
-  var nx = nextOccurrences(TODAY, 420);
+  var nx = nextOccurrences(TODAY, 800);
   var html = '';
 
   if (!list.length) {
     html = '<div class="empty-state" style="padding:60px 32px"><span class="big">日</span>' +
-      '还没有自定义的重要日<br>可添加农历或公历的生日、纪念日' +
+      '还没有自定义的纪念日<br>可添加农历或公历的生日、受戒日、纪念日' +
       '<div style="padding-top:16px;font-size:11.5px;color:#c0b49e">添加后会标记在日历上</div></div>';
   } else {
     var rows = list.slice().sort(function (a, b) {
@@ -12708,6 +12717,8 @@ function renderMyDays() {
         extra = pd.getMonth() + 1 + '月' + pd.getDate() + '日';
         var away = dayGap(TODAY, nd);
         extra += away === 0 ? ' · 今天' : ' · ' + away + ' 天后';
+      } else if (myDayOnce(m)) {
+        extra = '仅 ' + (+m.y) + ' 年';
       }
       html += '<div class="md-row" data-mdedit="' + esc(m.id) + '">' +
         '<div class="nm"><b>' + esc(m.name) + '</b>' +
@@ -12719,7 +12730,8 @@ function renderMyDays() {
   }
 
   html += '<div style="padding:12px 20px calc(100px + var(--safe-b));font-size:11px;color:#b5a992;line-height:1.9">' +
-    '农历重要日按每年同一农历月日计算，闰月不另计；公历重要日按每年同一公历月日计算。重要日只保存在本机，可随备份一起导出。' +
+    '纪念日默认按每年同一月日重复：农历的按农历月日、公历的按公历月日，闰月不另计。' +
+    '也可以只设某一年，那就只在那一年的日历上出现一次。纪念日只保存在本机，可随备份一起导出。' +
     '</div>';
 
   $('#mydays-scroll').innerHTML = html;
@@ -12763,6 +12775,7 @@ function openMyDayEditor(id) {  var m = null;
   var mm = m ? +m.m : 1;
   var dd = m ? +m.d : 1;
   var maxD = kind === 'lunar' ? 30 : 31;
+  var yy = m ? (+m.y || 0) : 0;
 
   function opts(n, cur) {
     var a = [];
@@ -12773,19 +12786,29 @@ function openMyDayEditor(id) {  var m = null;
   }
 
   openModal(
-    '<h4>' + (isNew ? '添加重要日' : '编辑重要日') + '</h4>' +
+    '<h4>' + (isNew ? '添加纪念日' : '编辑纪念日') + '</h4>' +
     '<div class="field"><label>名称</label>' +
       '<input id="f-mdname" type="text" value="' + esc(m ? m.name : '') + '" placeholder="如：母亲生日、皈依纪念日"></div>' +
     '<div class="field"><label>历法</label><div class="seg2" id="f-mdkind">' +
       '<button data-mdkind="lunar" class="' + (kind === 'lunar' ? 'on' : '') + '">农历</button>' +
       '<button data-mdkind="solar" class="' + (kind === 'solar' ? 'on' : '') + '">公历</button>' +
     '</div></div>' +
+    '<div class="field"><label>年份（可选）</label><select id="f-mdy">' +
+      '<option value="0"' + (yy ? '' : ' selected') + '>每年重复</option>' +
+      (function () {
+        var a = [];
+        for (var y = 1900; y <= 2100; y++) {
+          a.push('<option value="' + y + '"' + (y === yy ? ' selected' : '') + '>' + y + ' 年</option>');
+        }
+        return a.join('');
+      })() +
+    '</select></div>' +
     '<div class="field-row">' +
       '<div class="field"><label>月</label><select id="f-mdm">' + opts(12, mm) + '</select></div>' +
       '<div class="field"><label>日</label><select id="f-mdd">' + opts(maxD, Math.min(dd, maxD)) + '</select></div>' +
     '</div>' +
     (isNew ? '' : '<div style="text-align:center;padding:4px 0 0">' +
-      '<button style="color:#b8442f;font-size:12.5px" data-mddel="' + esc(m.id) + '">删除这个重要日</button></div>') +
+      '<button style="color:#b8442f;font-size:12.5px" data-mddel="' + esc(m.id) + '">删除这个纪念日</button></div>') +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
       '<button class="primary" data-mdsave="1">保存</button>' +
@@ -12796,20 +12819,21 @@ function openMyDayEditor(id) {  var m = null;
       var kdVal = kd ? kd.dataset.mdkind : 'lunar';
       var mv = parseInt($('#f-mdm').value, 10) || 1;
       var dv = parseInt($('#f-mdd').value, 10) || 1;
+      var yv = parseInt($('#f-mdy').value, 10) || 0;
       if (!nm) { toast('请填写名称'); return; }
       var maxDay = kdVal === 'lunar' ? 30 : daysInMonth(2024, mv);
       if (dv > maxDay) dv = maxDay;
       if (isNew) {
-        DB.mydays.push({ id: uid('md'), name: nm, kind: kdVal, m: mv, d: dv });
+        DB.mydays.push({ id: uid('md'), name: nm, kind: kdVal, m: mv, d: dv, y: yv });
       } else {
-        m.name = nm; m.kind = kdVal; m.m = mv; m.d = dv;
+        m.name = nm; m.kind = kdVal; m.m = mv; m.d = dv; m.y = yv;
       }
       saveNow();
       LunarCache = {};
       closeModal();
       renderMyDays();
       if (UI.view === 'home') renderHome();
-      toast(isNew ? '已添加重要日' : '已保存');
+      toast(isNew ? '已添加纪念日' : '已保存');
     }
   );
   setTimeout(function () { var el = $('#f-mdname'); if (el) el.focus(); }, 140);
@@ -12855,7 +12879,7 @@ function renderSettings() {
       '<div class="lbl">二十四节气<em>日历上以绿色标记</em></div>' +
       '<span class="switch ' + (s.showJq ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-actx="mydays">' +
-      '<div class="lbl">我的重要日<em>自定义农历 / 公历纪念日</em></div>' +
+      '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日，可只设某一年</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-toggle="showSumMeta">' +
       '<div class="lbl">总览显示地点与天气<em>关闭后汇总卡片只留功课与日记</em></div>' +
@@ -13775,7 +13799,7 @@ function openMenu() {
       }
     },
     {
-      k: 'mydays', t: '我的重要日', s: '自定义农历 / 公历纪念日',
+      k: 'mydays', t: '我的纪念日', s: '自定义农历 / 公历纪念日',
       icon: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7-4.2-7-9.2a3.9 3.9 0 0 1 7-2.2 3.9 3.9 0 0 1 7 2.2c0 5-7 9.2-7 9.2z"/></svg>',
       fn: function () { showView('mydays'); }
     },
