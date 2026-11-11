@@ -27,6 +27,11 @@
   --accent-soft:#f7e5df;
   --gold:#a9803a;
   --gold-soft:#f7eed8;
+  /* 纪念日：青碧色系，与斋戒日蓝 #3f6fa8、节气绿 #5f8b52 都拉得开 */
+  --cyan:#2e7f7b;
+  --cyan-deep:#1f6360;
+  --cyan-soft:#e7f3f1;
+  --cyan-line:#bcded9;
   --radius:16px;
   --serif:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
   --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif;
@@ -927,13 +932,13 @@ img{max-width:100%;display:block}
 #blocks .ed[readonly]{cursor:default}
 
 /* ---------- 重要日（自定义） ---------- */
-/* 纪念日：粉色，与功课红、佛教节日的金色区分开 */
-.cell .mks .my{background:#d8789f}
+/* 纪念日：青碧色，与功课红、斋戒日蓝、节气绿都区分开 */
+.cell .mks .my{background:var(--cyan)}
 .cell.trd .l{color:#b8860b}
-.cell.myd .l{color:#c1577f;font-weight:600}
+.cell.myd .l{color:var(--cyan-deep);font-weight:600}
 .cell.sel.myd .l{color:#fff}
-.cal-legend i.my{background:#d8789f}
-.badge.myd{background:#fbe9f0;color:#ad4870;border-color:#f0ceda}
+.cal-legend i.my{background:var(--cyan)}
+.badge.myd{background:var(--cyan-soft);color:var(--cyan-deep);border-color:var(--cyan-line)}
 .md-row{
   display:flex;align-items:center;gap:10px;padding:11px 13px;
   border-bottom:1px solid var(--line2);font-size:14px;
