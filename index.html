@@ -598,6 +598,13 @@ img{max-width:100%;display:block}
 .chk:has(input:disabled){opacity:.55}
 .chk em{font-style:normal;font-size:10.5px;color:var(--ink3);margin-left:6px}
 .field-note{font-size:10.5px;color:var(--ink3);padding:0 0 8px;line-height:1.6}
+/* 弹窗里的开关行（与设置页共用 .switch） */
+.field-chk{
+  display:flex;align-items:center;gap:10px;margin:2px 0 12px;padding:10px 12px;
+  border:1px solid var(--line);border-radius:10px;background:var(--card);
+}
+.field-chk .lbl{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--ink)}
+.field-chk .lbl em{font-style:normal;font-size:10.5px;color:var(--ink3);line-height:1.5}
 .tag-def{
   font-size:9.5px;color:var(--accent);background:var(--accent-soft);
   border:1px solid #ecd0c8;border-radius:5px;padding:1px 5px;letter-spacing:.5px;
@@ -903,6 +910,16 @@ img{max-width:100%;display:block}
 
 /* 日记内容撑满可用高度，工具条贴近底部 */
 .diary #blocks{flex:1 1 auto;min-height:0}
+/* 一整篇纯文本：正文就是一个 textarea，换行就是文本里的 \n */
+#blocks{display:flex;flex-direction:column;min-height:0}
+#blocks .ed{
+  flex:1 1 auto;width:100%;min-height:120px;box-sizing:border-box;
+  border:0;outline:none;background:transparent;resize:none;margin:0;
+  padding:3px 0;font-family:inherit;font-size:15px;line-height:1.75;color:var(--ink);
+  overflow-y:auto;-webkit-appearance:none;appearance:none;
+}
+#blocks .ed::placeholder{color:#c4b9a4;font-size:13px}
+#blocks .ed[readonly]{cursor:default}
 
 /* ---------- 重要日（自定义） ---------- */
 .cell .mks .my{background:#b8432f}
@@ -1064,13 +1081,21 @@ img{max-width:100%;display:block}
 /* ---------- 2.0 交互补充 ---------- */
 /* 「今」：只在这一天不是今天时出现，靠右，与上面两行整体垂直居中 */
 .dl-rows{position:relative;display:flex;flex-direction:column;gap:3px}
-.dl-rows.has-today{padding-right:30px}
+.dl-rows.has-today{padding-right:33px}
 .dr-today{
   position:absolute;right:0;top:50%;transform:translateY(-50%);
-  width:23px;height:23px;padding:0;display:flex;align-items:center;justify-content:center;
-  border-radius:50%;font-family:var(--serif);font-size:12.5px;line-height:1;
-  color:var(--accent);background:var(--accent-soft);border:1px solid #ecd0c8;
+  width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;line-height:1;color:var(--accent);
+  background:var(--accent-soft);border:1px solid #ecd0c8;
 }
+/* 今 + 顺时针转一圈的箭头，一眼看出是「回到今天」 */
+.dr-today .ta{
+  position:absolute;left:0;top:0;width:100%;height:100%;
+  fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;
+  opacity:.9;
+}
+.dr-today .ta .hd{fill:currentColor;stroke:none}
+.dr-today span{position:relative;font-family:var(--serif);font-size:10px;letter-spacing:0;line-height:1}
 .dr-today:active{background:#f1d6ce;transform:translateY(-50%) scale(.92)}
 /* 窄屏：佛历与公历同降一档，公历年月日才不会被截断 */
 @media (max-width:345px){
@@ -9779,6 +9804,10 @@ var CATS = [
 var CAT_MAP = {};
 CATS.forEach(function (c) { CAT_MAP[c.k] = c; });
 var TABS = CATS.concat([{ k: 'diary', n: '日记', unit: '', step: 0 }]);
+/* 设置里关掉日记功能后，标签栏只剩四类功课；日记数据仍留在库里 */
+function activeTabs() {
+  return (DB && DB.settings && DB.settings.showDiary === false) ? CATS : TABS;
+}
 
 var BUILTIN = {
   nianfo: [
@@ -9938,6 +9967,8 @@ function defaultDB() {
       showGuanyin: false,
       showTabTotal: false,
       showSumMeta: true,
+      showDiary: true,
+      showSumDiary: true,
       defaultPlaceId: '',
       useLastPlace: true,
       lastPlaceId: ''
@@ -9995,6 +10026,9 @@ function normalizeSettings(src) {
   if (typeof out.useLastPlace !== 'boolean') out.useLastPlace = true;
   /* 总览卡片上的地点 / 天气，默认显示 */
   if (typeof out.showSumMeta !== 'boolean') out.showSumMeta = true;
+  /* 2.5：日记功能与总览里的日记，默认都开着 */
+  if (typeof out.showDiary !== 'boolean') out.showDiary = true;
+  if (typeof out.showSumDiary !== 'boolean') out.showSumDiary = true;
   /* 月斋（三长斋月）默认不显示，独立开关，不受上面斋日单选影响 */
   if (typeof out.showYueZhai !== 'boolean') out.showYueZhai = false;
   /* 观音斋同样独立开关，默认关闭 */
@@ -10129,6 +10163,9 @@ function loadDB() {
         if (!isFinite(v) || v <= 0) delete rr.c[k];
         else rr.c[k] = v;
       });
+      /* 2.5：日记由块数组改成一整篇纯文本，只在有旧数据时迁一次 */
+      if (Array.isArray(rr.d)) { recDiaryText(rr); __dbMigrated = true; }
+      else if (typeof rr.dt !== 'string') rr.dt = '';
     });
     db.mydays = normalizeMyDays(db.mydays);
     db.places = normalizePlaces(db.places);
@@ -10201,26 +10238,19 @@ function tasksOf(cat) {
 function getRec(ds, create) {
   var r = DB.records[ds];
   if (!r && create) {
-    r = DB.records[ds] = { c: {}, d: [] };
+    r = DB.records[ds] = { c: {}, dt: '' };
   }
   if (r) {
     if (!r.c) r.c = {};
-    if (!Array.isArray(r.d)) r.d = [];
+    /* 老存档的块数组（rec.d）在这里折成一段纯文本（rec.dt） */
+    recDiaryText(r);
   }
   return r || null;
 }
 function recHasContent(r) {
   if (!r) return false;
   if (r.c && Object.keys(r.c).length) return true;
-  if (r.d && r.d.length) {
-    return r.d.some(function (b) {
-      if (!b) return false;
-      /* 图片块已不再计入日记内容（2.0 起日记只存纯文本） */
-      if (b.t === 'i') return false;
-      return !!(b.x && String(b.x).trim());
-    });
-  }
-  return false;
+  return !!recDiaryText(r).trim();
 }
 /* 有效功课：任一项功课计数大于 0（日记不计） */
 function hasWorkRec(r) {
@@ -10322,11 +10352,12 @@ function buddhaYear(gy) { return gy + (DB.settings.buddhaOffset || 543); }
 
 /* 当前设置下这一天属于哪些斋日（多选，可同时命中多类，按固定顺序） */
 function zhaiKeysOf(info) {
+  /* 顺序：朔望 → 观音 → 六斋 → 十斋 → 月斋 */
   var st = DB.settings, out = [];
   if (st.showShuo && (info.isShuo || info.isWang)) out.push('shuo');
+  if (st.showGuanyin && info.isGuanyin) out.push('gy');
   if (st.showZhai6 && info.isLiuZhai) out.push('z6');
   if (st.showZhai10 && info.isShiZhai) out.push('z10');
-  if (st.showGuanyin && info.isGuanyin) out.push('gy');
   if (st.showYueZhai && YUEZHAI_MONTHS.indexOf(+info.m) >= 0) out.push('yz');
   return out;
 }
@@ -10495,6 +10526,7 @@ function renderHome() {
   }
 
   tabsEl.style.display = '';
+  if (UI.tab === 'diary' && DB.settings.showDiary === false) UI.tab = CATS[0].k;
   tabsEl.innerHTML = renderTabsHTML();
 
   if (UI.tab === 'diary') {
@@ -10686,7 +10718,13 @@ function gregDateText(info) {
 /* 「今」按钮：只在这一天不是今天时出现，靠右、与上面两行垂直居中 */
 function todayBtnHTML(ds) {
   return ds !== TODAY
-    ? '<button class="dr-today" data-gotoday="1" aria-label="回到今天" title="回到今天">今</button>'
+    ? '<button class="dr-today" data-gotoday="1" aria-label="回到今天" title="回到今天">' +
+        '<svg class="ta" viewBox="0 0 24 24" aria-hidden="true">' +
+          '<path d="M19.9 7.5A9.1 9.1 0 1 1 13.6 3"/>' +
+          '<path class="hd" d="M16.4 3.5 12.8 5.1 13.6 0.9Z"/>' +
+        '</svg>' +
+        '<span>今</span>' +
+      '</button>'
     : '';
 }
 function dateRowsHTML(info, ds) {
@@ -10741,7 +10779,7 @@ function refreshCatSum() {
 }
 
 function renderTabsHTML() {
-  return TABS.map(function (t) {
+  return activeTabs().map(function (t) {
     var has = false;
     var r = DB.records[UI.date];
     if (r && r.c) {
@@ -10749,7 +10787,7 @@ function renderTabsHTML() {
         return tk.cat === t.k && !tk.hidden && r.c[tk.id] > 0;
       });
     }
-    if (t.k === 'diary' && r && r.d && r.d.some(function (b) { return b.t !== 'i' && b.x && String(b.x).trim(); })) has = true;
+    if (t.k === 'diary' && r && recDiaryText(r).trim()) has = true;
     return '<button class="tab ' + (UI.tab === t.k ? 'on' : '') + (has ? ' has' : '') + '" data-tab="' + t.k + '">' +
       '<span class="tl">' + t.n + '<span class="dotmark"></span></span></button>';
   }).join('');
@@ -10853,7 +10891,7 @@ function refreshTabDots() {
     if (r && r.c) {
       has = DB.tasks.some(function (tk) { return tk.cat === k && !tk.hidden && r.c[tk.id] > 0; });
     }
-    if (k === 'diary' && r && r.d && r.d.some(function (b) { return b.t !== 'i' && b.x && String(b.x).trim(); })) has = true;
+    if (k === 'diary' && r && recDiaryText(r).trim()) has = true;
     btn.classList.toggle('has', has);
   });
 }
@@ -10869,20 +10907,7 @@ function countsTextOf(rec) {
   return parts.length ? parts.join('；') + '。' : '';
 }
 function diaryTextOf(rec) {
-  if (!rec || !rec.d || !rec.d.length) return '';
-  var out = [];
-  var n = 0;
-  rec.d.forEach(function (b) {
-    if (!b) return;
-    /* 日记已是纯文本，旧版图片块在汇总里也不再出现 */
-    if (b.t === 'i') return;
-    var x = (b.x || '').trim();
-    if (!x) return;
-    if (b.t === 'o') { n++; out.push(n + '. ' + x); }
-    else if (b.t === 'b') { out.push('· ' + x); n = 0; }
-    else { out.push(x); n = 0; }
-  });
-  return out.join('\n');
+  return recDiaryText(rec).trim();
 }
 
 /* 有效功课日：仅前四类功课有计数才算，日记不计 */
@@ -10915,7 +10940,7 @@ function streakHTML() {
     return '<div class="streak off">' +
         '<div class="sk-l"><div class="sk-num"><b>0</b><em>天</em></div>' +
           '<div class="sk-lbl">连续功课</div></div>' +
-        '<div class="sk-r"><span>累计 <b>0</b> 天有功课</span>' +
+        '<div class="sk-r"><span>累计 <b>0</b> 天记录功课</span>' +
           '<span class="sk-sub">今天开始，记一句佛号也算</span></div>' +
       '</div>';
   }
@@ -10930,15 +10955,19 @@ function streakHTML() {
         '<div class="sk-lbl">连续功课</div>' +
       '</div>' +
       '<div class="sk-r">' +
-        '<span>累计 <b>' + dates.length + '</b> 天有功课</span>' +
         '<span class="sk-sub">' + sub + '</span>' +
+        '<span>累计 <b>' + dates.length + '</b> 天记录功课</span>' +
       '</div>' +
     '</div>';
 }
 
 function renderSummaryHTML() {
+  var showD = DB.settings.showDiary !== false && DB.settings.showSumDiary !== false;
   var dates = Object.keys(DB.records).filter(function (ds) {
-    return recHasContent(DB.records[ds]);
+    var r = DB.records[ds];
+    if (!recHasContent(r)) return false;
+    /* 不看日记时，只有日记的那一天就不占一张卡片 */
+    return showD || hasWorkRec(r);
   }).sort().reverse();
 
   if (!dates.length) {
@@ -10952,7 +10981,7 @@ function renderSummaryHTML() {
     var info = lunarOf(ds);
     var rec = DB.records[ds];
     var ctext = countsTextOf(rec);
-    var dtext = diaryTextOf(rec);
+    var dtext = showD ? diaryTextOf(rec) : '';
     var fest = info.fest || '';
     var cy = new Date().getFullYear();
     var gd = (info.shy !== cy ? info.shy + '年' : '') + info.shm + '月' + info.shd + '日';
@@ -11009,10 +11038,11 @@ function fitPanels() {
   });
 }
 
-/* ---------- 日记编辑器 ---------- */
-var diaryBlocks = [];
+/* ---------- 日记编辑器 ----------
+   2.5 起日记就是**一整篇纯文本**（存在 rec.dt 里）：不分块、不分条、不带序号，
+   换行只是文本里的一个 \n。复制、粘贴、撤回都按普通文字走。 */
+var diaryText = '';
 var diaryDate = null;
-var editingBlock = -1;
 /* 未来的日期只能翻看：日记区置为只读，工具条与地点/天气一并停用 */
 var diaryRO = false;
 
@@ -11088,41 +11118,80 @@ function weatherClass(k) {
   return 'w-cloud';
 }
 
+/* 记录的日记正文：2.5 起是 rec.dt 一个字符串；
+   老存档的块数组（rec.d）在这里一次性折成纯文本，之后不再写 rec.d */
+function recDiaryText(rec) {
+  if (!rec) return '';
+  if (typeof rec.dt === 'string') return rec.dt;
+  var buf = [];
+  if (Array.isArray(rec.d)) {
+    rec.d.forEach(function (b) {
+      if (!b || b.t === 'i') return;              /* 2.0 起不再有图片块 */
+      buf.push(typeof b.x === 'string' ? b.x : '');
+    });
+  }
+  rec.dt = buf.join('\n').replace(/\s+$/, '');
+  delete rec.d;
+  return rec.dt;
+}
+
+/* 规整成纯文本：去掉不换行空格与零宽字符，行尾空白不留（末尾换行保留，光标才对得上） */
+function normDiaryText(s) {
+  return String(s == null ? '' : s)
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, '')
+    .replace(/[ \t]+$/gm, '');
+}
+
+/* 存盘 / 复制用：末尾空行不收 */
+function cleanDiaryText(s) {
+  return normDiaryText(s).replace(/\n+$/, '');
+}
+
+/* 记了几个字（不算空白），显示在元信息行右侧 */
+function diaryChars(s) {
+  return String(s || '').replace(/\s/g, '').length;
+}
+
 function renderDiaryInto(box) {
   diaryRO = isFutureDate();
   /* 只读时不落库：翻看未来的日期不会凭空多出一条空记录 */
   var rec = getRec(UI.date, !diaryRO);
-  if (!rec) rec = { c: {}, d: [] };
-  if (!rec.d.length) rec.d = [{ t: 'p', x: '' }];
+  if (!rec) rec = { c: {} };              /* 未来的日期不落库，可能没有记录 */
+  var txt = recDiaryText(rec);
   var dateChanged = diaryDate !== UI.date;
-  diaryBlocks = rec.d;
+  diaryText = txt;
   diaryDate = UI.date;
-  box.innerHTML = diaryMetaHTML(rec) + '<div id="blocks"></div>' + diaryBarHTML();
-  paintBlocks();
+  box.innerHTML = diaryMetaHTML(rec) + diaryEditorHTML() + diaryBarHTML();
+  paintDiary();
   if (dateChanged) resetHistory();
   if (diaryRO) {
     /* 未来的日期不撑满屏，没内容就只留一句说明 */
     box.style.minHeight = '';
-    var host = document.getElementById('blocks');
-    if (host && !diaryEntryCount(rec)) {
-      host.innerHTML = '<div class="diary-empty">这一天还没有记录，到了那天就能写了</div>';
+    if (!txt.trim()) {
+      var host = document.getElementById('blocks');
+      if (host) host.innerHTML = '<div class="diary-empty">这一天还没有记录，到了那天就能写了</div>';
     }
   } else {
     fitDiaryHeight(box);
   }
 }
 
-function diaryEntryCount(rec) {
-  if (!rec || !rec.d) return 0;
-  return rec.d.filter(function (b) {
-    return b && b.t !== 'i' && !!(b.x && String(b.x).trim());
-  }).length;
+/* 一整篇就是一个 textarea：它本身就是纯文本，光标、粘贴、整篇复制都由浏览器保证正确 */
+function diaryEditorHTML() {
+  return '<div id="blocks"><textarea class="ed" spellcheck="false"' +
+    (diaryRO ? ' readonly' : '') +
+    ' placeholder="今日功课与心念，随意写下…"></textarea></div>';
+}
+
+function diaryEditor() {
+  return document.querySelector('#blocks .ed');
 }
 
 function diaryMetaHTML(rec) {
   var w = rec.w || '';
   var loc = rec.loc || '';
-  var n = diaryEntryCount(rec);
+  var n = diaryChars(recDiaryText(rec));
   var pin = '<svg viewBox="0 0 24 24"><path d="M12 21s6-5.6 6-10a6 6 0 1 0-12 0c0 4.4 6 10 6 10z"/><circle cx="12" cy="11" r="2.1"/></svg>';
   var sun = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3.2v2M12 18.8v2M3.2 12h2M18.8 12h2M5.8 5.8l1.4 1.4M16.8 16.8l1.4 1.4M18.2 5.8l-1.4 1.4M7.2 16.8l-1.4 1.4"/></svg>';
   var ro = diaryRO ? ' disabled' : '';
@@ -11133,7 +11202,7 @@ function diaryMetaHTML(rec) {
     '<button class="chip' + (w ? ' on' : '') + '" data-wx="1" aria-label="记录天气"' + ro + '>' +
       (w ? '<i class="wdot ' + weatherClass(w) + '"></i><span>' + esc(w) + '</span>' : sun + '<span>天气</span>') +
     '</button>' +
-    '<span class="meta-n">' + (n > 1 ? n + ' 条' : '') + '</span>' +
+    '<span class="meta-n">' + (n ? n + ' 字' : '') + '</span>' +
     '<button class="meta-copy" data-copyall="1" aria-label="复制全文" title="复制全文">' +
       '<svg viewBox="0 0 24 24"><rect x="8.6" y="8.6" width="11" height="11" rx="2.2"/><path d="M15.4 5.2H6.6A1.4 1.4 0 0 0 5.2 6.6v8.8"/></svg>' +
     '</button>' +
@@ -11155,31 +11224,28 @@ function diaryBarHTML() {
     '<button class="dbtn" data-bullet="1" aria-label="无序列表" title="无序列表">' +
       '<svg viewBox="0 0 24 24"><circle cx="5.6" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="5.6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5.6" cy="17" r="1.5" fill="currentColor" stroke="none"/><path d="M10.6 7h9M10.6 12h9M10.6 17h9"/></svg></button>' +
     '<button class="dbtn" data-line="-1" aria-label="上方插入新行" title="上方插入新行">' +
-      '<svg viewBox="0 0 24 24"><path d="M4.2 4.4h15.6"/><path d="M12 20.2V8.4"/><path d="m7.4 13 4.6-4.6 4.6 4.6"/></svg></button>' +
+      '<svg viewBox="0 0 24 24"><path d="M5.4 3.2v4.4M3.2 5.4h4.4"/><path d="M10.6 5.4h10.2"/><path d="M3.2 12.2h17.6"/><path d="M3.2 17.6h11.6"/></svg></button>' +
     '<button class="dbtn" data-line="1" aria-label="下方插入新行" title="下方插入新行">' +
-      '<svg viewBox="0 0 24 24"><path d="M4.2 19.6h15.6"/><path d="M12 3.8v11.8"/><path d="m7.4 11 4.6 4.6 4.6-4.6"/></svg></button>' +
+      '<svg viewBox="0 0 24 24"><path d="M3.2 6.4h17.6"/><path d="M3.2 11.8h11.6"/><path d="M5.4 16.2v4.4M3.2 18.4h4.4"/><path d="M10.6 18.4h10.2"/></svg></button>' +
     '<button class="dbtn" data-nowtime="1" aria-label="插入当前时间" title="插入时间">' +
       '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.8V12l3.1 1.9"/></svg></button>' +
     '</div>';
 }
 
 /* ---------- 撤回 / 重做 ----------
-   paintBlocks() 每次都重建 #blocks，浏览器原生的撤销栈会失效，
-   所以这里自己存内容快照（一次连续输入算一步，最多 50 步） */
+   编辑器每次重绘都会重建正文节点，浏览器原生撤销栈留不住，
+   所以这里自己存文本快照（一次连续输入算一步，最多 50 步） */
 var histStack = [];
 var histIdx = -1;
 var HIST_MAX = 50;
 var histTimer = null;
 
 function histSnap() {
-  var ae = document.activeElement;
-  var i = -1, off = 0;
-  if (ae && ae.classList && ae.classList.contains('ed')) {
-    i = +ae.dataset.i;
-    off = caretOffset(ae);
-  }
-  var arr = diaryBlocks.map(function (b) { return { t: b.t, x: b.x || '' }; });
-  return { d: JSON.stringify(arr), i: i, o: off };
+  var ed = diaryEditor();
+  var off = 0;
+  if (ed && document.activeElement === ed) off = caretOffset(ed);
+  else if (pendingCaret && pendingCaret.ds === UI.date) off = pendingCaret.off || 0;
+  return { t: diaryText, o: Math.min(off, diaryText.length) };
 }
 
 function resetHistory() {
@@ -11195,7 +11261,7 @@ function pushHistory() {
   histTimer = null;
   var s = histSnap();
   var top = histStack[histIdx];
-  if (top && top.d === s.d) return;
+  if (top && top.t === s.t) return;
   histStack = histStack.slice(0, histIdx + 1);
   histStack.push(s);
   if (histStack.length > HIST_MAX) histStack.shift();
@@ -11210,18 +11276,14 @@ function pushHistorySoon() {
 }
 
 function restoreSnap(s) {
-  var arr = [];
-  try { arr = JSON.parse(s.d) || []; } catch (e) { arr = []; }
-  diaryBlocks.length = 0;
-  arr.forEach(function (b) { diaryBlocks.push(b); });
-  if (!diaryBlocks.length) diaryBlocks.push({ t: 'p', x: '' });
+  var rec = ensureDiaryRec();
+  diaryText = s.t;
+  rec.dt = diaryText;
   saveNow();
-  paintBlocks();
+  paintDiary();
   updateHistoryButtons();
-  if (s.i != null && s.i >= 0 && s.i < diaryBlocks.length) {
-    var idx = s.i, off = s.o || 0;
-    setTimeout(function () { setCaretAt(document.querySelector('#blocks .ed[data-i="' + idx + '"]'), off); }, 0);
-  }
+  var ed = diaryEditor();
+  setTimeout(function () { setCaretAt(ed, s.o || 0); }, 0);
 }
 
 function undoDiary() {
@@ -11245,99 +11307,72 @@ function updateHistoryButtons() {
   if (r) r.disabled = diaryRO || histIdx >= histStack.length - 1;
 }
 
-/* 把光标放到块内第 off 个字符处（块内可能有换行） */
+/* 把光标放到正文第 off 个字符处 */
 function setCaretAt(el, off) {
   if (!el) return;
+  var o = Math.max(0, Math.min(off || 0, (el.value || '').length));
   el.focus();
-  try {
-    var r = document.createRange();
-    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
-    var left = off || 0, node = null, tn;
-    while ((tn = walker.nextNode())) {
-      var len = tn.textContent.length;
-      if (left <= len) { node = tn; break; }
-      left -= len;
-    }
-    if (node) r.setStart(node, Math.min(left, node.textContent.length));
-    else r.selectNodeContents(el);
-    r.collapse(true);
-    var sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(r);
-  } catch (e) { }
+  try { el.setSelectionRange(o, o); } catch (e) { }
 }
 
-/* 光标所在的块：优先用工具条按下时记下的位置（点按钮会让编辑区失焦） */
-function currentBlockIdx() {
-  var idx = -1, off = 0;
-  if (pendingCaret && pendingCaret.ds === UI.date && diaryBlocks[pendingCaret.i]) {
-    idx = pendingCaret.i;
-    off = pendingCaret.off || 0;
-  }
-  if (idx < 0) {
-    var ae = document.activeElement;
-    if (ae && ae.classList && ae.classList.contains('ed')) {
-      idx = +ae.dataset.i;
-      off = caretOffset(ae);
-    }
-  }
-  if (idx < 0 || !diaryBlocks[idx]) idx = diaryBlocks.length - 1;
-  return { idx: idx, off: off };
+function caretOffset(el) {
+  if (!el) return 0;
+  var v = el.value || '';
+  var s = el.selectionStart;
+  if (typeof s !== 'number' || s < 0) return v.length;
+  return Math.min(s, v.length);
 }
 
-/* 无序列表：在光标所在行的行首加 / 去「• 」 */
-function toggleBullet() {
-  if (diaryRO) { toast('未来的日期还不能写日记'); return; }
-  ensureDiaryRec();
-  var c = currentBlockIdx();
-  var idx = c.idx, off = c.off;
-  var b = diaryBlocks[idx];
-  if (!b) return;
-  var ed = document.querySelector('#blocks .ed[data-i="' + idx + '"]');
-  if (ed && (!pendingCaret || pendingCaret.i !== idx)) off = caretOffset(ed);
-
-  var x = b.x || '';
-  var ls = off > 0 ? x.lastIndexOf('\n', off - 1) + 1 : 0;
-  var le = x.indexOf('\n', ls);
-  if (le < 0) le = x.length;
-  var line = x.slice(ls, le);
-
-  if (/^• /.test(line)) {
-    x = x.slice(0, ls) + line.slice(2) + x.slice(le);
-    off = Math.max(ls, off - 2);
-  } else {
-    x = x.slice(0, ls) + '• ' + line + x.slice(le);
-    off = off + 2;
+/* 光标位置：优先用工具条按下时记下的位置（点按钮会让正文失焦） */
+function currentCaret() {
+  var off = -1;
+  if (pendingCaret && pendingCaret.ds === UI.date) off = pendingCaret.off || 0;
+  else {
+    var ed = diaryEditor();
+    if (ed && document.activeElement === ed) off = caretOffset(ed);
   }
-  b.x = x;
-  if (ed) ed.innerText = x;
-  saveNow();
-  setCaretAt(ed, off);
+  if (off < 0) off = diaryText.length;
+  return Math.max(0, Math.min(off, diaryText.length));
+}
+
+/* 光标所在行的起止位置 */
+function lineBoundsAt(off) {
+  var s = off > 0 ? diaryText.lastIndexOf('\n', off - 1) + 1 : 0;
+  var e = diaryText.indexOf('\n', off);
+  if (e < 0) e = diaryText.length;
+  return { s: s, e: e };
+}
+
+/* 在光标处插入一段文字（时间戳走这里） */
+function insertTextAtCaret(txt) {
+  var ed = diaryEditor();
+  if (!ed) return false;
+  var a = ed.selectionStart, b = ed.selectionEnd;
+  if (typeof a !== 'number' || a < 0) { a = b = (ed.value || '').length; }
+  var v = ed.value || '';
+  ed.value = v.slice(0, a) + txt + v.slice(b);
+  var o = a + txt.length;
+  try { ed.setSelectionRange(o, o); } catch (e) { }
+  return true;
+}
+
+/* 把正文读回模型 */
+function syncDiaryFromDOM() {
+  var ed = diaryEditor();
+  if (!ed) return;
+  diaryText = normDiaryText(ed.value);
+  var rec = ensureDiaryRec();
+  rec.dt = cleanDiaryText(diaryText);
   updateDiaryMetaCount();
+  saveSoon();
   if (diaryDate === UI.date) refreshTabDots();
-  pushHistory();
 }
 
-function paintBlocks() {
-  var host = document.getElementById('blocks');
-  if (!host) return;
-  var n = 0;
-  var html = '';
-  diaryBlocks.forEach(function (b, i) {
-    if (!b) return;
-    /* 2.0 起日记只存纯文本；旧版本留下的图片块不再渲染 */
-    if (b.t === 'i') { n = 0; return; }
-    var pre = '';
-    if (b.t === 'o') { n++; pre = n + '.'; }
-    else if (b.t === 'b') { n = 0; pre = '•'; }
-    else { n = 0; pre = ''; }
-    html += '<div class="blk" data-i="' + i + '">' +
-      '<span class="pre">' + pre + '</span>' +
-      '<div class="ed"' + (diaryRO ? '' : ' contenteditable="plaintext-only"') +
-        ' data-i="' + i + '" data-ph="">' + esc(b.x || '') + '</div>' +
-      '</div>';
-  });
-  host.innerHTML = html;
+function paintDiary() {
+  var ed = diaryEditor();
+  if (!ed) return;
+  if (ed.value !== diaryText) ed.value = diaryText;
+  ed.readOnly = !!diaryRO;
   updateDiaryMetaCount();
   updateHistoryButtons();
 }
@@ -11345,118 +11380,24 @@ function paintBlocks() {
 function updateDiaryMetaCount() {
   var el = document.querySelector('.diary-meta .meta-n');
   if (!el) return;
-  var n = diaryEntryCount({ d: diaryBlocks });
-  el.textContent = n > 1 ? n + ' 条' : '';
+  var n = diaryChars(diaryText);
+  el.textContent = n ? n + ' 字' : '';
 }
 
 function ensureDiaryRec() {
   var rec = getRec(UI.date, true);
-  if (!Array.isArray(rec.d) || !rec.d.length) rec.d = [{ t: 'p', x: '' }];
-  diaryBlocks = rec.d;
-  diaryDate = UI.date;
+  var t = recDiaryText(rec);
+  /* 同一天内不要把正在编辑的内容盖回旧值 */
+  if (diaryDate !== UI.date) { diaryText = t; diaryDate = UI.date; }
   return rec;
 }
 
-function focusBlock(idx, offset) {
-  var el = document.querySelector('.blk[data-i="' + idx + '"] .ed');
-  if (!el) return;
-  el.focus();
-  try {
-    var r = document.createRange();
-    var tn = el.firstChild;
-    if (tn && tn.nodeType === 3) {
-      var o = Math.min(offset || 0, tn.textContent.length);
-      r.setStart(tn, o);
-    } else {
-      r.selectNodeContents(el);
-    }
-    r.collapse(true);
-    var sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(r);
-  } catch (e) { }
-}
-
-function caretOffset(el) {
-  var sel = window.getSelection();
-  if (!sel || !sel.rangeCount) return 0;
-  var r = sel.getRangeAt(0);
-  if (!el.contains(r.endContainer)) return (el.innerText || '').length;
-  var pre = r.cloneRange();
-  pre.selectNodeContents(el);
-  pre.setEnd(r.endContainer, r.endOffset);
-  return pre.toString().length;
-}
-
-function onBlockInput(e) {
+/* 输入：换行、粘贴都交给 textarea 自己处理，这里只把内容读回模型 */
+function onDiaryInput(e) {
   if (diaryRO) return;
-  var ed = e.target.closest('.ed');
-  if (!ed) return;
-  var i = +ed.dataset.i;
-  if (!diaryBlocks[i]) return;
-  var txt = ed.innerText;
-  if (txt === '\n') txt = '';
-  diaryBlocks[i].x = txt;
-  saveSoon();
-  updateDiaryMetaCount();
+  if (!e.target.closest('.ed')) return;
+  syncDiaryFromDOM();
   pushHistorySoon();
-  if (diaryDate === UI.date) refreshTabDots();
-}
-
-function onBlockKey(e) {
-  if (diaryRO) return;
-  var ed = e.target.closest('.ed');
-  if (!ed) return;
-  /* Ctrl/Cmd+A：选中整篇，方便整体复制（原生只会选当前块） */
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
-    if (selectWholeDiary()) e.preventDefault();
-    return;
-  }
-  var i = +ed.dataset.i;
-  var b = diaryBlocks[i];
-  if (!b) return;
-
-  if (e.key === 'Enter' && !e.isComposing) {
-    e.preventDefault();
-    var off = caretOffset(ed);
-    var text = ed.innerText || '';
-    var before = text.slice(0, off);
-    var after = text.slice(off);
-    b.x = before;
-    diaryBlocks.splice(i + 1, 0, { t: 'p', x: after });
-    saveSoon();
-    paintBlocks();
-    focusBlock(i + 1, 0);
-    pushHistory();
-    return;
-  }
-
-  if (e.key === 'Backspace') {
-    var off2 = caretOffset(ed);
-    if (off2 === 0 && i > 0) {
-      var prev = diaryBlocks[i - 1];
-      if (prev && prev.t !== 'i') {
-        e.preventDefault();
-        var prevLen = (prev.x || '').length;
-        prev.x = (prev.x || '') + (b.x || '');
-        diaryBlocks.splice(i, 1);
-        saveSoon();
-        paintBlocks();
-        focusBlock(i - 1, prevLen);
-        pushHistory();
-      }
-    }
-    return;
-  }
-}
-
-function onBlockPaste(e) {
-  if (diaryRO) return;
-  var ed = e.target.closest('.ed');
-  if (!ed) return;
-  e.preventDefault();
-  var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-  document.execCommand('insertText', false, text);
 }
 
 /* ---------- 插入时间 / 插入新行 / 天气 / 地点 ---------- */
@@ -11467,57 +11408,68 @@ function stampNow() {
   return '[' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ']';
 }
 
-/* 时间按钮：只在光标处插入形如「[05:01]」的文字，不另起一行、不改动已有内容 */
+/* 时间按钮：只在光标处插入形如「[05:01]」的文字，不换行、不改动已有内容 */
 function insertTimeStamp() {
   if (diaryRO) { toast('未来的日期还不能写日记'); return; }
-  var s = stampNow();
   ensureDiaryRec();
-  var c = currentBlockIdx();
+  var off = currentCaret();
   pendingCaret = null;
-  var ed = document.querySelector('#blocks .ed[data-i="' + c.idx + '"]');
-  if (ed) {
-    ed.focus();
-    setCaretAt(ed, c.off);
-    document.execCommand('insertText', false, s);
-  } else {
-    var b = diaryBlocks[c.idx] || diaryBlocks[diaryBlocks.length - 1];
-    b.x = (b.x || '') + s;
-    paintBlocks();
-    focusBlock(c.idx, (b.x || '').length);
-  }
-  saveNow();
-  updateDiaryMetaCount();
+  var ed = diaryEditor();
+  if (!ed) return;
+  ed.focus();
+  setCaretAt(ed, off);
+  insertTextAtCaret(stampNow());
+  syncDiaryFromDOM();
   pushHistory();
 }
 
-/* 在光标所在块的上方（dir=-1）/ 下方（dir=1）插入一个空行 */
+/* 在光标所在行的上方（dir=-1）/ 下方（dir=1）插入一个空行 */
 function insertDiaryLine(dir) {
   if (diaryRO) { toast('未来的日期还不能写日记'); return; }
-  ensureDiaryRec();
-  var c = currentBlockIdx();
+  var rec = ensureDiaryRec();
+  var off = currentCaret();
   pendingCaret = null;
-  var at = c.idx + (dir < 0 ? 0 : 1);
-  if (at < 0) at = 0;
-  diaryBlocks.splice(at, 0, { t: 'p', x: '' });
+  if (!diaryText.trim()) {
+    /* 空文档没有「当前行」可分，直接把光标放进去即可 */
+    setCaretAt(diaryEditor(), 0);
+    return;
+  }
+  var b = lineBoundsAt(off);
+  var at = dir < 0 ? b.s : b.e;
+  var caret = dir < 0 ? b.s : b.e + 1;
+  diaryText = diaryText.slice(0, at) + '\n' + diaryText.slice(at);
+  rec.dt = diaryText;
   saveNow();
-  paintBlocks();
-  focusBlock(at, 0);
-  updateDiaryMetaCount();
+  paintDiary();
+  setCaretAt(diaryEditor(), caret);
   pushHistory();
 }
 
-/* ---------- 整体复制 ----------
-   日记按块存，但复制出去应该是整篇连续的文字：不带序号、不带 • 之外的装饰，
-   块与块之间只留一个换行 */
-function diaryPlainText() {
-  var out = [];
-  diaryBlocks.forEach(function (b) {
-    if (!b || b.t === 'i') return;
-    out.push(b.x || '');
-  });
-  return out.join('\n').replace(/[\s\u00a0]+$/, '');
+/* 无序列表：在光标所在行的行首加 / 去「• 」 */
+function toggleBullet() {
+  if (diaryRO) { toast('未来的日期还不能写日记'); return; }
+  var rec = ensureDiaryRec();
+  var off = currentCaret();
+  pendingCaret = null;
+  var b = lineBoundsAt(off);
+  var line = diaryText.slice(b.s, b.e);
+  var m = line.match(/^•\s?/);
+  if (m) {
+    diaryText = diaryText.slice(0, b.s) + line.slice(m[0].length) + diaryText.slice(b.e);
+    off = Math.max(b.s, off - m[0].length);
+  } else {
+    diaryText = diaryText.slice(0, b.s) + '• ' + line + diaryText.slice(b.e);
+    off = off + 2;
+  }
+  rec.dt = diaryText;
+  saveNow();
+  paintDiary();
+  setCaretAt(diaryEditor(), off);
+  pushHistory();
 }
 
+/* ---------- 复制全文 ----------
+   正文本身就是纯文本，选中复制即可；这里再给一个一键复制的按钮 */
 function legacyCopy(txt) {
   try {
     var ta = document.createElement('textarea');
@@ -11534,7 +11486,8 @@ function legacyCopy(txt) {
 }
 
 function copyAllDiary() {
-  var txt = diaryPlainText();
+  var ed = diaryEditor();
+  var txt = cleanDiaryText(ed ? ed.value : diaryText).trim();
   if (!txt) { toast('这一天还没有内容'); return; }
   var done = function () { toast('已复制全文'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -11546,48 +11499,6 @@ function copyAllDiary() {
   } else {
     toast('复制失败，请长按选中后复制');
   }
-}
-
-/* 全选整篇日记（Ctrl/Cmd+A 只选一个块，这里改成整块区域） */
-function selectWholeDiary() {
-  var host = document.getElementById('blocks');
-  if (!host) return false;
-  try {
-    var r = document.createRange();
-    r.selectNodeContents(host);
-    var sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(r);
-    return true;
-  } catch (e) { return false; }
-}
-
-/* 跨块选中时，把选区还原成干净文本（块之间一个换行，不含序号） */
-function diarySelectionText() {
-  var host = document.getElementById('blocks');
-  if (!host) return '';
-  var sel = window.getSelection();
-  if (!sel || !sel.rangeCount || sel.isCollapsed) return '';
-  var r = sel.getRangeAt(0);
-  var root = r.commonAncestorContainer;
-  if (root !== host && !host.contains(root)) return '';
-  var parts = [];
-  var eds = host.querySelectorAll('.ed');
-  Array.prototype.forEach.call(eds, function (ed) {
-    if (!r.intersectsNode(ed)) return;
-    var whole = document.createRange();
-    whole.selectNodeContents(ed);
-    var inter = r.cloneRange();
-    if (inter.compareBoundaryPoints(Range.START_TO_START, whole) < 0) {
-      inter.setStart(whole.startContainer, whole.startOffset);
-    }
-    if (inter.compareBoundaryPoints(Range.END_TO_END, whole) > 0) {
-      inter.setEnd(whole.endContainer, whole.endOffset);
-    }
-    parts.push(inter.toString());
-  });
-  if (!parts.length) return '';
-  return parts.join('\n').replace(/[\s\u00a0]+$/, '');
 }
 
 /* 让日记工具条贴近屏幕底部 */
@@ -12575,8 +12486,8 @@ function renderTaskSettings() {
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
           '<em>' + esc(t.unit) + ' · 增减 ' + t.step +
-            (taskGoal(t) ? ' · 日目标 ' + taskGoal(t) : '') +
-            (taskTarget(t) ? ' · 总目标 ' + taskTarget(t) : '') + '</em>' +
+            (taskGoal(t) ? ' · 日目标 ' + taskGoal(t) : '') + '</em>' +
+          (taskTarget(t) ? '<em class="tg">总目标 ' + taskTarget(t) + '</em>' : '') +
         '</div>' +
         '<button class="mini eye' + (t.hidden ? ' on' : '') + '" data-thide="1" aria-label="' +
           (t.hidden ? '取消隐藏' : '隐藏这项功课') + '" title="' + (t.hidden ? '取消隐藏' : '隐藏') + '">' +
@@ -12619,6 +12530,9 @@ function openTaskEditor(taskId, cat) {
     '<div class="field"><label>默认增量（＋ / － 按钮一次的数量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
     '<div class="field"><label>总目标（可选，累计到多少）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
+    '<div class="field-chk" data-mshow="1">' +
+      '<div class="lbl">在功课列表中显示<em>关掉只是藏起来，计数与目标都保留</em></div>' +
+      '<span class="switch' + (t && t.hidden ? '' : ' on') + '"></span></div>' +
     (isNew ? '' : '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-tdel="' + esc(t.id) + '">删除这项功课</button></div>') +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
@@ -12630,15 +12544,17 @@ function openTaskEditor(taskId, cat) {
       var st = parseInt($('#f-step').value, 10);
       var gl = parseInt($('#f-goal').value, 10);
       var tgl = parseInt($('#f-tgoal').value, 10);
+      var showIt = !!(document.querySelector('#modal [data-mshow] .switch.on'));
       if (!nm) { toast('请填写名称'); return; }
       if (isNaN(st) || st <= 0) st = 1;
       if (isNaN(gl) || gl <= 0) gl = 0;
       if (isNaN(tgl) || tgl <= 0) tgl = 0;
       if (isNew) {
         DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st,
-          goal: gl, tgoal: tgl, builtin: false, hidden: false });
+          goal: gl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
         t.name = nm; t.unit = un; t.step = st; t.goal = gl; t.tgoal = tgl;
+        t.hidden = !showIt;
       }
       saveNow();
       closeModal();
@@ -12895,15 +12811,15 @@ function renderSettings() {
     '<div class="set-row" data-toggle="showShuo">' +
       '<div class="lbl">朔望日<em>农历初一、十五</em></div>' +
       '<span class="switch ' + (s.showShuo ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showGuanyin">' +
+      '<div class="lbl">观音斋<em>农历每月固定日，全年 22 日</em></div>' +
+      '<span class="switch ' + (s.showGuanyin ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showZhai6">' +
       '<div class="lbl">六斋日<em>农历初八、十四、十五、廿三、廿九、三十；小月无三十，以廿八、廿九补足</em></div>' +
       '<span class="switch ' + (s.showZhai6 ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showZhai10">' +
       '<div class="lbl">十斋日<em>农历初一、初八、十四…共十日；小月无三十，以廿七至廿九补足</em></div>' +
       '<span class="switch ' + (s.showZhai10 ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showGuanyin">' +
-      '<div class="lbl">观音斋<em>农历每月固定日，全年 22 日</em></div>' +
-      '<span class="switch ' + (s.showGuanyin ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showYueZhai">' +
       '<div class="lbl">月斋（三长斋月）<em>农历正月、五月、九月整月持斋</em></div>' +
       '<span class="switch ' + (s.showYueZhai ? 'on' : '') + '"></span></div>' +
@@ -12947,14 +12863,23 @@ function renderSettings() {
 
   html += '<div class="set-sec"><div class="set-title">功课</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showTotal">' +
-      '<div class="lbl">显示累计总数<em>每项功课同时显示今日与累计</em></div>' +
+      '<div class="lbl">显示累计总数<em>每项功课下方多一行「总计 N」，设了总目标再带上「/ 目标」</em></div>' +
       '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showMonthTotal">' +
-      '<div class="lbl">显示当月累计<em>当月合计在左，累计总数在右</em></div>' +
+      '<div class="lbl">显示当月累计<em>在同一行里，于「总计」左边显示「本月 N」</em></div>' +
       '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showTabTotal">' +
-      '<div class="lbl">显示当日计数明细<em>在念佛 / 诵经 / 持咒 / 仪轨 顶部列出今日各项</em></div>' +
+      '<div class="lbl">显示当日分类汇总<em>在念佛 / 诵经 / 持咒 / 仪轨 顶部用一行列出当日各项计数</em></div>' +
       '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
+    '</div></div>';
+
+  html += '<div class="set-sec"><div class="set-title">日记</div><div class="set-card">' +
+    '<div class="set-row" data-toggle="showDiary">' +
+      '<div class="lbl">日记功能<em>关闭后首页不再有日记标签页，已写的内容仍留在数据里</em></div>' +
+      '<span class="switch ' + (s.showDiary !== false ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showSumDiary">' +
+      '<div class="lbl">总览显示日记<em>关闭后总览卡片只显示功课，日记照常记录</em></div>' +
+      '<span class="switch ' + (s.showSumDiary !== false ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">数据</div><div class="set-card">' +
@@ -12964,7 +12889,7 @@ function renderSettings() {
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">关于</div><div class="set-card">' +
-    '<div class="set-row"><div class="lbl">学佛日记<em>版本 2.4 · 数据保存在本机，不上传</em></div></div>' +
+    '<div class="set-row"><div class="lbl">学佛日记<em>版本 2.5 · 数据保存在本机，不上传</em></div></div>' +
     '<div class="set-row" data-actx="wipe"><div class="lbl" style="color:#b8442f">清空全部数据<em>不可恢复，请先导出备份</em></div><span class="chev" style="color:#b8442f">›</span></div>' +
     '</div></div>';
 
@@ -13050,6 +12975,13 @@ function bindEvents() {
         inp.value = String(+document.getElementById('m-sign').dataset.cur || 0);
         inp.select();
       }
+      return;
+    }
+    /* 弹窗里的显示开关（编辑功课） */
+    var ms = e.target.closest('[data-mshow]');
+    if (ms) {
+      var sw = ms.querySelector('.switch');
+      if (sw) sw.classList.toggle('on');
       return;
     }
     if (e.target.closest('[data-mok]') || e.target.closest('[data-tsave]') || e.target.closest('[data-mdsave]')) {
@@ -13430,24 +13362,9 @@ function bindEvents() {
     }
   }, true);
 
-  /* 日记块事件 */
+  /* 日记正文：一整篇纯文本，换行 / 粘贴 / 复制都由 textarea 原生处理 */
   app.addEventListener('input', function (e) {
-    if (e.target.closest('.ed')) onBlockInput(e);
-  });
-  app.addEventListener('keydown', function (e) {
-    if (e.target.closest('.ed')) onBlockKey(e);
-  });
-  app.addEventListener('paste', function (e) {
-    if (e.target.closest('.ed')) onBlockPaste(e);
-  });
-  /* 复制：跨块选中时输出干净全文（不带序号，块间只留一个换行）
-     copy 的 target 不一定是编辑块（全选后焦点会落到别处），所以只看选区 */
-  app.addEventListener('copy', function (e) {
-    if (!e.clipboardData || !document.getElementById('blocks')) return;
-    var txt = diarySelectionText();
-    if (!txt) return;
-    e.clipboardData.setData('text/plain', txt);
-    e.preventDefault();
+    if (e.target.closest('.ed')) onDiaryInput(e);
   });
   app.addEventListener('blur', function (e) {
     if (e.target.closest && e.target.closest('.ed')) saveNow();
@@ -13458,7 +13375,7 @@ function bindEvents() {
     if (!e.target.closest('.diary-bar')) return;
     var ae = document.activeElement;
     if (ae && ae.classList && ae.classList.contains('ed')) {
-      pendingCaret = { i: +ae.dataset.i, off: caretOffset(ae), ds: UI.date };
+      pendingCaret = { off: caretOffset(ae), ds: UI.date };
     } else {
       pendingCaret = null;
     }
@@ -13715,7 +13632,7 @@ function scrollSummaryToDate(ds) {
 /* 切换 5 tab 的内容区 */
 function switchTab(k, anim) {
   if (!k) return;
-  var keys = TABS.map(function (t) { return t.k; });
+  var keys = activeTabs().map(function (t) { return t.k; });
   if (keys.indexOf(k) < 0) return;
   UI.tab = k;
   Array.prototype.forEach.call(document.querySelectorAll('#home-tabs .tab'), function (b) {
@@ -13757,7 +13674,7 @@ function homePinTop() {
 /* 左右滑动内容区时，切到相邻的 tab */
 function shiftTab(dir) {
   if (UI.mode !== 'record') return;
-  var keys = TABS.map(function (t) { return t.k; });
+  var keys = activeTabs().map(function (t) { return t.k; });
   var i = keys.indexOf(UI.tab);
   if (i < 0) i = 0;
   var n = (i + (dir > 0 ? 1 : -1) + keys.length) % keys.length;
@@ -13830,7 +13747,7 @@ function openMenu() {
       fn: function () { UI.taskCat = UI.tab === 'diary' ? 'nianfo' : UI.tab; showView('tasks'); }
     },
     {
-      k: 'fest', t: '节日一览', s: '佛教节日 · 传统节日，左右划动切换',
+      k: 'fest', t: '节日一览', s: '佛教节日 · 传统节日',
       icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>',
       fn: function () {
         if (UI.festKind !== 'trad') UI.festKind = 'buddha';
@@ -13995,7 +13912,7 @@ function sanitizeImport(src) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return;
     var r = src.records[ds];
     if (!r || typeof r !== 'object' || Array.isArray(r)) return;
-    var rec = { c: {}, d: [] };
+    var rec = { c: {} };
     if (r.c && typeof r.c === 'object' && !Array.isArray(r.c)) {
       Object.keys(r.c).forEach(function (k) {
         if (!idSet[k]) return;
@@ -14003,15 +13920,22 @@ function sanitizeImport(src) {
         if (isFinite(v) && v > 0) rec.c[k] = v;
       });
     }
-    if (Array.isArray(r.d)) {
+    /* 日记：新版是 dt 一段纯文本，老备份里的块数组一并折成纯文本 */
+    var dtext = '';
+    if (typeof r.dt === 'string') {
+      dtext = r.dt;
+    } else if (Array.isArray(r.d)) {
+      var buf = [];
       r.d.slice(0, 500).forEach(function (b) {
         if (!b || typeof b !== 'object' || Array.isArray(b)) return;
         if (['p', 'o', 'b'].indexOf(b.t) < 0) return;   /* 图片块（i）不再接收 */
-        var x = typeof b.x === 'string' ? b.x : '';
-        if (x.length > 20000) x = x.slice(0, 20000);
-        rec.d.push({ t: b.t, x: x });
+        if (typeof b.x === 'string') buf.push(b.x);
       });
+      dtext = buf.join('\n');
     }
+    dtext = cleanDiaryText(dtext);
+    if (dtext.length > 40000) dtext = dtext.slice(0, 40000);
+    if (dtext) rec.dt = dtext;
     if (typeof r.loc === 'string' && r.loc.trim()) rec.loc = r.loc.slice(0, 40);
     if (typeof r.w === 'string' && r.w.trim()) rec.w = r.w.slice(0, 20);
     if (typeof r.place === 'string') rec.place = r.place.slice(0, 64);
@@ -14121,7 +14045,7 @@ function showStats() {
       var c = catOf[k];
       if (c && byCat[c] != null) byCat[c] += (r.c[k] || 0);
     });
-    if (diaryEntryCount(r) > 0) diaryN++;
+    if (recDiaryText(r).trim()) diaryN++;
   });
 
   var cells = [
