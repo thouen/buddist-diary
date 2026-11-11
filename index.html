@@ -455,9 +455,6 @@ img{max-width:100%;display:block}
 .set-row .lbl{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .set-row .lbl em{font-style:normal;font-size:11px;color:var(--ink3)}
 .set-row:active{background:var(--card2)}
-/* 前置功能关掉后，跟着失效的开关：灰掉且点不动 */
-.set-row.dis{opacity:.45}
-.set-row.dis,.set-row.dis *{pointer-events:none}
 .set-row .chev{color:var(--ink3);font-size:14px}
 .set-row .val{color:var(--ink2);font-size:12.5px}
 .switch{
@@ -10046,10 +10043,11 @@ function normalizeSettings(src) {
   if (typeof out.useLastPlace !== 'boolean') out.useLastPlace = true;
   /* 总览卡片上的地点 / 天气，默认显示 */
   if (typeof out.showSumMeta !== 'boolean') out.showSumMeta = true;
-  /* 2.5：日记功能与总览里的日记，默认都开着；关了记录日记，总览也不可能再显示 */
+  /* 2.5：记录日记与总览显示日记，默认都开着，两者各自独立存值。
+     2.7 修订：关掉「记录日记」不再改写「总览显示日记」的值，设置页只是把那一行藏起来。
+     总览是否显示日记，由 renderSummaryHTML() 按「两个开关都开」实时判定。 */
   if (typeof out.showDiary !== 'boolean') out.showDiary = true;
   if (typeof out.showSumDiary !== 'boolean') out.showSumDiary = true;
-  if (out.showDiary === false) out.showSumDiary = false;
   /* 月斋（三长斋月）默认不显示，独立开关，不受上面斋日单选影响 */
   if (typeof out.showYueZhai !== 'boolean') out.showYueZhai = false;
   /* 观音斋同样独立开关，默认关闭 */
@@ -11018,6 +11016,7 @@ function streakHTML() {
 }
 
 function renderSummaryHTML() {
+  /* 两个开关任一为关，总览卡片里就不出现任何日记内容；值各自独立保存，互不改写 */
   var showD = DB.settings.showDiary !== false && DB.settings.showSumDiary !== false;
   var dates = Object.keys(DB.records).filter(function (ds) {
     var r = DB.records[ds];
@@ -12956,18 +12955,18 @@ function renderSettings() {
       '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
-  /* 记录日记关掉之后，「总览显示日记」就没有意义了：置灰并禁用 */
+  /* 关掉「记录日记」后，「总览显示日记」整行隐藏；它的值原样留着，
+     下次重新打开记录日记时会按原值恢复，不会被悄悄改掉。 */
   var diaryOn = s.showDiary !== false;
-  var sumDiaryOn = diaryOn && s.showSumDiary !== false;
   html += '<div class="set-sec"><div class="set-title">日记</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showDiary">' +
       '<div class="lbl">记录日记<em>关闭后首页不再有日记标签页，已写的内容仍留在数据里</em></div>' +
       '<span class="switch ' + (diaryOn ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row' + (diaryOn ? '' : ' dis') + '"' + (diaryOn ? ' data-toggle="showSumDiary"' : '') + '>' +
-      '<div class="lbl">总览显示日记<em>' +
-        (diaryOn ? '关闭后总览卡片只显示功课，日记照常记录' : '已关闭「记录日记」，这一项不可用') +
-      '</em></div>' +
-      '<span class="switch ' + (sumDiaryOn ? 'on' : '') + '"></span></div>' +
+    (diaryOn
+      ? '<div class="set-row" data-toggle="showSumDiary">' +
+          '<div class="lbl">总览显示日记<em>关闭后总览卡片只显示功课，日记照常记录</em></div>' +
+          '<span class="switch ' + (s.showSumDiary !== false ? 'on' : '') + '"></span></div>'
+      : '') +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">数据</div><div class="set-card">' +
@@ -13352,8 +13351,6 @@ function bindEvents() {
     if (el) {
       var key = el.dataset.toggle;
       DB.settings[key] = !DB.settings[key];
-      /* 不再记录日记了，总览里的日记自然也就没得显示 */
-      if (key === 'showDiary' && DB.settings.showDiary === false) DB.settings.showSumDiary = false;
       saveNow();
       renderSettings();
       return;
