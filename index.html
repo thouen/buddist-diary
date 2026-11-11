@@ -1092,6 +1092,9 @@ img{max-width:100%;display:block}
 /* ---------- 详情页：统计区 ---------- */
 .detail-stats{margin-top:12px}
 .detail-stats .seg{padding:0 14px 8px}
+/* 只给详情页「按年 / 按月 / 按日」分段去功课红，改低调墨色；
+   全局 .seg button.on 保持功课红，首页标签页、节日一览、历法分段都不受影响 */
+.detail-stats .seg button.on{background:#e7ddc9;color:#4a3b2a;border-color:#cdbf9f;font-weight:600}
 
 /* ---------- 2.0 交互补充 ---------- */
 /* 「今」：只在这一天不是今天时出现，靠右，与上面两行整体垂直居中 */
