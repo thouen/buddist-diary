@@ -1086,26 +1086,41 @@ img{max-width:100%;display:block}
 /* ---------- 2.0 交互补充 ---------- */
 /* 「今」：只在这一天不是今天时出现，靠右，与上面两行整体垂直居中 */
 .dl-rows{position:relative;display:flex;flex-direction:column;gap:3px}
-.dl-rows.has-today{padding-right:33px}
+.dl-rows.has-today{padding-right:35px}
 .dr-today{
   position:absolute;right:0;top:50%;transform:translateY(-50%);
-  width:26px;height:26px;padding:0;display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;
   border-radius:50%;line-height:1;color:var(--accent);
-  background:var(--accent-soft);border:1px solid #ecd0c8;
+  background:radial-gradient(circle at 50% 30%,#fffdfb 0%,#fbe9e3 62%,#f6ded6 100%);
+  border:1px solid #eccfc6;
+  box-shadow:0 1px 2px rgba(130,50,30,.10),inset 0 1px 0 rgba(255,255,255,.95);
+  transition:transform .1s ease,box-shadow .12s ease;
 }
 /* 今 + 顺时针转一圈的箭头，一眼看出是「回到今天」 */
 .dr-today .ta{
   position:absolute;left:0;top:0;width:100%;height:100%;
-  fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;
-  opacity:.9;
+  fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;
 }
-.dr-today .ta .hd{fill:currentColor;stroke:none}
-.dr-today span{position:relative;font-family:var(--serif);font-size:10px;letter-spacing:0;line-height:1}
-.dr-today:active{background:#f1d6ce;transform:translateY(-50%) scale(.92)}
+/* 圈画得轻一点，让中间的「今」是主角；箭头实心，方向才看得清 */
+.dr-today .ta path{stroke-opacity:.5}
+.dr-today .ta .hd{fill:currentColor;stroke:none;stroke-opacity:0}
+.dr-today span{
+  position:relative;font-family:var(--serif);font-size:11px;font-weight:600;
+  letter-spacing:0;line-height:1;transform:translateY(-.3px);
+}
+.dr-today:active{
+  background:radial-gradient(circle at 50% 26%,#fdf1ec 0%,#f4d8cf 100%);
+  box-shadow:0 0 0 rgba(0,0,0,0);
+  transform:translateY(-50%) scale(.93);
+}
 /* 窄屏：佛历与公历同降一档，公历年月日才不会被截断 */
 @media (max-width:345px){
   .dr1{gap:5px}
   .dr-fen,.dr-gd{font-size:14px}
+  /* 窄屏把「今」收紧一点，公历年月日才不会被挤成省略号 */
+  .dl-rows.has-today{padding-right:30px}
+  .dr-today{width:25px;height:25px}
+  .dr-today span{font-size:10px}
 }
 
 /* 未来的日期不能记功课：按钮置灰 */
@@ -10758,8 +10773,8 @@ function todayBtnHTML(ds) {
   return ds !== TODAY
     ? '<button class="dr-today" data-gotoday="1" aria-label="回到今天" title="回到今天">' +
         '<svg class="ta" viewBox="0 0 24 24" aria-hidden="true">' +
-          '<path d="M19.9 7.5A9.1 9.1 0 1 1 13.6 3"/>' +
-          '<path class="hd" d="M16.4 3.5 12.8 5.1 13.6 0.9Z"/>' +
+          '<path d="M18 4.8A9.4 9.4 0 1 1 12 2.6"/>' +
+          '<path class="hd" d="M11.2 1.5 14 2.6 11.2 3.7Z"/>' +
         '</svg>' +
         '<span>今</span>' +
       '</button>'
