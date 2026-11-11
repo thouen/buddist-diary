@@ -32,6 +32,9 @@
   --cyan-deep:#1f6360;
   --cyan-soft:#e7f3f1;
   --cyan-line:#bcded9;
+  /* 补录（过去某天）：暖墨棕实底白字，不用功课红、也不再是惨白 */
+  --backfill:#4a3b2a;
+  --backfill-dark:#372b1e;
   --radius:16px;
   --serif:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
   --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif;
@@ -264,17 +267,18 @@ img{max-width:100%;display:block}
   content:"";position:absolute;left:50%;bottom:-1px;transform:translateX(-50%);
   width:20px;height:2px;border-radius:2px;background:var(--accent);
 }
-/* 非当天：只有加号的底色变米白，tab 文字与下划线仍用功课红 */
-.offtoday .btn.step{background:var(--card2);border-color:var(--line);color:var(--ink2)}
-.offtoday .btn.step:active{background:var(--accent-soft)}
-.offtoday .cbtn.step{background:var(--card2);border-color:var(--line);color:var(--ink2)}
-.offtoday .cbtn.step:active{background:var(--accent-soft)}
-.offtoday .bigadd{
-  background:linear-gradient(180deg,#fffdf8,#f7efe1);
-  color:var(--ink);border:1px solid var(--line);
+/* 非当天（补录）：末位 + 与详情页 +1 用深墨棕实底白字，与四个米白数字按钮拉开主次。
+   一律带 :not(:disabled)：无论规则写在哪，都不会把未来禁用态也染成深墨棕。 */
+.offtoday .btn.step:not(:disabled),
+.offtoday .cbtn.step:not(:disabled){background:var(--backfill);border-color:var(--backfill);color:#fff}
+.offtoday .btn.step:not(:disabled):active,
+.offtoday .cbtn.step:not(:disabled):active{background:var(--backfill-dark);border-color:var(--backfill-dark)}
+.offtoday .bigadd:not(:disabled){
+  background:linear-gradient(180deg,#5a4833,var(--backfill));
+  color:#fff;border:1px solid var(--backfill);
   box-shadow:0 8px 18px -14px rgba(90,70,40,.5);
 }
-.offtoday .bigadd:active{background:linear-gradient(180deg,#f8f1e4,#efe3d0)}
+.offtoday .bigadd:not(:disabled):active{background:linear-gradient(180deg,var(--backfill),var(--backfill-dark))}
 .tab .cnt{
   font-family:var(--sans);font-size:9px;margin-left:1px;color:var(--ink3);
   vertical-align:super;letter-spacing:0;
