@@ -10154,6 +10154,7 @@ function loadDB() {
     if (!Array.isArray(db.tasks)) db.tasks = [];
     db.tasks.forEach(function (t) {
       t.goal = +t.goal > 0 ? Math.floor(+t.goal) : 0;
+      t.mgoal = +t.mgoal > 0 ? Math.floor(+t.mgoal) : 0;
       if (t.name === '南无药师琉璃光如来') { t.name = '南无消灾延寿药师佛'; __dbMigrated = true; }
       if (t.name === '文殊师利菩萨心咒') { t.name = '文殊菩萨心咒'; __dbMigrated = true; }
     });
@@ -10234,6 +10235,11 @@ function taskGoal(t) {
 /* 总目标（可选）：累计到多少 */
 function taskTarget(t) {
   var g = t ? +t.tgoal : 0;
+  return g > 0 && isFinite(g) ? Math.floor(g) : 0;
+}
+/* 月目标（可选）：当月累计到多少。只作对照数字，不画进度条 */
+function taskMonthGoal(t) {
+  var g = t ? +t.mgoal : 0;
   return g > 0 && isFinite(g) ? Math.floor(g) : 0;
 }
 function tasksOf(cat) {
@@ -10843,8 +10849,9 @@ function renderTaskListInto(box, cat) {
       '</div>') : '';
     var statsHTML = (showTot || showMtot) ? (
       '<div class="task-stats' + (showMtot && showTot ? '' : ' solo') + '" data-open="' + esc(t.id) + '">' +
-        (showMtot ? '<span class="st-m">本月 ' + taskMonthTotal(t.id) + '</span>' : '') +
-        (showTot ? '<span class="st-a">总计 ' + taskTotal(t.id) +
+        (showMtot ? '<span class="st-m">本月 ' + taskMonthTotal(t.id) +
+            (taskMonthGoal(t) ? ' / ' + taskMonthGoal(t) : '') + '</span>' : '') +
+        (showTot ? '<span class="st-a">累计 ' + taskTotal(t.id) +
             (taskTarget(t) ? ' / ' + taskTarget(t) : '') + '</span>' : '') +
       '</div>') : '';
     return '' +
@@ -10893,9 +10900,11 @@ function refreshTaskRow(taskId) {
   numEl.classList.toggle('zero', n === 0);
   row.classList.toggle('done', n > 0);
   var totEl = row.querySelector('.st-a');
-  if (totEl && t) totEl.textContent = '总计 ' + taskTotal(t.id) + (taskTarget(t) ? ' / ' + taskTarget(t) : '');
+  if (totEl && t) totEl.textContent = '累计 ' + taskTotal(t.id) + (taskTarget(t) ? ' / ' + taskTarget(t) : '');
   var mtotEl = row.querySelector('.st-m');
-  if (mtotEl && t) mtotEl.textContent = '本月 ' + taskMonthTotal(t.id);
+  if (mtotEl && t) {
+    mtotEl.textContent = '本月 ' + taskMonthTotal(t.id) + (taskMonthGoal(t) ? ' / ' + taskMonthGoal(t) : '');
+  }
 
   var g = taskGoal(t);
   var gEl = row.querySelector('.task-goal');
@@ -12203,9 +12212,11 @@ function detailCountHTML(t) {
       '<span class="cg-txt">' + esc(n) + ' / ' + esc(g) + (n >= g ? ' ✓' : '') + '</span>' +
     '</div>') : '';
 
+  var mgoal = taskMonthGoal(t);
   var totHTML = '<div class="cc-tot' + (DB.settings.showMonthTotal ? '' : ' one') + '">' +
     (DB.settings.showMonthTotal
-      ? '<span class="tot-m">本月 <b>' + taskMonthTotal(t.id) + '</b> ' + esc(t.unit) + '</span>'
+      ? '<span class="tot-m">本月 <b>' + taskMonthTotal(t.id) + '</b>' +
+          (mgoal ? ' / ' + mgoal : '') + ' ' + esc(t.unit) + '</span>'
       : '') +
     '<span class="tot-all">累计 <b>' + taskTotal(t.id) + '</b>' +
       (taskTarget(t) ? ' / ' + taskTarget(t) : '') + ' ' + esc(t.unit) + '</span>' +
@@ -12515,7 +12526,13 @@ function renderTaskSettings() {
           '<b>' + esc(t.name) + '</b>' +
           '<em>' + esc(t.unit) + ' · 增减 ' + t.step +
             (taskGoal(t) ? ' · 日目标 ' + taskGoal(t) : '') + '</em>' +
-          (taskTarget(t) ? '<em class="tg">总目标 ' + taskTarget(t) + '</em>' : '') +
+          (taskMonthGoal(t) || taskTarget(t)
+            ? '<em class="tg">' +
+                (taskMonthGoal(t) ? '月目标 ' + taskMonthGoal(t) : '') +
+                (taskMonthGoal(t) && taskTarget(t) ? ' · ' : '') +
+                (taskTarget(t) ? '总目标 ' + taskTarget(t) : '') +
+              '</em>'
+            : '') +
         '</div>' +
         '<button class="mini eye' + (t.hidden ? ' on' : '') + '" data-thide="1" aria-label="' +
           (t.hidden ? '取消隐藏' : '隐藏这项功课') + '" title="' + (t.hidden ? '取消隐藏' : '隐藏') + '">' +
@@ -12549,6 +12566,7 @@ function openTaskEditor(taskId, cat) {
   var unit = t ? t.unit : c.unit;
   var step = t ? t.step : c.step;
   var goal = t ? taskGoal(t) : 0;
+  var mgoal = t ? taskMonthGoal(t) : 0;
   var tgoal = t ? taskTarget(t) : 0;
 
   openModal(
@@ -12557,6 +12575,7 @@ function openTaskEditor(taskId, cat) {
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
     '<div class="field"><label>默认增量（＋ / － 按钮一次的数量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
+    '<div class="field"><label>月目标（可选，当月累计到多少）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
     '<div class="field"><label>总目标（可选，累计到多少）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
     '<div class="field-chk" data-mshow="1">' +
       '<div class="lbl">在功课列表中显示<em>关掉只是藏起来，计数与目标都保留</em></div>' +
@@ -12571,17 +12590,19 @@ function openTaskEditor(taskId, cat) {
       var un = ($('#f-unit').value || '').trim() || '遍';
       var st = parseInt($('#f-step').value, 10);
       var gl = parseInt($('#f-goal').value, 10);
+      var mgl = parseInt($('#f-mgoal').value, 10);
       var tgl = parseInt($('#f-tgoal').value, 10);
       var showIt = !!(document.querySelector('#modal [data-mshow] .switch.on'));
       if (!nm) { toast('请填写名称'); return; }
       if (isNaN(st) || st <= 0) st = 1;
       if (isNaN(gl) || gl <= 0) gl = 0;
+      if (isNaN(mgl) || mgl <= 0) mgl = 0;
       if (isNaN(tgl) || tgl <= 0) tgl = 0;
       if (isNew) {
         DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st,
-          goal: gl, tgoal: tgl, builtin: false, hidden: !showIt });
+          goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
-        t.name = nm; t.unit = un; t.step = st; t.goal = gl; t.tgoal = tgl;
+        t.name = nm; t.unit = un; t.step = st; t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
         t.hidden = !showIt;
       }
       saveNow();
@@ -12906,10 +12927,10 @@ function renderSettings() {
 
   html += '<div class="set-sec"><div class="set-title">功课</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showTotal">' +
-      '<div class="lbl">显示累计总数<em>每项功课下方多一行「总计 N」，设了总目标再带上「/ 目标」</em></div>' +
+      '<div class="lbl">显示累计总数<em>显示功课项的累计总数及总目标</em></div>' +
       '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showMonthTotal">' +
-      '<div class="lbl">显示当月累计<em>在同一行里，于「总计」左边显示「本月 N」</em></div>' +
+      '<div class="lbl">显示当月累计<em>显示功课项的当月累计总数及月目标</em></div>' +
       '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showTabTotal">' +
       '<div class="lbl">显示当日分类汇总<em>在念佛 / 诵经 / 持咒 / 仪轨 顶部用一行列出当日各项计数</em></div>' +
@@ -13941,6 +13962,7 @@ function sanitizeImport(src) {
       unit: (typeof t.unit === 'string' ? t.unit : '').slice(0, 8),
       step: Math.min(100000, Math.max(1, Math.floor(Number(t.step)) || 1)),
       goal: Math.max(0, Math.floor(Number(t.goal)) || 0),
+      mgoal: Math.max(0, Math.floor(Number(t.mgoal)) || 0),
       tgoal: Math.max(0, Math.floor(Number(t.tgoal)) || 0),
       builtin: !!t.builtin,
       hidden: !!t.hidden
