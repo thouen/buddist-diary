@@ -10630,8 +10630,12 @@ function openYearPicker() {
     if (!g) return;
     var cur = g.querySelector('.pk.on') || g.querySelector('.pk.today');
     if (!cur) return;
-    var gr = g.getBoundingClientRect(), cr = cur.getBoundingClientRect();
-    g.scrollTop = g.scrollTop + (cr.top - gr.top) - (g.clientHeight - cr.height) / 2;
+    var cs = getComputedStyle(g);
+    var gap = parseFloat(cs.rowGap || cs.gap) || 0;
+    var pitch = cur.offsetHeight + gap;
+    /* 按「第几行」直接算，整行对齐：面板上下不出现被切掉半截的年份 */
+    var row = Math.floor(Math.max(0, list.indexOf(base)) / 4);
+    g.scrollTop = Math.max(0, row * pitch - Math.round((g.clientHeight - cur.offsetHeight) / 2));
   }, 50);
 }
 
