@@ -699,9 +699,13 @@ img{max-width:100%;display:block}
 .dcell.on .dd,.dcell.on .dn{color:#fff}
 .dcell.on .hmark{color:rgba(255,255,255,.92)}
 .dcell .hmark{position:absolute;top:2px;right:3px;font-size:8px;font-style:normal;color:var(--gold)}
+/* 按月达标勾：与按日同一套标记语言，只补 .mcell；按年视图不参与达标判断 */
+.mcell .hmark{position:absolute;top:3px;right:4px;font-size:9px;font-style:normal;color:var(--gold)}
+.mcell.on .hmark{color:rgba(255,255,255,.92)}
 
 .mtable{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:2px}
 .mcell{
+  position:relative;
   border:1px solid var(--line2);background:var(--card2);border-radius:10px;
   padding:8px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;
 }
@@ -12186,10 +12190,11 @@ function dayTableHTML(items, d, t) {
     '</div>';
 }
 
-/* 按月：12 个月的表格 */
-function monthTableHTML(items) {
+/* 按月：12 个月的表格。按月认月目标；按年不做任何达标判断（yearTableHTML 保持不带 t） */
+function monthTableHTML(items, t) {
   var max = 1;
   items.forEach(function (it) { if (it.n > max) max = it.n; });
+  var mg = taskMonthGoal(t);
   return '<div class="mtable">' + items.map(function (it) {
     var lv = heatLevel(it.n, max);
     var cls = 'mcell lv' + lv + (it.n > 0 ? ' has' : '') +
@@ -12198,6 +12203,7 @@ function monthTableHTML(items) {
     return '<div class="' + cls + '" data-dmon="' + it.m + '">' +
       '<span class="mm">' + it.m + ' 月</span>' +
       '<span class="mn' + numCls(sv, 6, 7) + '">' + sv + '</span>' +
+      (mg && it.n >= mg ? '<i class="hmark">✓</i>' : '') +
       '</div>';
   }).join('') + '</div>';
 }
@@ -12358,7 +12364,7 @@ function renderDetailStats() {
     sub2 = '<span>记录 <b>' + active + '</b> 个月</span>';
     sub3 = '<span>月均 <b>' + avg + '</b></span><span>单月最高 <b>' + peak + '</b></span>';
     tip = '点按月份查看每日 · 左右滑动切换年份';
-    table = monthTableHTML(items);
+    table = monthTableHTML(items, t);
   } else {
     var ys = items.map(function (x) { return x.y; });
     var y0 = Math.min.apply(null, ys);
@@ -12376,14 +12382,21 @@ function renderDetailStats() {
     table = yearTableHTML(items);
   }
 
+  /* 目标按口径分开：按日认日目标、按月认月目标；按年不显示任何目标 / 达标字样。
+     总目标只是累计数字对照，不参与任何统计达标。 */
   var goalStat = '';
-  if (goal > 0) {
-    if (d.range === 'day') {
+  if (d.range === 'day') {
+    if (goal > 0) {
       var hit = 0;
       items.forEach(function (it) { if (it.n >= goal) hit++; });
       goalStat = '<span class="goal-note">目标 <b>' + goal + '</b> · 达标 <b>' + hit + '</b> 天</span>';
-    } else {
-      goalStat = '<span class="goal-note">每日目标 <b>' + goal + '</b></span>';
+    }
+  } else if (d.range === 'month') {
+    var mgStat = taskMonthGoal(t);
+    if (mgStat > 0) {
+      var mhit = 0;
+      items.forEach(function (it) { if (it.n >= mgStat) mhit++; });
+      goalStat = '<span class="goal-note">月目标 <b>' + mgStat + '</b> · 达标 <b>' + mhit + '</b> 个月</span>';
     }
   }
 
