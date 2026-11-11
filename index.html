@@ -10604,8 +10604,12 @@ function renderCalHTML() {
 function openYearPicker() {
   var base = UI.calY;
   var ty = new Date().getFullYear();
+  /* 不再只给中心年前后各 12 年：整段 1900 – 2100 都能选，面板里上下滑动即可 */
+  var y0 = 1900, y1 = 2100;
+  if (base < y0) y0 = base;
+  if (base > y1) y1 = base;
   var list = [];
-  for (var i = base - 12; i <= base + 11; i++) list.push(i);
+  for (var y = y0; y <= y1; y++) list.push(y);
   var cls = function (y) {
     var c = 'pk';
     if (y === base) c += ' on';
@@ -10614,12 +10618,21 @@ function openYearPicker() {
   };
   openModal(
     '<h4>选择年份</h4>' +
-    '<div class="dlg-sub">以 ' + base + ' 年为中心，前后各 12 年</div>' +
-    '<div class="pick-grid">' + list.map(function (y) {
+    '<div class="dlg-sub">上下滑动选择 · ' + y0 + ' – ' + y1 + ' 年</div>' +
+    '<div class="pick-grid" id="yr-grid">' + list.map(function (y) {
       return '<button class="' + cls(y) + '" data-setyear="' + y + '">' + y + '</button>';
     }).join('') + '</div>' +
     '<div class="modal-actions"><button data-mclose="1">取消</button></div>'
   );
+  /* 打开时把当前年份滚到面板正中，省得用户自己找 */
+  setTimeout(function () {
+    var g = document.getElementById('yr-grid');
+    if (!g) return;
+    var cur = g.querySelector('.pk.on') || g.querySelector('.pk.today');
+    if (!cur) return;
+    var gr = g.getBoundingClientRect(), cr = cur.getBoundingClientRect();
+    g.scrollTop = g.scrollTop + (cr.top - gr.top) - (g.clientHeight - cr.height) / 2;
+  }, 50);
 }
 
 function openMonthPicker() {
