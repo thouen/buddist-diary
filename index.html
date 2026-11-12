@@ -135,15 +135,14 @@ img{max-width:100%;display:block}
   box-shadow:0 1px 2px rgba(184,68,47,.10);
   transition:background .15s ease,color .15s ease,box-shadow .15s ease,transform .1s ease;
 }
-/* 一圈留缺口的箭头，示意「回到当期」 */
-.today-btn::before{
-  content:'';width:9px;height:9px;border-radius:50%;
-  border:1.4px solid currentColor;border-top-color:transparent;
-  transform:rotate(-38deg);opacity:.85;
-}
 .today-btn:active{
   background:var(--accent);color:#fff;border-color:var(--accent);
   transform:scale(.97);box-shadow:none;
+}
+/* 顺时针一圈带箭头的图标：分段「本月 / 今年 / 近年」与日期条的「今天」共用 */
+.today-btn .ta,.dr-today .ta{
+  width:11px;height:11px;flex:0 0 auto;
+  fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;
 }
 
 .week-row{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));padding:0 2px}
@@ -220,8 +219,12 @@ img{max-width:100%;display:block}
   font-size:11.5px;color:var(--ink2);padding-top:2px;
 }
 .dr3{display:flex;flex-wrap:wrap;gap:5px;padding:3px 0 1px}
-/* 这一天没有任何节期时：用一行纯文字预告最近的一个 */
-.dr-next{padding:2px 0 0;font-size:10.5px;color:var(--ink3);letter-spacing:.3px;line-height:1.6}
+/* 这一天没有任何节期时：用一行纯文字预告最近的一个。
+   高度对齐一行 tag（.badge 约 17.6 + dr3 的 3/1 内边距），换行时日期条不会忽高忽低 */
+.dr-next{
+  display:flex;align-items:center;min-height:18px;padding:3px 0 1px;
+  font-size:10.5px;color:var(--ink3);letter-spacing:.3px;line-height:1.3;
+}
 .dr-next b{font-weight:500;color:var(--ink2)}
 
 /* 日期信息条：三行 */
@@ -1135,43 +1138,26 @@ img{max-width:100%;display:block}
 .detail-stats .seg button.on{background:#e7ddc9;color:#4a3b2a;border-color:#cdbf9f;font-weight:600}
 
 /* ---------- 2.0 交互补充 ---------- */
-/* 「今」：只在这一天不是今天时出现，靠右，与上面两行整体垂直居中 */
+/* 「今天」：只在这一天不是今天时出现，跟在第一行公历年月日后面 */
 .dl-rows{position:relative;display:flex;flex-direction:column;gap:3px}
-.dl-rows.has-today{padding-right:35px}
 .dr-today{
-  position:absolute;right:0;top:50%;transform:translateY(-50%);
-  width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;
-  border-radius:50%;line-height:1;color:var(--accent);
-  background:radial-gradient(circle at 50% 30%,#fffdfb 0%,#fbe9e3 62%,#f6ded6 100%);
-  border:1px solid #eccfc6;
-  box-shadow:0 1px 2px rgba(130,50,30,.10),inset 0 1px 0 rgba(255,255,255,.95);
-  transition:transform .1s ease,box-shadow .12s ease;
+  flex:0 0 auto;align-self:center;margin-left:1px;
+  display:inline-flex;align-items:center;gap:2.5px;line-height:1;
+  font-size:11px;color:var(--accent);letter-spacing:.3px;padding:2.5px 7px 2.5px 5px;
+  border-radius:20px;border:1px solid rgba(184,68,47,.24);
+  background:linear-gradient(180deg,#fffdfb,var(--accent-soft));
+  box-shadow:0 1px 2px rgba(184,68,47,.09);
+  transition:background .15s ease,color .15s ease,transform .1s ease;
 }
-/* 今 + 顺时针转一圈的箭头，一眼看出是「回到今天」 */
-.dr-today .ta{
-  position:absolute;left:0;top:0;width:100%;height:100%;
-  fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;
-}
-/* 圈画得轻一点，让中间的「今」是主角；箭头实心，方向才看得清 */
-.dr-today .ta path{stroke-opacity:.5}
-.dr-today .ta .hd{fill:currentColor;stroke:none;stroke-opacity:0}
-.dr-today span{
-  position:relative;font-family:var(--serif);font-size:11px;font-weight:600;
-  letter-spacing:0;line-height:1;transform:translateY(-.3px);
-}
-.dr-today:active{
-  background:radial-gradient(circle at 50% 26%,#fdf1ec 0%,#f4d8cf 100%);
-  box-shadow:0 0 0 rgba(0,0,0,0);
-  transform:translateY(-50%) scale(.93);
-}
+.dr-today span{font-family:var(--serif);font-weight:600}
+.dr-today:active{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(.95)}
 /* 窄屏：佛历与公历同降一档，公历年月日才不会被截断 */
 @media (max-width:345px){
   .dr1{gap:5px}
   .dr-fen,.dr-gd{font-size:14px}
-  /* 窄屏把「今」收紧一点，公历年月日才不会被挤成省略号 */
-  .dl-rows.has-today{padding-right:30px}
-  .dr-today{width:25px;height:25px}
-  .dr-today span{font-size:10px}
+  /* 窄屏把「今天」收紧一点，公历年月日才不会被挤成省略号 */
+  .dr-today{font-size:10px;padding:2px 6px 2px 4px;gap:2px}
+  .dr-today .ta{width:10px;height:10px}
 }
 
 /* 未来的日期不能记功课：按钮置灰 */
@@ -10923,15 +10909,17 @@ function nextSpecialDay(ds) {
   }
   return null;
 }
-/* 「今」按钮：只在这一天不是今天时出现，靠右、与上面两行垂直居中 */
+/* 顺时针一圈、带箭头的图标（圈从右上角开始绕一圈，箭头收在同一处）：
+   分段里的「本月 / 今年 / 近年」与日期条的「今天」共用一个，方向一致才不别扭 */
+var LOOP_ARROW = '<svg class="ta" viewBox="0 0 24 24" aria-hidden="true">' +
+  '<polyline points="22.4 4.4 22.4 9.9 16.9 9.9"/>' +
+  '<path d="M20.1 14.9a8.8 8.8 0 1 1-2.2-9.1l4.5 4.1"/>' +
+  '</svg>';
+/* 「今天」按钮：只在这一天不是今天时出现，跟在第一行公历年月日后面 */
 function todayBtnHTML(ds) {
   return ds !== TODAY
     ? '<button class="dr-today" data-gotoday="1" aria-label="回到今天" title="回到今天">' +
-        '<svg class="ta" viewBox="0 0 24 24" aria-hidden="true">' +
-          '<path d="M18 4.8A9.4 9.4 0 1 1 12 2.6"/>' +
-          '<path class="hd" d="M11.2 1.5 14 2.6 11.2 3.7Z"/>' +
-        '</svg>' +
-        '<span>今</span>' +
+        LOOP_ARROW + '<span>今天</span>' +
       '</button>'
     : '';
 }
@@ -10947,17 +10935,17 @@ function dateRowsHTML(info, ds) {
       nextTxt = '<div class="dr-next">' + nx.n + '天后：<b>' + esc(nx.label) + '</b></div>';
     }
   }
-  return '<div class="dl-rows' + (hasToday ? ' has-today' : '') + '">' +
+  return '<div class="dl-rows">' +
       '<div class="dr1">' +
         '<span class="dr-fen">佛历 ' + buddhaYear(info.shy) + ' 年</span>' +
         '<span class="dr-gd gd">' + gregDateText(info) + '</span>' +
+        todayBtnHTML(ds) +
       '</div>' +
       '<div class="dr2">' +
         '<span class="dr-lun">农历' + esc(info.monthCn) + esc(info.dayCn) + '</span>' +
         '<span class="dr-wk">星期' + WEEK_CN[info.week] + '</span>' +
         (rel ? '<span class="dr-rel' + (rel === '今天' ? ' now' : '') + '">' + rel + '</span>' : '') +
       '</div>' +
-      todayBtnHTML(ds) +
     '</div>' +
     (badges ? '<div class="dr3">' + badges + '</div>' : '') +
     nextTxt;
@@ -12513,7 +12501,7 @@ function renderDetailStats() {
       '<button class="navbtn" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + d.y + ' 年 ' + d.m + ' 月</div>' +
       '<button class="navbtn" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">回到本月</button>';
+      '<button class="today-btn" data-p="now">' + LOOP_ARROW + '本月</button>';
     /* 翻到别的月份时，表头的合计不再是「本月」 */
     keyLabel = (d.y === +TODAY.slice(0, 4) && d.m === +TODAY.slice(5, 7)) ? '本月合计' : '此月合计';
     sub2 = '<span>记录 <b>' + active + '</b> 天</span>';
@@ -12525,7 +12513,7 @@ function renderDetailStats() {
       '<button class="navbtn" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + d.year + ' 年</div>' +
       '<button class="navbtn" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">回到今年</button>';
+      '<button class="today-btn" data-p="now">' + LOOP_ARROW + '今年</button>';
     keyLabel = '本年合计';
     sub2 = '<span>记录 <b>' + active + '</b> 个月</span>';
     sub3 = '<span>月均 <b>' + avg + '</b></span><span>单月最高 <b>' + peak + '</b></span>';
@@ -12540,7 +12528,7 @@ function renderDetailStats() {
       '<button class="navbtn' + (y0 <= 1901 ? ' dis' : '') + '" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + (y0 === y1 ? y0 + ' 年' : y0 + ' – ' + y1 + ' 年') + '</div>' +
       '<button class="navbtn' + (y1 >= cy ? ' dis' : '') + '" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">回到近年</button>';
+      '<button class="today-btn" data-p="now">' + LOOP_ARROW + '近年</button>';
     keyLabel = '近年合计';
     sub2 = '<span>记录 <b>' + active + '</b> 年</span>';
     sub3 = '<span>年均 <b>' + avg + '</b></span><span>单年最高 <b>' + peak + '</b></span>';
@@ -12734,10 +12722,11 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 增量 ' + t.step +
-            (taskGoal(t) ? ' · 日目标 ' + taskGoal(t) : '') + '</em>' +
-          (taskMonthGoal(t) || taskTarget(t)
+          '<em>' + esc(t.unit) + ' · 增量 ' + t.step + '</em>' +
+          (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
+                (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
+                (taskGoal(t) && (taskMonthGoal(t) || taskTarget(t)) ? ' · ' : '') +
                 (taskMonthGoal(t) ? '月目标 ' + taskMonthGoal(t) : '') +
                 (taskMonthGoal(t) && taskTarget(t) ? ' · ' : '') +
                 (taskTarget(t) ? '总目标 ' + taskTarget(t) : '') +
@@ -12920,7 +12909,7 @@ function renderFestivals() {
     '<button class="navbtn" data-fy="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
     '<div class="pt">' + y + ' 年</div>' +
     '<button class="navbtn" data-fy="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-    '<button class="today-btn" data-fy="now">今年</button>' +
+    '<button class="today-btn" data-fy="now">' + LOOP_ARROW + '今年</button>' +
     '</div>';
 
   var curMonth = 0;
@@ -12995,7 +12984,7 @@ function renderMyDays() {
       }
       html += '<div class="md-row" data-mdedit="' + esc(m.id) + '">' +
         '<div class="nm"><b>' + esc(m.name) + '</b>' +
-          '<em>' + myDayText(m) + ' · ' + (myDayOnce(m) ? '仅此一年' : '每年重复') + '</em></div>' +
+          '<em>' + myDayText(m) + ' · ' + (myDayOnce(m) ? '' : '每年重复') + '</em></div>' +
         '<div class="rt"><span class="nx">' + esc(extra) + '</span><span class="chev">›</span></div>' +
         '</div>';
     });
@@ -13042,23 +13031,48 @@ function renderPlaces() {
   scroll.innerHTML = html;
 }
 
-function openMyDayEditor(id) {  var m = null;
+/* 农历月名 / 日名：纪念日的月、日下拉用 */
+var LUNAR_MONTH_CN = ['正月', '二月', '三月', '四月', '五月', '六月',
+  '七月', '八月', '九月', '十月', '冬月', '腊月'];
+var CN_DIGIT = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+function lunarDayCN(d) {
+  d = +d;
+  if (d <= 10) return d === 10 ? '初十' : '初' + CN_DIGIT[d];
+  if (d < 20) return '十' + CN_DIGIT[d - 10];
+  if (d === 20) return '二十';
+  if (d < 30) return '廿' + CN_DIGIT[d - 20];
+  return '三十';
+}
+/* 月下拉：公历「1 月」，农历「正月 … 腊月」 */
+function myDayMonthOpts(kind, cur) {
+  var a = [];
+  for (var i = 1; i <= 12; i++) {
+    var txt = kind === 'lunar' ? LUNAR_MONTH_CN[i - 1] : i + ' 月';
+    a.push('<option value="' + i + '"' + (i === +cur ? ' selected' : '') + '>' + txt + '</option>');
+  }
+  return a.join('');
+}
+/* 日下拉：公历「1 日」，农历「初一 … 三十」 */
+function myDayDayOpts(kind, cur) {
+  var max = kind === 'lunar' ? 30 : 31;
+  var c = Math.min(Math.max(+cur || 1, 1), max);
+  var a = [];
+  for (var i = 1; i <= max; i++) {
+    var txt = kind === 'lunar' ? lunarDayCN(i) : i + ' 日';
+    a.push('<option value="' + i + '"' + (i === c ? ' selected' : '') + '>' + txt + '</option>');
+  }
+  return a.join('');
+}
+
+function openMyDayEditor(id) {
+  var m = null;
   (DB.mydays || []).forEach(function (x) { if (x.id === id) m = x; });
   var isNew = !m;
-  var kind = m ? m.kind : 'lunar';
+  var kind = (m && m.kind) || 'solar';   /* 新增的默认选公历 */
   var mm = m ? +m.m : 1;
   var dd = m ? +m.d : 1;
-  var maxD = kind === 'lunar' ? 30 : 31;
   var yy = m ? (+m.y || 0) : 0;
   var rep = m ? m.repeat !== false : true;   /* 默认每年重复 */
-
-  function opts(n, cur) {
-    var a = [];
-    for (var i = 1; i <= n; i++) {
-      a.push('<option value="' + i + '"' + (i === cur ? ' selected' : '') + '>' + i + '</option>');
-    }
-    return a.join('');
-  }
 
   /* 年份就是一个可滚动的下拉框：1900 – 2100 全区间都能选，新条目默认落在实际当年；
      旧存档里没记年份（y = 0）的仍停在「不指定年份」，不会被悄悄改写 */
@@ -13077,13 +13091,13 @@ function openMyDayEditor(id) {  var m = null;
     '<div class="field"><label>名称</label>' +
       '<input id="f-mdname" type="text" value="' + esc(m ? m.name : '') + '" placeholder="如：母亲生日、皈依纪念日"></div>' +
     '<div class="field"><label>历法</label><div class="seg2" id="f-mdkind">' +
-      '<button data-mdkind="lunar" class="' + (kind === 'lunar' ? 'on' : '') + '">农历</button>' +
       '<button data-mdkind="solar" class="' + (kind === 'solar' ? 'on' : '') + '">公历</button>' +
+      '<button data-mdkind="lunar" class="' + (kind === 'lunar' ? 'on' : '') + '">农历</button>' +
     '</div></div>' +
     '<div class="field"><label>年份</label><select id="f-mdy">' + yearOpts() + '</select></div>' +
     '<div class="field-row">' +
-      '<div class="field"><label>月</label><select id="f-mdm">' + opts(12, mm) + '</select></div>' +
-      '<div class="field"><label>日</label><select id="f-mdd">' + opts(maxD, Math.min(dd, maxD)) + '</select></div>' +
+      '<div class="field"><label>月</label><select id="f-mdm">' + myDayMonthOpts(kind, mm) + '</select></div>' +
+      '<div class="field"><label>日</label><select id="f-mdd">' + myDayDayOpts(kind, dd) + '</select></div>' +
     '</div>' +
     '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十：该月只有廿九时，按当月最后一天算</div>' +
     '<div class="field-chk" data-mtog="1">' +
@@ -13098,7 +13112,7 @@ function openMyDayEditor(id) {  var m = null;
     function () {
       var nm = ($('#f-mdname').value || '').trim();
       var kd = $('#f-mdkind .on');
-      var kdVal = kd ? kd.dataset.mdkind : 'lunar';
+      var kdVal = kd ? kd.dataset.mdkind : 'solar';
       var mv = parseInt($('#f-mdm').value, 10) || 1;
       var dv = parseInt($('#f-mdd').value, 10) || 1;
       var yv = parseInt($('#f-mdy').value, 10) || 0;
@@ -13258,16 +13272,11 @@ function bindEvents() {
       Array.prototype.forEach.call(document.querySelectorAll('#f-mdkind button'), function (b) {
         b.classList.toggle('on', b.dataset.mdkind === kd);
       });
-      var sel = document.getElementById('f-mdd');
-      if (sel) {
-        var curD = parseInt(sel.value, 10) || 1;
-        var maxD = kd === 'lunar' ? 30 : 31;
-        var buf = '';
-        for (var di = 1; di <= maxD; di++) {
-          buf += '<option value="' + di + '"' + (di === Math.min(curD, maxD) ? ' selected' : '') + '>' + di + '</option>';
-        }
-        sel.innerHTML = buf;
-      }
+      /* 换历法时月名（正月…腊月 / 1 月）与日名（初一…三十 / 1 日）都要重排 */
+      var msel = document.getElementById('f-mdm');
+      if (msel) msel.innerHTML = myDayMonthOpts(kd, parseInt(msel.value, 10) || 1);
+      var dsel = document.getElementById('f-mdd');
+      if (dsel) dsel.innerHTML = myDayDayOpts(kd, parseInt(dsel.value, 10) || 1);
       return;
     }
     var mdel = e.target.closest('[data-mddel]');
