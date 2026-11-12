@@ -128,10 +128,23 @@ img{max-width:100%;display:block}
 .navbtn.dis{opacity:.28;pointer-events:none}
 .navbtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .today-btn{
-  margin-left:2px;font-size:11px;color:var(--ink2);border:1px solid var(--line);
-  border-radius:20px;padding:3px 9px;letter-spacing:.5px;background:var(--card2);
+  margin-left:2px;display:inline-flex;align-items:center;gap:3px;
+  font-size:11px;color:var(--accent);border:1px solid rgba(184,68,47,.26);
+  border-radius:20px;padding:3px 10px 3px 7px;letter-spacing:.4px;
+  background:linear-gradient(180deg,#fffdfb,var(--accent-soft));
+  box-shadow:0 1px 2px rgba(184,68,47,.10);
+  transition:background .15s ease,color .15s ease,box-shadow .15s ease,transform .1s ease;
 }
-.today-btn:active{background:var(--accent-soft);color:var(--accent)}
+/* 一圈留缺口的箭头，示意「回到当期」 */
+.today-btn::before{
+  content:'';width:9px;height:9px;border-radius:50%;
+  border:1.4px solid currentColor;border-top-color:transparent;
+  transform:rotate(-38deg);opacity:.85;
+}
+.today-btn:active{
+  background:var(--accent);color:#fff;border-color:var(--accent);
+  transform:scale(.97);box-shadow:none;
+}
 
 .week-row{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));padding:0 2px}
 .week-row span{
@@ -10002,7 +10015,8 @@ function defaultDB() {
       showYueZhai: false,
       showGuanyin: false,
       showTabTotal: false,
-      showSumMeta: true,
+      showSumPlace: true,
+      showSumWeather: true,
       showDiary: true,
       showSumDiary: true,
       defaultPlaceId: '',
@@ -10060,8 +10074,15 @@ function normalizeSettings(src) {
   if (typeof out.defaultPlaceId !== 'string') out.defaultPlaceId = '';
   /* 1.18：日记默认沿用最近一次用过的地点 */
   if (typeof out.useLastPlace !== 'boolean') out.useLastPlace = true;
-  /* 总览卡片上的地点 / 天气，默认显示 */
-  if (typeof out.showSumMeta !== 'boolean') out.showSumMeta = true;
+  /* 总览卡片上的地点 / 天气：旧版本是一个总开关 showSumMeta，这里一次性拆成两个，
+     之后各自独立保存；没有旧值时默认都显示 */
+  if (typeof out.showSumMeta === 'boolean') {
+    if (typeof out.showSumPlace !== 'boolean') out.showSumPlace = out.showSumMeta;
+    if (typeof out.showSumWeather !== 'boolean') out.showSumWeather = out.showSumMeta;
+    delete out.showSumMeta;
+  }
+  if (typeof out.showSumPlace !== 'boolean') out.showSumPlace = true;
+  if (typeof out.showSumWeather !== 'boolean') out.showSumWeather = true;
   /* 2.5：记录日记与总览显示日记，默认都开着，两者各自独立存值。
      2.7 修订：关掉「记录日记」不再改写「总览显示日记」的值，设置页只是把那一行藏起来。
      总览是否显示日记，由 renderSummaryHTML() 按「两个开关都开」实时判定。 */
@@ -10360,9 +10381,10 @@ function taskMonthTotal(id, ds) {
 function monthWord(ds) {
   return String(ds || UI.date).slice(0, 7) === TODAY.slice(0, 7) ? '本月' : '此月';
 }
-/* 月目标后缀：设了月目标才写「 / N」，该月达标补一个 ✓（与日目标同一套写法） */
-function monthGoalSuffix(mt, mg) {
-  return mg ? ' / ' + mg + (mt >= mg ? ' ✓' : '') : '';
+/* 月目标 / 总目标后缀：设了目标才写「 / N」，达到了补一个 ✓（与日目标同一套写法）。
+   月目标和总目标都没有进度条，这个小勾就是「已达标」的唯一提示。 */
+function goalSuffix(n, g) {
+  return g ? ' / ' + g + (n >= g ? ' ✓' : '') : '';
 }
 
 function pruneRec(ds) {
@@ -10428,6 +10450,10 @@ function zhaiKeysOf(info) {
 }
 
 /* ---------- 自定义纪念日 ---------- */
+/* 农历「三十」碰到只有廿九天的小月：看明天是不是初一，是的话今天就是这个月的最后一天 */
+function isLunarMonthEnd(ds) {
+  return lunarOf(addDays(ds, 1)).d === 1;
+}
 function myDaysOn(ds) {
   var list = DB.mydays || [];
   if (!list.length) return [];
@@ -10441,10 +10467,10 @@ function myDaysOn(ds) {
       if (!+m.y || +m.y !== iy) continue;
     }
     if (m.kind === 'lunar') {
-      if (+m.m === info.m && +m.d === info.d) out.push(m);
-    } else {
-      if (+m.m === info.shm && +m.d === info.shd) out.push(m);
-    }
+      if (+m.m !== info.m) continue;
+      /* 三十号遇到只有廿九天的小月，按当月最后一天（廿九）算 */
+      if (+m.d === info.d || (+m.d === 30 && info.d === 29 && isLunarMonthEnd(ds))) out.push(m);
+    } else if (+m.m === info.shm && +m.d === info.shd) out.push(m);
   }
   return out;
 }
@@ -10946,12 +10972,13 @@ function renderTaskListInto(box, cat) {
       '</div>') : '';
     var mtot = showMtot ? taskMonthTotal(t.id) : 0;
     var mgoal = showMtot ? taskMonthGoal(t) : 0;
+    var allTot = showTot ? taskTotal(t.id) : 0;
     var statsHTML = (showTot || showMtot) ? (
       '<div class="task-stats' + (showMtot && showTot ? '' : ' solo') + '" data-open="' + esc(t.id) + '">' +
         (showMtot ? '<span class="st-m">' + monthWord(UI.date) + ' ' + mtot +
-            monthGoalSuffix(mtot, mgoal) + '</span>' : '') +
-        (showTot ? '<span class="st-a">累计 ' + taskTotal(t.id) +
-            (taskTarget(t) ? ' / ' + taskTarget(t) : '') + '</span>' : '') +
+            goalSuffix(mtot, mgoal) + '</span>' : '') +
+        (showTot ? '<span class="st-a">累计 ' + allTot +
+            goalSuffix(allTot, taskTarget(t)) + '</span>' : '') +
       '</div>') : '';
     return '' +
       '<div class="task' + (n > 0 ? ' done' : '') + (g && n >= g ? ' goal-done' : '') + '" data-id="' + esc(t.id) + '">' +
@@ -10999,11 +11026,14 @@ function refreshTaskRow(taskId) {
   numEl.classList.toggle('zero', n === 0);
   row.classList.toggle('done', n > 0);
   var totEl = row.querySelector('.st-a');
-  if (totEl && t) totEl.textContent = '累计 ' + taskTotal(t.id) + (taskTarget(t) ? ' / ' + taskTarget(t) : '');
+  if (totEl && t) {
+    var at = taskTotal(t.id);
+    totEl.textContent = '累计 ' + at + goalSuffix(at, taskTarget(t));
+  }
   var mtotEl = row.querySelector('.st-m');
   if (mtotEl && t) {
     var mt = taskMonthTotal(t.id);
-    mtotEl.textContent = monthWord(UI.date) + ' ' + mt + monthGoalSuffix(mt, taskMonthGoal(t));
+    mtotEl.textContent = monthWord(UI.date) + ' ' + mt + goalSuffix(mt, taskMonthGoal(t));
   }
 
   var g = taskGoal(t);
@@ -11129,10 +11159,8 @@ function renderSummaryHTML() {
     else if (fest) tag = fest;
 
     var meta = [];
-    if (DB.settings.showSumMeta !== false) {
-      if (rec.loc) meta.push(esc(rec.loc));
-      if (rec.w) meta.push('<i class="wdot ' + weatherClass(rec.w) + '"></i>' + esc(rec.w));
-    }
+    if (DB.settings.showSumPlace !== false && rec.loc) meta.push(esc(rec.loc));
+    if (DB.settings.showSumWeather !== false && rec.w) meta.push('<i class="wdot ' + weatherClass(rec.w) + '"></i>' + esc(rec.w));
     html += '<div class="sum-day" data-goto="' + ds + '" data-ds="' + ds + '">' +
       '<div class="sum-head">' +
         '<span class="gd' + (isToday ? ' today' : '') + '">' + gd + '</span>' +
@@ -12322,13 +12350,14 @@ function detailCountHTML(t) {
 
   var mgoal = taskMonthGoal(t);
   var mt = taskMonthTotal(t.id);
+  var at = taskTotal(t.id);
   var totHTML = '<div class="cc-tot' + (DB.settings.showMonthTotal ? '' : ' one') + '">' +
     (DB.settings.showMonthTotal
       ? '<span class="tot-m">' + monthWord(UI.date) + ' <b>' + mt + '</b>' +
-          monthGoalSuffix(mt, mgoal) + '</span>'
+          goalSuffix(mt, mgoal) + '</span>'
       : '') +
-    '<span class="tot-all">累计 <b>' + taskTotal(t.id) + '</b>' +
-      (taskTarget(t) ? ' / ' + taskTarget(t) : '') + '</span>' +
+    '<span class="tot-all">累计 <b>' + at + '</b>' +
+      goalSuffix(at, taskTarget(t)) + '</span>' +
     '</div>';
 
   return '<div class="count-card' + (n > 0 ? ' has' : '') + '">' +
@@ -12367,13 +12396,13 @@ function refreshDetailCount(t) {
   if (numBox) numBox.className = 'cc-num' + numClass(n);
   var totEl = box.querySelector('.tot-all');
   if (totEl) {
-    totEl.innerHTML = '累计 <b>' + taskTotal(t.id) + '</b>' +
-      (taskTarget(t) ? ' / ' + taskTarget(t) : '');
+    var at = taskTotal(t.id);
+    totEl.innerHTML = '累计 <b>' + at + '</b>' + goalSuffix(at, taskTarget(t));
   }
   var mtEl = box.querySelector('.tot-m');
   if (mtEl) {
     var mt = taskMonthTotal(t.id);
-    mtEl.innerHTML = monthWord(UI.date) + ' <b>' + mt + '</b>' + monthGoalSuffix(mt, taskMonthGoal(t));
+    mtEl.innerHTML = monthWord(UI.date) + ' <b>' + mt + '</b>' + goalSuffix(mt, taskMonthGoal(t));
   }
   box.classList.toggle('has', n > 0);
 
@@ -12929,26 +12958,15 @@ function openMyDayEditor(id) {  var m = null;
     return a.join('');
   }
 
-  /* 年份下拉从「实际日期当年」开始往前翻，不再从 1900 一路排下来；
-     分组只是展示顺序，1900 – 2100 全区间仍然都能选，旧存档里的年份不会丢 */
+  /* 年份就是一个可滚动的下拉框：1900 – 2100 全区间都能选，新条目默认落在实际当年；
+     旧存档里没记年份（y = 0）的仍停在「不指定年份」，不会被悄悄改写 */
   function yearOpts() {
     var cy = new Date().getFullYear();
-    function opt(y) {
-      return '<option value="' + y + '"' + (y === yy ? ' selected' : '') + '>' + y + ' 年</option>';
+    var cur = yy || (isNew ? cy : 0);
+    var a = ['<option value="0"' + (cur ? '' : ' selected') + '>不指定年份</option>'];
+    for (var y = 1900; y <= 2100; y++) {
+      a.push('<option value="' + y + '"' + (y === cur ? ' selected' : '') + '>' + y + ' 年</option>');
     }
-    var a = ['<option value="0"' + (yy ? '' : ' selected') + '>不指定年份</option>'];
-    var near = Math.max(1900, cy - 30);
-    a.push('<optgroup label="近年 · 从 ' + cy + ' 年往前">');
-    for (var y = cy; y >= near; y--) a.push(opt(y));
-    a.push('</optgroup>');
-    if (near > 1900) {
-      a.push('<optgroup label="更早">');
-      for (var y2 = near - 1; y2 >= 1900; y2--) a.push(opt(y2));
-      a.push('</optgroup>');
-    }
-    a.push('<optgroup label="未来">');
-    for (var y3 = cy + 1; y3 <= 2100; y3++) a.push(opt(y3));
-    a.push('</optgroup>');
     return a.join('');
   }
 
@@ -12960,16 +12978,15 @@ function openMyDayEditor(id) {  var m = null;
       '<button data-mdkind="lunar" class="' + (kind === 'lunar' ? 'on' : '') + '">农历</button>' +
       '<button data-mdkind="solar" class="' + (kind === 'solar' ? 'on' : '') + '">公历</button>' +
     '</div></div>' +
-    '<div class="field"><label>年份（可选）</label><select id="f-mdy">' + yearOpts() + '</select></div>' +
-    '<div class="field"><label>重复方式</label><div class="seg2" id="f-mdrepeat">' +
-      '<button data-mdrepeat="1" class="' + (rep ? 'on' : '') + '">每年重复</button>' +
-      '<button data-mdrepeat="0" class="' + (rep ? '' : 'on') + '">只此一年</button>' +
-    '</div>' +
-    '<div class="dlg-sub" style="padding:6px 2px 0">每年重复：每年同月日都出现，年份只作记录；只此一年：仅在选中的年份出现一次</div></div>' +
+    '<div class="field"><label>年份</label><select id="f-mdy">' + yearOpts() + '</select></div>' +
     '<div class="field-row">' +
       '<div class="field"><label>月</label><select id="f-mdm">' + opts(12, mm) + '</select></div>' +
       '<div class="field"><label>日</label><select id="f-mdd">' + opts(maxD, Math.min(dd, maxD)) + '</select></div>' +
     '</div>' +
+    '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十：该月只有廿九时，按当月最后一天算</div>' +
+    '<div class="field-chk" data-mtog="1">' +
+      '<div class="lbl">每年重复<em>关掉就是只此一年，只在上面选中的年份出现一次</em></div>' +
+      '<span class="switch' + (rep ? ' on' : '') + '"></span></div>' +
     (isNew ? '' : '<div style="text-align:center;padding:4px 0 0">' +
       '<button style="color:#b8442f;font-size:12.5px" data-mddel="' + esc(m.id) + '">删除这个纪念日</button></div>') +
     '<div class="modal-actions">' +
@@ -12983,8 +13000,7 @@ function openMyDayEditor(id) {  var m = null;
       var mv = parseInt($('#f-mdm').value, 10) || 1;
       var dv = parseInt($('#f-mdd').value, 10) || 1;
       var yv = parseInt($('#f-mdy').value, 10) || 0;
-      var repBtn = $('#f-mdrepeat .on');
-      var repVal = repBtn ? repBtn.dataset.mdrepeat === '1' : true;
+      var repVal = !!document.querySelector('#modal [data-mtog] .switch.on');
       if (!nm) { toast('请填写名称'); return; }
       var maxDay = kdVal === 'lunar' ? 30 : daysInMonth(2024, mv);
       if (dv > maxDay) dv = maxDay;
@@ -13051,12 +13067,26 @@ function renderSettings() {
     '<div class="set-row" data-actx="mydays">' +
       '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日，年份与是否每年重复可分别设置</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
-    '<div class="set-row" data-toggle="showSumMeta">' +
-      '<div class="lbl">总览显示地点与天气<em>关闭后汇总卡片只留功课与日记</em></div>' +
-      '<span class="switch ' + (s.showSumMeta !== false ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
-  html += '<div class="set-sec"><div class="set-title">地点</div><div class="set-card">' +
+  html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
+    '<div class="set-row" data-toggle="showTotal">' +
+      '<div class="lbl">显示总累计及总目标<em>显示功课项的累计总数及总目标</em></div>' +
+      '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showMonthTotal">' +
+      '<div class="lbl">显示月累计及月目标<em>显示功课项的当月累计总数及月目标</em></div>' +
+      '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showTabTotal">' +
+      '<div class="lbl">显示此日分类汇总<em>在功课分类列表顶部列出此日记录汇总</em></div>' +
+      '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
+    '</div></div>';
+
+  /* 地点相关的两项并到日记里（写日记时才会用到），单独不再占一个分区 */
+  var diaryOn = s.showDiary !== false;
+  html += '<div class="set-sec"><div class="set-title">日记</div><div class="set-card">' +
+    '<div class="set-row" data-toggle="showDiary">' +
+      '<div class="lbl">记录日记<em>关闭后首页不再有日记标签页，已写的内容仍留在数据里</em></div>' +
+      '<span class="switch ' + (diaryOn ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-actx="places">' +
       '<div class="lbl">常用地点<em>' + (function () {
         var dp = defaultPlace();
@@ -13074,28 +13104,18 @@ function renderSettings() {
       '<span class="switch ' + (s.useLastPlace ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
-  html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
-    '<div class="set-row" data-toggle="showTotal">' +
-      '<div class="lbl">显示总累计<em>显示功课项的累计总数及总目标</em></div>' +
-      '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showMonthTotal">' +
-      '<div class="lbl">显示月累计<em>显示功课项的当月累计总数及月目标</em></div>' +
-      '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showTabTotal">' +
-      '<div class="lbl">显示日分类汇总<em>在念佛 / 诵经 / 持咒 / 仪轨 顶部列出此日功课记录汇总</em></div>' +
-      '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
-    '</div></div>';
-
-  /* 关掉「记录日记」后，「总览显示日记」整行隐藏；它的值原样留着，
-     下次重新打开记录日记时会按原值恢复，不会被悄悄改掉。 */
-  var diaryOn = s.showDiary !== false;
-  html += '<div class="set-sec"><div class="set-title">日记</div><div class="set-card">' +
-    '<div class="set-row" data-toggle="showDiary">' +
-      '<div class="lbl">记录日记<em>关闭后首页不再有日记标签页，已写的内容仍留在数据里</em></div>' +
-      '<span class="switch ' + (diaryOn ? 'on' : '') + '"></span></div>' +
+  /* 总览：汇总卡片上要不要露出地点、天气、日记内容。
+     关掉「记录日记」时，「显示日记内容」整行隐藏，它的值原样留着，下次打开记录日记时按原值恢复。 */
+  html += '<div class="set-sec"><div class="set-title">总览</div><div class="set-card">' +
+    '<div class="set-row" data-toggle="showSumPlace">' +
+      '<div class="lbl">显示地点<em>汇总卡片头部显示当天地点</em></div>' +
+      '<span class="switch ' + (s.showSumPlace !== false ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showSumWeather">' +
+      '<div class="lbl">显示天气<em>汇总卡片头部显示当天天气</em></div>' +
+      '<span class="switch ' + (s.showSumWeather !== false ? 'on' : '') + '"></span></div>' +
     (diaryOn
       ? '<div class="set-row" data-toggle="showSumDiary">' +
-          '<div class="lbl">总览显示日记<em>关闭后总览卡片只显示功课，日记照常记录</em></div>' +
+          '<div class="lbl">显示日记内容<em>关闭后汇总卡片只显示功课，日记照常记录</em></div>' +
           '<span class="switch ' + (s.showSumDiary !== false ? 'on' : '') + '"></span></div>'
       : '') +
     '</div></div>';
@@ -13130,14 +13150,6 @@ function bindEvents() {
     if (e.target.id === 'modal') { if (_ackBack) cancelConfirm(); else closeModal(); return; }
     if (e.target.closest('[data-ack-cancel]')) { cancelConfirm(); return; }
     if (e.target.closest('[data-mclose]')) { closeModal(); return; }
-    var mr = e.target.closest('[data-mdrepeat]');
-    if (mr) {
-      var rv = mr.dataset.mdrepeat;
-      Array.prototype.forEach.call(document.querySelectorAll('#f-mdrepeat button'), function (b2) {
-        b2.classList.toggle('on', b2.dataset.mdrepeat === rv);
-      });
-      return;
-    }
     var mk = e.target.closest('[data-mdkind]');
     if (mk) {
       var kd = mk.dataset.mdkind;
@@ -13208,8 +13220,8 @@ function bindEvents() {
       }
       return;
     }
-    /* 弹窗里的显示开关（编辑功课） */
-    var ms = e.target.closest('[data-mshow]');
+    /* 弹窗里的开关：功课的「在功课列表中显示」与纪念日的「每年重复」 */
+    var ms = e.target.closest('[data-mshow],[data-mtog]');
     if (ms) {
       var sw = ms.querySelector('.switch');
       if (sw) sw.classList.toggle('on');
@@ -14000,7 +14012,7 @@ function openMenu() {
       }
     },
     {
-      k: 'mydays', t: '我的纪念日', s: '自定义农历 / 公历纪念日 · 可设年份与重复方式',
+      k: 'mydays', t: '我的纪念日', s: '自定义农历 / 公历纪念日',
       icon: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7-4.2-7-9.2a3.9 3.9 0 0 1 7-2.2 3.9 3.9 0 0 1 7 2.2c0 5-7 9.2-7 9.2z"/></svg>',
       fn: function () { showView('mydays'); }
     },
