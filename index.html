@@ -220,6 +220,9 @@ img{max-width:100%;display:block}
   font-size:11.5px;color:var(--ink2);padding-top:2px;
 }
 .dr3{display:flex;flex-wrap:wrap;gap:5px;padding:3px 0 1px}
+/* 这一天没有任何节期时：用一行纯文字预告最近的一个 */
+.dr-next{padding:2px 0 0;font-size:10.5px;color:var(--ink3);letter-spacing:.3px;line-height:1.6}
+.dr-next b{font-weight:500;color:var(--ink2)}
 
 /* 日期信息条：三行 */
 .dateline{
@@ -303,7 +306,14 @@ img{max-width:100%;display:block}
   background:#fbf6ea;border:1px solid #eee1c9;
   font-family:var(--serif);font-size:11.5px;line-height:1.85;color:var(--ink2);
   letter-spacing:.2px;word-break:break-word;
+  /* 最多四行，条目再多就在这块里上下滚，不把功课列表顶下去
+     （box-sizing 是 border-box，所以要把 8+8 的内边距和 1+1 的描边一起算进来） */
+  max-height:calc(1.85em * 4 + 18px);overflow-y:auto;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
 }
+.cat-sum::-webkit-scrollbar{width:3px}
+.cat-sum::-webkit-scrollbar-thumb{background:#e3d3b6;border-radius:3px}
+.cat-sum::-webkit-scrollbar-track{background:transparent}
 .cat-sum .cs-k{
   font-family:var(--sans);font-size:10px;color:var(--ink3);
   letter-spacing:1px;margin-right:5px;
@@ -628,6 +638,18 @@ img{max-width:100%;display:block}
 }
 .field-chk .lbl{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--ink)}
 .field-chk .lbl em{font-style:normal;font-size:10.5px;color:var(--ink3);line-height:1.5}
+/* 删除功课：两个并列的可选项 */
+.del-opts{display:flex;flex-direction:column;gap:8px;margin:2px 0 12px}
+.del-opts button{
+  display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
+  padding:10px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);
+  font-family:var(--serif);font-size:13.5px;color:var(--ink);letter-spacing:.3px;
+  transition:background .12s ease,border-color .12s ease;
+}
+.del-opts button em{font-family:var(--sans);font-style:normal;font-size:10.5px;color:var(--ink3);line-height:1.5}
+.del-opts button:active{background:var(--accent-soft);border-color:#ecd0c8}
+.del-opts button[data-tdelmode="wipe"]{border-color:#e8c9c2;color:#b8442f}
+.del-opts button[data-tdelmode="wipe"] em{color:#b8442f;opacity:.78}
 .tag-def{
   font-size:9.5px;color:var(--accent);background:var(--accent-soft);
   border:1px solid #ecd0c8;border-radius:5px;padding:1px 5px;letter-spacing:.5px;
@@ -9861,13 +9883,13 @@ function activeTabs() {
 var BUILTIN = {
   nianfo: [
     '南无本师释迦牟尼佛', '南无消灾延寿药师佛', '南无阿弥陀佛',
-    '南无观世音菩萨', '南无地藏王菩萨', '南无文殊师利菩萨', '南无普贤菩萨',
+    '南无地藏王菩萨', '南无观世音菩萨', '南无文殊师利菩萨', '南无普贤菩萨',
     '南无大方广佛华严经', '南无当来下生弥勒尊佛', '南无护法韦陀尊天菩萨'
   ],
   jing: [
     '心经', '金刚经', '地藏经', '楞严经', '法华经', '观世音菩萨普门品',
     '阿弥陀经', '十善业道经', '无量寿经', '普贤行愿品', '吉祥经',
-    '二十一尊度母礼赞经', '大乘起信论', '大势至菩萨念佛圆通章'
+    '大乘起信论', '二十一尊度母礼赞经', '大势至菩萨念佛圆通章'
   ],
   zhou: [
     '楞严咒', '大悲咒', '六字大明咒', '准提咒', '文殊菩萨心咒',
@@ -10450,10 +10472,6 @@ function zhaiKeysOf(info) {
 }
 
 /* ---------- 自定义纪念日 ---------- */
-/* 农历「三十」碰到只有廿九天的小月：看明天是不是初一，是的话今天就是这个月的最后一天 */
-function isLunarMonthEnd(ds) {
-  return lunarOf(addDays(ds, 1)).d === 1;
-}
 function myDaysOn(ds) {
   var list = DB.mydays || [];
   if (!list.length) return [];
@@ -10468,8 +10486,8 @@ function myDaysOn(ds) {
     }
     if (m.kind === 'lunar') {
       if (+m.m !== info.m) continue;
-      /* 三十号遇到只有廿九天的小月，按当月最后一天（廿九）算 */
-      if (+m.d === info.d || (+m.d === 30 && info.d === 29 && isLunarMonthEnd(ds))) out.push(m);
+      /* 三十号遇到只有廿九天的小月，按当月最后一天（廿九）算，与佛教节日同一套规则 */
+      if (+m.d === info.d || (+m.d === 30 && info.d === info.lunarDays)) out.push(m);
     } else if (+m.m === info.shm && +m.d === info.shd) out.push(m);
   }
   return out;
@@ -10572,15 +10590,18 @@ function closeModal() {
    就把那个弹窗原样放回去。这里挪的是**真实节点**而不是 innerHTML 字符串，
    所以刚输入的内容、勾选状态、以及绑在省市联动上的监听都还在。 */
 var _ackBack = null;
-function askConfirm(title, sub, okText, onOk) {
+/* 把当前弹窗的内容整块「搬」下来暂存（挪真实节点，监听与输入都还在），供「取消」时放回 */
+function stashModal() {
   var box = $('#modal-box');
-  var back = null;
   if (box && $('#modal').classList.contains('on') && box.firstChild) {
     var frag = document.createDocumentFragment();
     while (box.firstChild) frag.appendChild(box.firstChild);
-    back = { frag: frag, ok: modalOnOk };
+    return { frag: frag, ok: modalOnOk };
   }
-  _ackBack = back;
+  return null;
+}
+function askConfirm(title, sub, okText, onOk) {
+  _ackBack = stashModal();
   openModal(
     '<h4>' + esc(title) + '</h4>' +
     (sub ? '<div class="dlg-sub">' + sub + '</div>' : '') +
@@ -10872,6 +10893,36 @@ function dayBadgesHTML(info, ds) {
 function gregDateText(info) {
   return info.shy + '年' + info.shm + '月' + info.shd + '日';
 }
+/* 这一天有没有「节期」：佛教节日 / 传统节日 / 节气 / 纪念日（斋戒日不算，它天天可能有） */
+function hasSpecialDay(info, ds) {
+  if (DB.settings.showFest && info.fest) return true;
+  if (DB.settings.showTrad !== false && info.trad) return true;
+  if (DB.settings.showJq && info.jq) return true;
+  return myDaysOn(ds).length > 0;
+}
+/* 四类节期全关着、也没有纪念日时，就不用往后找了 */
+function specialEnabled() {
+  if (DB.settings.showFest || DB.settings.showTrad !== false || DB.settings.showJq) return true;
+  return (DB.mydays || []).length > 0;
+}
+/* 往后找最近的一个节期，返回 { n: 几天后, label: 名称 }；斋戒日不参与 */
+function nextSpecialDay(ds) {
+  var d = ds;
+  for (var i = 1; i <= 366; i++) {
+    d = addDays(d, 1);
+    var info = lunarOf(d);
+    var label = '';
+    if (DB.settings.showFest && info.fest) label = info.fest;
+    else if (DB.settings.showTrad !== false && info.trad) label = info.trad;
+    else if (DB.settings.showJq && info.jq) label = info.jq;
+    else {
+      var my = myDaysOn(d);
+      if (my.length) label = my[0].name;
+    }
+    if (label) return { n: i, label: label };
+  }
+  return null;
+}
 /* 「今」按钮：只在这一天不是今天时出现，靠右、与上面两行垂直居中 */
 function todayBtnHTML(ds) {
   return ds !== TODAY
@@ -10888,6 +10939,14 @@ function dateRowsHTML(info, ds) {
   var rel = relDayName(ds);
   var badges = dayBadgesHTML(info, ds);
   var hasToday = ds !== TODAY;
+  /* 这天既不是佛节、传统节日、节气，也不是纪念日：用纯文字预告最近的一个（不算斋戒日） */
+  var nextTxt = '';
+  if (specialEnabled() && !hasSpecialDay(info, ds)) {
+    var nx = nextSpecialDay(ds);
+    if (nx) {
+      nextTxt = '<div class="dr-next">' + nx.n + '天后：<b>' + esc(nx.label) + '</b></div>';
+    }
+  }
   return '<div class="dl-rows' + (hasToday ? ' has-today' : '') + '">' +
       '<div class="dr1">' +
         '<span class="dr-fen">佛历 ' + buddhaYear(info.shy) + ' 年</span>' +
@@ -10900,7 +10959,8 @@ function dateRowsHTML(info, ds) {
       '</div>' +
       todayBtnHTML(ds) +
     '</div>' +
-    (badges ? '<div class="dr3">' + badges + '</div>' : '');
+    (badges ? '<div class="dr3">' + badges + '</div>' : '') +
+    nextTxt;
 }
 function renderDateLineHTML() {
   return '<div class="dl-wrap">' +
@@ -12723,7 +12783,7 @@ function openTaskEditor(taskId, cat) {
     '<h4>' + (isNew ? '添加功课' : '编辑功课') + '</h4>' +
     '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '" placeholder="如：南无阿弥陀佛"></div>' +
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
-    '<div class="field"><label>默认增量（＋ 按钮一次的数量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
+    '<div class="field"><label>默认增量（＋ 按钮每点击一次的增量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
     '<div class="field"><label>月目标（可选，留空则不设）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
     '<div class="field"><label>总目标（可选，留空则不设）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
@@ -12768,6 +12828,48 @@ function openTaskEditor(taskId, cat) {
       toast(isNew ? '已添加' : '已保存');
     }
   );
+}
+
+/* 删除功课：让用户选「只移除」还是「连计数一起彻底删掉」。
+   取消时把底下的编辑弹窗原样放回（stashModal 挪的是真实节点）。 */
+function askDeleteTask(t) {
+  _ackBack = stashModal();
+  openModal(
+    '<h4>删除这项功课？</h4>' +
+    '<div class="dlg-sub">「' + esc(t.name) + '」将从功课列表中移除，选一种删法。</div>' +
+    '<div class="del-opts">' +
+      '<button data-tdelmode="keep" data-tid="' + esc(t.id) + '">仅移除功课' +
+        '<em>各日期上已记的计数都留着，只是不再显示</em></button>' +
+      '<button data-tdelmode="wipe" data-tid="' + esc(t.id) + '">彻底删除，含计数' +
+        '<em>把它在各日期上记的数量一并删掉，不可恢复</em></button>' +
+    '</div>' +
+    '<div class="modal-actions"><button data-ack-cancel="1">取消</button></div>'
+  );
+}
+function deleteTask(id, wipe) {
+  DB.tasks = DB.tasks.filter(function (x) { return x.id !== id; });
+  if (wipe) {
+    /* 逐个日期摘掉这项计数；某天因此空了就连这条记录一起清掉 */
+    Object.keys(DB.records || {}).forEach(function (ds) {
+      var r = DB.records[ds];
+      if (!r || !r.c || r.c[id] == null) return;
+      delete r.c[id];
+      pruneRec(ds);
+    });
+  }
+  invalidateTotals();
+  saveNow();
+  if (UI.view === 'detail' && UI.detail && UI.detail.taskId === id) {
+    /* 正在看的这项功课被删了：退回首页，别把已删的卡片留在屏幕上 */
+    UI.detail = null;
+    UI.view = 'home';
+    UI.viewStack = [];
+    renderView();
+  } else {
+    renderTaskSettings();
+    if (UI.view === 'home') renderHome();
+  }
+  toast(wipe ? '已彻底删除' : '已移除');
 }
 
 /* ---------- 佛教节日一览 ---------- */
@@ -13044,10 +13146,10 @@ function renderSettings() {
       '<div class="lbl">观音斋<em>农历每月固定日，全年 22 日</em></div>' +
       '<span class="switch ' + (s.showGuanyin ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showZhai6">' +
-      '<div class="lbl">六斋日<em>农历初八、十四、十五、廿三、廿九、三十；小月无三十，以廿八、廿九补足</em></div>' +
+      '<div class="lbl">六斋日<em>农历初八、十四、十五、廿三、廿九、三十；小月无三十，以廿八补足</em></div>' +
       '<span class="switch ' + (s.showZhai6 ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showZhai10">' +
-      '<div class="lbl">十斋日<em>农历初一、初八、十四…共十日；小月无三十，以廿七至廿九补足</em></div>' +
+      '<div class="lbl">十斋日<em>农历初一、初八、十四、十五、十八、二十三、二十四、二十八、二十九、三十；小月无三十，以廿七补足</em></div>' +
       '<span class="switch ' + (s.showZhai10 ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showYueZhai">' +
       '<div class="lbl">月斋（三长斋月）<em>农历正月、五月、九月整月持斋</em></div>' +
@@ -13065,7 +13167,7 @@ function renderSettings() {
       '<div class="lbl">二十四节气<em>日历上以绿色标记</em></div>' +
       '<span class="switch ' + (s.showJq ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-actx="mydays">' +
-      '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日，年份与是否每年重复可分别设置</em></div>' +
+      '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
     '</div></div>';
 
@@ -13074,10 +13176,10 @@ function renderSettings() {
       '<div class="lbl">显示总累计及总目标<em>显示功课项的累计总数及总目标</em></div>' +
       '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showMonthTotal">' +
-      '<div class="lbl">显示月累计及月目标<em>显示功课项的当月累计总数及月目标</em></div>' +
+      '<div class="lbl">显示月累计及月目标<em>显示功课项的本月/此月累计总数及月目标</em></div>' +
       '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showTabTotal">' +
-      '<div class="lbl">显示此日分类汇总<em>在功课分类列表顶部列出此日记录汇总</em></div>' +
+      '<div class="lbl">显示此日分类汇总<em>在功课分类列表顶部列出今日/此日记录汇总</em></div>' +
       '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
@@ -13121,9 +13223,9 @@ function renderSettings() {
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">数据</div><div class="set-card">' +
+    '<div class="set-row" data-actx="stats"><div class="lbl">数据概况<em>记录天数与五类总数</em></div><span class="val" id="data-stat">查看</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="export"><div class="lbl">导出备份<em>生成 JSON 文件，可保存到网盘</em></div><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="import"><div class="lbl">导入备份<em>将覆盖当前全部数据</em></div><span class="chev">›</span></div>' +
-    '<div class="set-row" data-actx="stats"><div class="lbl">数据概况<em>记录天数与五类总数</em></div><span class="val" id="data-stat">查看</span><span class="chev">›</span></div>' +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">关于</div><div class="set-card">' +
@@ -13233,28 +13335,18 @@ function bindEvents() {
     }
     var del = e.target.closest('[data-tdel]');
     if (del) {
-      var did = del.dataset.tdel;
-      var dt = taskById(did);
+      var dt = taskById(del.dataset.tdel);
       if (!dt) return;
       if (dt.builtin) { toast('内置功课只能隐藏，不能删除'); return; }
-      askConfirm('删除这项功课？',
-        '「' + esc(dt.name) + '」将从功课列表中移除；已记下的计数会保留，只是不再显示。',
-        '删除',
-        function () {
-          DB.tasks = DB.tasks.filter(function (x) { return x.id !== did; });
-          saveNow();
-          if (UI.view === 'detail' && UI.detail && UI.detail.taskId === did) {
-            /* 正在看的这项功课被删了：退回首页，别把已删的卡片留在屏幕上 */
-            UI.detail = null;
-            UI.view = 'home';
-            UI.viewStack = [];
-            renderView();
-          } else {
-            renderTaskSettings();
-            if (UI.view === 'home') renderHome();
-          }
-          toast('已删除');
-        });
+      askDeleteTask(dt);
+      return;
+    }
+    /* 删除功课的两种删法 */
+    var dm = e.target.closest('[data-tdelmode]');
+    if (dm) {
+      _ackBack = null;
+      closeModal();
+      deleteTask(dm.dataset.tid, dm.dataset.tdelmode === 'wipe');
       return;
     }
   });
