@@ -10540,20 +10540,46 @@ function closeModal() {
   modalOnOk = null;
 }
 /* 应用内确认框：原生 confirm 在 APK 里会多出一行「网址为 https://appassets.local 的网页显示」，
-   所以二次确认一律走这里。sub 允许传已经转义好的 HTML。 */
+   所以二次确认一律走这里。sub 允许传已经转义好的 HTML。
+   如果点「取消」时底下本来就开着一个弹窗（删除功课 / 删除地点 / 删除纪念日这些从编辑弹窗里点出来的），
+   把那个弹窗原样放回去，连刚输入的内容一起还原，不会平白丢掉未保存的编辑。 */
+var _ackBack = null;
 function askConfirm(title, sub, okText, onOk) {
+  var box = $('#modal-box');
+  var wasOn = $('#modal').classList.contains('on');
+  var back = null;
+  if (wasOn && box) {
+    back = { html: box.innerHTML, ok: modalOnOk, vals: [] };
+    Array.prototype.forEach.call(box.querySelectorAll('input,textarea,select'), function (el) {
+      back.vals.push(el.value);
+    });
+  }
+  _ackBack = back;
   openModal(
     '<h4>' + esc(title) + '</h4>' +
     (sub ? '<div class="dlg-sub">' + sub + '</div>' : '') +
     '<div class="modal-actions">' +
-      '<button data-mclose="1">取消</button>' +
+      '<button data-ack-cancel="1">取消</button>' +
       '<button class="primary" data-mok="1">' + esc(okText || '确定') + '</button>' +
     '</div>',
     function () {
+      _ackBack = null;
       closeModal();
       if (typeof onOk === 'function') onOk();
     }
   );
+}
+function cancelConfirm() {
+  var back = _ackBack;
+  _ackBack = null;
+  if (!back) { closeModal(); return; }
+  var box = $('#modal-box');
+  box.innerHTML = back.html;
+  modalOnOk = back.ok;
+  Array.prototype.forEach.call(box.querySelectorAll('input,textarea,select'), function (el, i) {
+    if (i < back.vals.length) el.value = back.vals[i];
+  });
+  $('#modal').classList.add('on');
 }
 
 /* ---------- 页面切换 ---------- */
@@ -11896,19 +11922,22 @@ function openPlaceForm(opts) {
 function deletePlace(id) {
   var p = placeById(id);
   if (!p) return;
-  if (!confirm('删除常用地点「' + p.name + '」？\n已写下的日记不受影响。')) return;
-  DB.places = (DB.places || []).filter(function (x) { return x.id !== id; });
-  if (DB.settings.defaultPlaceId === id) DB.settings.defaultPlaceId = '';
-  /* 清掉日记里对它的引用，地点文字仍保留 */
-  Object.keys(DB.records || {}).forEach(function (ds) {
-    var r = DB.records[ds];
-    if (r && r.place === id) delete r.place;
-  });
-  saveNow();
-  closeModal();
-  if (UI.view === 'places') renderPlaces();
-  if (UI.view === 'home') renderHome();
-  toast('已删除');
+  askConfirm('删除常用地点？',
+    '「' + esc(p.name) + '」将从常用地点中移除；已写下的日记不受影响。',
+    '删除',
+    function () {
+      DB.places = (DB.places || []).filter(function (x) { return x.id !== id; });
+      if (DB.settings.defaultPlaceId === id) DB.settings.defaultPlaceId = '';
+      /* 清掉日记里对它的引用，地点文字仍保留 */
+      Object.keys(DB.records || {}).forEach(function (ds) {
+        var r = DB.records[ds];
+        if (r && r.place === id) delete r.place;
+      });
+      saveNow();
+      if (UI.view === 'places') renderPlaces();
+      if (UI.view === 'home') renderHome();
+      toast('已删除');
+    });
 }
 
 function chooseLocation() {
@@ -13050,7 +13079,7 @@ function renderSettings() {
 
   html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showTotal">' +
-      '<div class="lbl">显示总累计<em>显示功课项的累计总数及总目标</em></div>' +
+      '<div class="lbl">显示总累计及总⠀<em>显示功课项的累计总数及总目标</em></div>' +
       '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showMonthTotal">' +
       '<div class="lbl">显示月累计<em>显示功课项的当月累计总数及月目标</em></div>' +
@@ -13102,6 +13131,7 @@ function bindEvents() {
   document.getElementById('mask').addEventListener('click', closeSheet);
   document.getElementById('modal').addEventListener('click', function (e) {
     if (e.target.id === 'modal') { closeModal(); return; }
+    if (e.target.closest('[data-ack-cancel]')) { cancelConfirm(); return; }
     if (e.target.closest('[data-mclose]')) { closeModal(); return; }
     var mr = e.target.closest('[data-mdrepeat]');
     if (mr) {
@@ -13135,13 +13165,16 @@ function bindEvents() {
       var mm0 = null;
       (DB.mydays || []).forEach(function (x) { if (x.id === mid) mm0 = x; });
       if (!mm0) return;
-      if (!confirm('删除「' + mm0.name + '」？')) return;
-      DB.mydays = DB.mydays.filter(function (x) { return x.id !== mid; });
-      saveNow();
-      closeModal();
-      renderMyDays();
-      if (UI.view === 'home') renderHome();
-      toast('已删除');
+      askConfirm('删除这个纪念日？',
+        '「' + esc(mm0.name) + '」将从我的纪念日中移除。',
+        '删除',
+        function () {
+          DB.mydays = DB.mydays.filter(function (x) { return x.id !== mid; });
+          saveNow();
+          renderMyDays();
+          if (UI.view === 'home') renderHome();
+          toast('已删除');
+        });
       return;
     }
     var pdel = e.target.closest('[data-pdel]');
@@ -14169,18 +14202,22 @@ function importData() {
           inp.remove();
           return;
         }
-        if (!confirm('导入将覆盖当前全部数据，确定继续？')) { inp.remove(); return; }
-        DB = db;
-        if (!DB.places.some(function (x) { return x.id === DB.settings.defaultPlaceId; })) {
-          DB.settings.defaultPlaceId = '';
-        }
-        /* 用户明确选择覆盖：解除“读取失败不写回”的保护 */
-        loadError = false;
-        invalidateTotals();
-        LunarCache = {};
-        saveNow();
-        renderView();
-        toast('导入成功');
+        askConfirm('导入将覆盖当前全部数据？',
+          '导入的备份会替换这台设备上现有的全部记录，此操作不可撤销。',
+          '覆盖并导入',
+          function () {
+            DB = db;
+            if (!DB.places.some(function (x) { return x.id === DB.settings.defaultPlaceId; })) {
+              DB.settings.defaultPlaceId = '';
+            }
+            /* 用户明确选择覆盖：解除“读取失败不写回”的保护 */
+            loadError = false;
+            invalidateTotals();
+            LunarCache = {};
+            saveNow();
+            renderView();
+            toast('导入成功');
+          });
       } catch (e) {
         toast('备份文件格式不正确，未导入任何数据');
       }
@@ -14212,17 +14249,21 @@ function wipeData() {
       t: '确认清空', s: '所有功课与日记将被删除', warn: true,
       fn: function () {
         setTimeout(function () {
-          if (!confirm('最后确认：清空后不可恢复，是否继续？')) return;
-          wipeAllLocal();
-          loadError = false;
-          DB = defaultDB();
-          invalidateTotals();
-          saveNow();
-          LunarCache = {};
-          UI.date = TODAY; UI.tab = 'nianfo'; UI.view = 'home';
-          setMode('record');
-          renderView();
-          toast('已清空');
+          askConfirm('最后确认：清空全部数据？',
+            '功课与日记将被全部删除，清空后不可恢复。',
+            '确认清空',
+            function () {
+              wipeAllLocal();
+              loadError = false;
+              DB = defaultDB();
+              invalidateTotals();
+              saveNow();
+              LunarCache = {};
+              UI.date = TODAY; UI.tab = 'nianfo'; UI.view = 'home';
+              setMode('record');
+              renderView();
+              toast('已清空');
+            });
         }, 120);
       }
     }
