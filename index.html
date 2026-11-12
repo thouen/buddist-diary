@@ -218,13 +218,10 @@ img{max-width:100%;display:block}
   display:flex;justify-content:flex-start;align-items:baseline;gap:9px;
   font-size:11.5px;color:var(--ink2);padding-top:2px;
 }
-.dr3{display:flex;flex-wrap:wrap;gap:5px;padding:3px 0 1px}
-/* 这一天没有任何节期时：用一行纯文字预告最近的一个。
-   高度对齐一行 tag（.badge 约 17.6 + dr3 的 3/1 内边距），换行时日期条不会忽高忽低 */
-.dr-next{
-  display:flex;align-items:center;min-height:18px;padding:3px 0 1px;
-  font-size:10.5px;color:var(--ink3);letter-spacing:.3px;line-height:1.3;
-}
+/* 第三行：先占住一行 tag 的高度（.badge 约 17.6），tag 多时自然往下长成第四、五行 */
+.dr3{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 0 1px;min-height:18px}
+/* 一个 tag 都没有时，这行放一句纯文字预告，行高与一行 tag 一致 */
+.dr-next{font-size:10.5px;color:var(--ink3);letter-spacing:.3px;line-height:1}
 .dr-next b{font-weight:500;color:var(--ink2)}
 
 /* 日期信息条：三行 */
@@ -236,7 +233,8 @@ img{max-width:100%;display:block}
 /* 当天：公历年月日用工课红做记号，背景保持原样（首页 / 详情页同一套） */
 .dateline.today .dr-gd,
 .detail-day.today .dr-gd{color:var(--gold)}
-.dl-wrap{display:flex;align-items:center;gap:2px}
+/* 箭头与「今天」都对着前两行居中：第三行再长也不会把它们带偏 */
+.dl-wrap{display:flex;align-items:flex-start;gap:2px}
 .dl-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;padding:0 2px}
 .dl-nav{
   flex:0 0 auto;width:26px;height:44px;border-radius:10px;
@@ -309,9 +307,9 @@ img{max-width:100%;display:block}
   background:#fbf6ea;border:1px solid #eee1c9;
   font-family:var(--serif);font-size:11.5px;line-height:1.85;color:var(--ink2);
   letter-spacing:.2px;word-break:break-word;
-  /* 最多四行，条目再多就在这块里上下滚，不把功课列表顶下去
+  /* 最多五行，条目再多就在这块里上下滚，不把功课列表顶下去
      （box-sizing 是 border-box，所以要把 8+8 的内边距和 1+1 的描边一起算进来） */
-  max-height:calc(1.85em * 4 + 18px);overflow-y:auto;
+  max-height:calc(1.85em * 5 + 18px);overflow-y:auto;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
 }
 .cat-sum::-webkit-scrollbar{width:3px}
@@ -433,6 +431,11 @@ img{max-width:100%;display:block}
   background:var(--card2);border:1px solid var(--line2);margin-top:6px;
   color:#5a5145;
 }
+/* 总览里的日记：超过 6 行就在框内滚动（fitPanels 只设高度，不截断文字） */
+.panel.diary[data-scroll="1"]{-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.panel.diary[data-scroll="1"]::-webkit-scrollbar{width:3px}
+.panel.diary[data-scroll="1"]::-webkit-scrollbar-thumb{background:#ddd2c4;border-radius:3px}
+.panel.diary[data-scroll="1"]::-webkit-scrollbar-track{background:transparent}
 .panel.diary.empty{color:var(--ink3);font-size:12px;font-style:normal}
 .panel .plus{color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums}
 .empty-state{
@@ -1053,10 +1056,11 @@ img{max-width:100%;display:block}
 /* ---------- 详情页：日信息 ---------- */
 .detail-day{
   margin:2px 12px 0;background:var(--card);border:1px solid var(--line);
-  border-radius:14px;padding:9px 7px;display:flex;align-items:center;gap:2px;
+  border-radius:14px;padding:9px 7px;display:flex;align-items:flex-start;gap:2px;
 }
 .dd-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;padding:0 1px}
-.detail-day .dl-nav{height:52px}
+/* 45 ≈ 前两行的高度（24 + 3 + 18），箭头中心才能和「今天」按钮对齐 */
+.detail-day .dl-nav{height:45px}
 .dd-row1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .dd-gd{font-family:var(--serif);font-size:15.5px;font-weight:600;letter-spacing:.3px}
 .detail-day{cursor:pointer}
@@ -1138,26 +1142,35 @@ img{max-width:100%;display:block}
 .detail-stats .seg button.on{background:#e7ddc9;color:#4a3b2a;border-color:#cdbf9f;font-weight:600}
 
 /* ---------- 2.0 交互补充 ---------- */
-/* 「今天」：只在这一天不是今天时出现，跟在第一行公历年月日后面 */
+/* 「今天」：只在这一天不是今天时出现。
+   它竖直居中于**前两行**（佛历/公历 + 农历/星期），不跟着第三行走——
+   第三行可能是好几个 tag 或一句长预告，把按钮拖下去就难看了 */
 .dl-rows{position:relative;display:flex;flex-direction:column;gap:3px}
+.dl-top{position:relative;display:flex;flex-direction:column;gap:3px}
+.dl-top.has-today{padding-right:62px}
 .dr-today{
-  flex:0 0 auto;align-self:center;margin-left:1px;
-  display:inline-flex;align-items:center;gap:2.5px;line-height:1;
-  font-size:11px;color:var(--accent);letter-spacing:.3px;padding:2.5px 7px 2.5px 5px;
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+  display:inline-flex;align-items:center;gap:3px;line-height:1;
+  font-size:12px;color:var(--accent);letter-spacing:.3px;padding:5px 9px 5px 7px;
   border-radius:20px;border:1px solid rgba(184,68,47,.24);
   background:linear-gradient(180deg,#fffdfb,var(--accent-soft));
   box-shadow:0 1px 2px rgba(184,68,47,.09);
   transition:background .15s ease,color .15s ease,transform .1s ease;
 }
+.dr-today .ta{width:12px;height:12px}
 .dr-today span{font-family:var(--serif);font-weight:600}
-.dr-today:active{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(.95)}
+.dr-today:active{
+  background:var(--accent);color:#fff;border-color:var(--accent);
+  transform:translateY(-50%) scale(.95);
+}
 /* 窄屏：佛历与公历同降一档，公历年月日才不会被截断 */
 @media (max-width:345px){
   .dr1{gap:5px}
   .dr-fen,.dr-gd{font-size:14px}
   /* 窄屏把「今天」收紧一点，公历年月日才不会被挤成省略号 */
-  .dr-today{font-size:10px;padding:2px 6px 2px 4px;gap:2px}
-  .dr-today .ta{width:10px;height:10px}
+  .dl-top.has-today{padding-right:56px}
+  .dr-today{font-size:11px;padding:4px 8px 4px 6px;gap:2px}
+  .dr-today .ta{width:11px;height:11px}
 }
 
 /* 未来的日期不能记功课：按钮置灰 */
@@ -10879,13 +10892,6 @@ function dayBadgesHTML(info, ds) {
 function gregDateText(info) {
   return info.shy + '年' + info.shm + '月' + info.shd + '日';
 }
-/* 这一天有没有「节期」：佛教节日 / 传统节日 / 节气 / 纪念日（斋戒日不算，它天天可能有） */
-function hasSpecialDay(info, ds) {
-  if (DB.settings.showFest && info.fest) return true;
-  if (DB.settings.showTrad !== false && info.trad) return true;
-  if (DB.settings.showJq && info.jq) return true;
-  return myDaysOn(ds).length > 0;
-}
 /* 四类节期全关着、也没有纪念日时，就不用往后找了 */
 function specialEnabled() {
   if (DB.settings.showFest || DB.settings.showTrad !== false || DB.settings.showJq) return true;
@@ -10926,29 +10932,30 @@ function todayBtnHTML(ds) {
 function dateRowsHTML(info, ds) {
   var rel = relDayName(ds);
   var badges = dayBadgesHTML(info, ds);
-  var hasToday = ds !== TODAY;
-  /* 这天既不是佛节、传统节日、节气，也不是纪念日：用纯文字预告最近的一个（不算斋戒日） */
-  var nextTxt = '';
-  if (specialEnabled() && !hasSpecialDay(info, ds)) {
+  /* 第三行：有 tag 就摆 tag（佛节 / 斋戒日 / 传统节日 / 节气 / 纪念日），
+     一个 tag 都没有时才用一行纯文字预告最近的节期（挑的时候不计算斋戒日） */
+  var third = badges;
+  if (!badges && specialEnabled()) {
     var nx = nextSpecialDay(ds);
-    if (nx) {
-      nextTxt = '<div class="dr-next">' + nx.n + '天后：<b>' + esc(nx.label) + '</b></div>';
-    }
+    if (nx) third = '<span class="dr-next">' + nx.n + '天后：<b>' + esc(nx.label) + '</b></span>';
   }
   return '<div class="dl-rows">' +
-      '<div class="dr1">' +
-        '<span class="dr-fen">佛历 ' + buddhaYear(info.shy) + ' 年</span>' +
-        '<span class="dr-gd gd">' + gregDateText(info) + '</span>' +
+      /* 前两行单独包一层：「今天」按钮以这一层的竖直中心定位 */
+      '<div class="dl-top' + (ds !== TODAY ? ' has-today' : '') + '">' +
+        '<div class="dr1">' +
+          '<span class="dr-fen">佛历 ' + buddhaYear(info.shy) + ' 年</span>' +
+          '<span class="dr-gd gd">' + gregDateText(info) + '</span>' +
+        '</div>' +
+        '<div class="dr2">' +
+          '<span class="dr-lun">农历' + esc(info.monthCn) + esc(info.dayCn) + '</span>' +
+          '<span class="dr-wk">星期' + WEEK_CN[info.week] + '</span>' +
+          (rel ? '<span class="dr-rel' + (rel === '今天' ? ' now' : '') + '">' + rel + '</span>' : '') +
+        '</div>' +
         todayBtnHTML(ds) +
       '</div>' +
-      '<div class="dr2">' +
-        '<span class="dr-lun">农历' + esc(info.monthCn) + esc(info.dayCn) + '</span>' +
-        '<span class="dr-wk">星期' + WEEK_CN[info.week] + '</span>' +
-        (rel ? '<span class="dr-rel' + (rel === '今天' ? ' now' : '') + '">' + rel + '</span>' : '') +
-      '</div>' +
-    '</div>' +
-    (badges ? '<div class="dr3">' + badges + '</div>' : '') +
-    nextTxt;
+      /* 空的第三行也照留：高度按一行 tag 算，日信息永远至少三行 */
+      '<div class="dr3">' + third + '</div>' +
+    '</div>';
 }
 function renderDateLineHTML() {
   return '<div class="dl-wrap">' +
@@ -10959,7 +10966,7 @@ function renderDateLineHTML() {
 }
 
 /* Tabs */
-/* 某一类功课在当日的明细：南无阿弥陀佛×100；南无地藏王菩萨×1000。 */
+/* 某一类功课在当日的汇总：南无阿弥陀佛×100；南无地藏王菩萨×1000。 */
 function catSumHTML(cat, ds) {
   var r = DB.records[ds];
   if (!r || !r.c) return '';
@@ -11217,14 +11224,14 @@ function renderSummaryHTML() {
         (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') +
       '</div>' +
       (ctext ? '<div class="panel tasks" data-panel="tasks">' + esc(ctext) + '</div>' : '') +
-      (dtext ? '<div class="panel diary" data-panel="diary" data-clamp="3">' + esc(dtext) + '</div>' : '') +
+      (dtext ? '<div class="panel diary" data-panel="diary" data-clamp="6" data-scroll="1">' + esc(dtext) + '</div>' : '') +
       '</div>';
   });
   html += '</div>';
   return html;
 }
 
-/* 精确按行数截断：上面板 4 行、下面板 3 行 */
+/* 精确按行数限制高度：上面板 4 行（超出用省略号截断）、下面板日记 6 行（超出框内滚动） */
 function fitPanels() {
   var els = document.querySelectorAll('.panel[data-clamp]');
   Array.prototype.forEach.call(els, function (el) {
@@ -11239,6 +11246,12 @@ function fitPanels() {
     el.style.maxHeight = limit + 'px';
     el.style.overflow = 'hidden';
     if (el.scrollHeight <= limit + 1) return;
+    /* 日记面板要的是「能往上翻」，所以不截字，直接把溢出改成滚动 */
+    if (el.dataset.scroll === '1') {
+      el.style.overflowY = 'auto';
+      el.style.overflowX = 'hidden';
+      return;
+    }
     var raw = el.dataset.raw;
     if (raw == null) { raw = el.textContent; el.dataset.raw = raw; }
     var lo = 0, hi = raw.length;
