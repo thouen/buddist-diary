@@ -486,6 +486,14 @@ img{max-width:100%;display:block}
 .set-row:active{background:var(--card2)}
 .set-row .chev{color:var(--ink3);font-size:14px}
 .set-row .val{color:var(--ink2);font-size:12.5px}
+/* 卡片内的二级分组：一行小标题 + 若干缩进的开关（如「日历」里的节期预告） */
+.set-head{
+  display:flex;align-items:center;gap:10px;padding:11px 13px 8px;
+  border-bottom:1px solid var(--line2);background:var(--card2);
+}
+.set-head .lbl{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--ink2)}
+.set-head .lbl em{font-style:normal;font-size:11px;color:var(--ink3)}
+.set-row.sub{padding-left:26px;font-size:13.5px}
 .switch{
   width:44px;height:26px;border-radius:20px;background:#e4dac6;position:relative;
   transition:background .2s ease;flex:0 0 auto;
@@ -905,7 +913,7 @@ img{max-width:100%;display:block}
 
 .stat-sub .goal-note b{color:var(--gold)}
 
-/* 汇总卡片里的天气 / 地点 */
+/* 总览卡片里的天气 / 地点 */
 .sum-head .sum-wx{
   font-size:10px;color:var(--ink3);display:inline-flex;align-items:center;gap:3px;
   max-width:46%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
@@ -9965,6 +9973,9 @@ var GUANYIN_ZHAI = [
 
 /* 斋日显示：多选，可选任意组合（朔望 / 六斋 / 十斋 / 月斋 / 观音斋） */
 var ZHAI_LABEL = { shuo: '朔望日', z6: '六斋日', z10: '十斋日', yz: '月斋', gy: '观音斋' };
+/* 节期预告的五类开关，与日历上的显示开关相互独立：日历不显示某一类，
+   仍可以在预告里提到它，反之亦然。默认只开佛教节日、传统节日、纪念日 */
+var HINT_DEFAULT = { hintFest: true, hintTrad: true, hintZhai: false, hintJq: false, hintMyd: true };
 
 /* ---------- 基础工具 ---------- */
 function $(s) { return document.querySelector(s); }
@@ -10014,6 +10025,12 @@ function defaultDB() {
       showYueZhai: false,
       showGuanyin: false,
       showTabTotal: false,
+      goalFirst: false,
+      hintFest: true,
+      hintTrad: true,
+      hintZhai: false,
+      hintJq: false,
+      hintMyd: true,
       showSumPlace: true,
       showSumWeather: true,
       showDiary: true,
@@ -10091,6 +10108,12 @@ function normalizeSettings(src) {
   if (typeof out.showYueZhai !== 'boolean') out.showYueZhai = false;
   /* 观音斋同样独立开关，默认关闭 */
   if (typeof out.showGuanyin !== 'boolean') out.showGuanyin = false;
+  /* 2.6 修订（九）：功课列表「目标优先」默认关闭 */
+  if (typeof out.goalFirst !== 'boolean') out.goalFirst = false;
+  /* 2.6 修订（九）：节期预告的五类独立开关，默认只开佛教节日、传统节日、纪念日 */
+  Object.keys(HINT_DEFAULT).forEach(function (k) {
+    if (typeof out[k] !== 'boolean') out[k] = HINT_DEFAULT[k];
+  });
   if (typeof out.lastPlaceId !== 'string') out.lastPlaceId = '';
   return out;
 }
@@ -10307,8 +10330,20 @@ function taskMonthGoal(t) {
   var g = t ? +t.mgoal : 0;
   return g > 0 && isFinite(g) ? Math.floor(g) : 0;
 }
+/* 目标优先时的档位：日目标 0、月目标 1、总目标 2、都没设 3 */
+function taskGoalRank(t) {
+  if (taskGoal(t)) return 0;
+  if (taskMonthGoal(t)) return 1;
+  if (taskTarget(t)) return 2;
+  return 3;
+}
 function tasksOf(cat) {
-  return DB.tasks.filter(function (t) { return t.cat === cat && !t.hidden; });
+  var list = DB.tasks.filter(function (t) { return t.cat === cat && !t.hidden; });
+  if (!DB.settings.goalFirst) return list;
+  /* 「目标优先」：按档位重排，同一档里仍保持功课设置里排好的先后 */
+  return list.map(function (t, i) { return { t: t, i: i, r: taskGoalRank(t) }; })
+    .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
+    .map(function (x) { return x.t; });
 }
 
 function getRec(ds, create) {
@@ -10892,22 +10927,31 @@ function dayBadgesHTML(info, ds) {
 function gregDateText(info) {
   return info.shy + '年' + info.shm + '月' + info.shd + '日';
 }
-/* 四类节期全关着、也没有纪念日时，就不用往后找了 */
-function specialEnabled() {
-  if (DB.settings.showFest || DB.settings.showTrad !== false || DB.settings.showJq) return true;
-  return (DB.mydays || []).length > 0;
+/* 节期预告的某一类是否开着（默认值见 HINT_DEFAULT） */
+function hintOn(k) {
+  var v = DB.settings[k];
+  return typeof v === 'boolean' ? v : HINT_DEFAULT[k] !== false;
 }
-/* 这一天所有要预告的节期名（斋戒日不参与）：
-   顺序固定为 佛教节日 → 传统节日 → 节气 → 纪念日，同日多类时全部列出 */
+/* 五类全关时就不用往后找了 */
+function specialEnabled() {
+  return hintOn('hintFest') || hintOn('hintZhai') || hintOn('hintTrad') ||
+    hintOn('hintJq') || hintOn('hintMyd');
+}
+/* 这一天所有要预告的节期名，顺序固定为
+   佛教节日 → 斋戒日（朔望 → 观音 → 六斋 → 十斋 → 月斋）→ 传统节日 → 节气 → 纪念日，
+   同日多类时全部列出 */
 function specialNamesOn(ds, info) {
   var out = [];
-  if (DB.settings.showFest && info.fest) out.push(info.fest);
-  if (DB.settings.showTrad !== false && info.trad) out.push(info.trad);
-  if (DB.settings.showJq && info.jq) out.push(info.jq);
-  myDaysOn(ds).forEach(function (m) { out.push(m.name); });
+  if (hintOn('hintFest') && info.fest) out.push(info.fest);
+  if (hintOn('hintZhai')) {
+    zhaiKeysOf(info).forEach(function (k) { out.push(ZHAI_LABEL[k]); });
+  }
+  if (hintOn('hintTrad') && info.trad) out.push(info.trad);
+  if (hintOn('hintJq') && info.jq) out.push(info.jq);
+  if (hintOn('hintMyd')) myDaysOn(ds).forEach(function (m) { out.push(m.name); });
   return out;
 }
-/* 往后找最近的一个节期，返回 { n: 几天后, names: [名称…] }；斋戒日不参与 */
+/* 往后找最近的一个节期，返回 { n: 几天后, names: [名称…] } */
 function nextSpecialDay(ds) {
   var d = ds;
   for (var i = 1; i <= 366; i++) {
@@ -12734,7 +12778,7 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 增量 ' + t.step + '</em>' +
+          '<em>' + esc(t.unit) + ' · 默认增量 ' + t.step + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
                 (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
@@ -13008,7 +13052,7 @@ function renderMyDays() {
   html += '<div style="padding:12px 20px calc(100px + var(--safe-b));font-size:11px;color:#b5a992;line-height:1.9">' +
     '每年重复的纪念日按同一月日出现：农历的按农历月日、公历的按公历月日，闰月不另计。' +
     '年份和「是否每年重复」是两回事：年份可以留空，也可以记下是哪一年；' +
-    '设为「只此一年」时就只在那一年的日历上出现一次。纪念日只保存在本机，可随备份一起导出。' +
+    '关闭「每年重复」时就只在设定年的日历上出现一次。纪念日可随备份一起导出。' +
     '</div>';
 
   $('#mydays-scroll').innerHTML = html;
@@ -13185,6 +13229,25 @@ function renderSettings() {
     '<div class="set-row" data-actx="mydays">' +
       '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
+    /* 节期预告：日期条第三行没有节期时，预告最近要来的那一个。
+       这五个开关与上面的显示开关互不影响——日历不显示某一类，预告里仍可以提到它 */
+    '<div class="set-head"><div class="lbl">节期预告' +
+      '<em>日信息第三行没有节期时，预告最近要来的节期</em></div></div>' +
+    '<div class="set-row sub" data-toggle="hintFest">' +
+      '<div class="lbl">佛教节日</div>' +
+      '<span class="switch ' + (hintOn('hintFest') ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row sub" data-toggle="hintTrad">' +
+      '<div class="lbl">传统节日</div>' +
+      '<span class="switch ' + (hintOn('hintTrad') ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row sub" data-toggle="hintZhai">' +
+      '<div class="lbl">斋戒日<em>朔望日 → 观音斋 → 六斋日 → 十斋日 → 月斋</em></div>' +
+      '<span class="switch ' + (hintOn('hintZhai') ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row sub" data-toggle="hintJq">' +
+      '<div class="lbl">二十四节气</div>' +
+      '<span class="switch ' + (hintOn('hintJq') ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row sub" data-toggle="hintMyd">' +
+      '<div class="lbl">我的纪念日</div>' +
+      '<span class="switch ' + (hintOn('hintMyd') ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
@@ -13197,13 +13260,17 @@ function renderSettings() {
     '<div class="set-row" data-toggle="showTabTotal">' +
       '<div class="lbl">显示此日分类汇总<em>在功课分类列表顶部列出今日/此日记录汇总</em></div>' +
       '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
+    /* 开了「目标优先」，设了日目标的功课排最前，其次月目标、总目标，最后是没设目标的 */
+    '<div class="set-row" data-toggle="goalFirst">' +
+      '<div class="lbl">目标优先<em>设了日目标的排最前，其次月目标、总目标，最后是未设目标的</em></div>' +
+      '<span class="switch ' + (s.goalFirst ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
   /* 地点相关的两项并到日记里（写日记时才会用到），单独不再占一个分区 */
   var diaryOn = s.showDiary !== false;
   html += '<div class="set-sec"><div class="set-title">日记</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showDiary">' +
-      '<div class="lbl">记录日记<em>关闭后首页不再有日记标签页，已写的内容仍留在数据里</em></div>' +
+      '<div class="lbl">记录日记<em>关闭后首页不再显示日记标签页，已写的内容仍留在数据里</em></div>' +
       '<span class="switch ' + (diaryOn ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-actx="places">' +
       '<div class="lbl">常用地点<em>' + (function () {
@@ -13222,18 +13289,18 @@ function renderSettings() {
       '<span class="switch ' + (s.useLastPlace ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
-  /* 总览：汇总卡片上要不要露出地点、天气、日记内容。
+  /* 总览：总览卡片上要不要露出地点、天气、日记内容。
      关掉「记录日记」时，「显示日记内容」整行隐藏，它的值原样留着，下次打开记录日记时按原值恢复。 */
   html += '<div class="set-sec"><div class="set-title">总览</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showSumPlace">' +
-      '<div class="lbl">显示地点<em>汇总卡片头部显示当天地点</em></div>' +
+      '<div class="lbl">显示地点<em>总览卡片头部显示当天地点</em></div>' +
       '<span class="switch ' + (s.showSumPlace !== false ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showSumWeather">' +
-      '<div class="lbl">显示天气<em>汇总卡片头部显示当天天气</em></div>' +
+      '<div class="lbl">显示天气<em>总览卡片头部显示当天天气</em></div>' +
       '<span class="switch ' + (s.showSumWeather !== false ? 'on' : '') + '"></span></div>' +
     (diaryOn
       ? '<div class="set-row" data-toggle="showSumDiary">' +
-          '<div class="lbl">显示日记内容<em>关闭后汇总卡片只显示功课，日记照常记录</em></div>' +
+          '<div class="lbl">显示日记内容<em>关闭后总览卡片只显示功课内容，日记照常记录</em></div>' +
           '<span class="switch ' + (s.showSumDiary !== false ? 'on' : '') + '"></span></div>'
       : '') +
     '</div></div>';
@@ -13470,7 +13537,7 @@ function bindEvents() {
     el = e.target.closest('[data-open]');
     if (el) { openDetail(el.dataset.open); return; }
 
-    /* 汇总卡片 -> 切回 5 tab 模式并跳到该日 */
+    /* 总览卡片 -> 切回单日模式（5 tab 模式）并跳到该日 */
     el = e.target.closest('[data-goto]');
     if (el) {
       var ds = el.dataset.goto;
@@ -14040,7 +14107,7 @@ function shiftTab(dir) {
   switchTab(keys[n], dir);
 }
 
-/* 这一天哪一类功课有记录（用于汇总卡片跳转） */
+/* 这一天哪一类功课有记录（用于总览卡片跳转） */
 function firstCatWithData(ds) {
   var r = DB.records[ds];
   if (r && r.c) {
