@@ -635,6 +635,8 @@ img{max-width:100%;display:block}
 
 /* 自定义增减弹窗 */
 .dlg-sub{font-size:11.5px;color:var(--ink3);margin:-6px 0 12px;letter-spacing:.3px}
+/* 内置功课的删除位：只留一句说明，不给删除按钮 */
+.tk-note{text-align:center;padding:8px 0 0;font-size:11.5px;color:var(--ink3);letter-spacing:.3px}
 .sign-seg{display:flex;gap:6px}
 .sign-seg button{
   flex:1;height:38px;border-radius:10px;font-size:13.5px;letter-spacing:1px;
@@ -10353,6 +10355,15 @@ function taskMonthTotal(id, ds) {
   return monthTotals(ym)[id] || 0;
 }
 
+/* 选中日期所在的月就是当前月时说「本月」，否则说「此月」 */
+function monthWord(ds) {
+  return String(ds || UI.date).slice(0, 7) === TODAY.slice(0, 7) ? '本月' : '此月';
+}
+/* 月目标后缀：设了月目标才写「 / N」，该月达标补一个 ✓（与日目标同一套写法） */
+function monthGoalSuffix(mt, mg) {
+  return mg ? ' / ' + mg + (mt >= mg ? ' ✓' : '') : '';
+}
+
 function pruneRec(ds) {
   var r = DB.records[ds];
   if (r && !recHasContent(r)) delete DB.records[ds];
@@ -10527,6 +10538,22 @@ function openModal(html, onOk) {
 function closeModal() {
   $('#modal').classList.remove('on');
   modalOnOk = null;
+}
+/* 应用内确认框：原生 confirm 在 APK 里会多出一行「网址为 https://appassets.local 的网页显示」，
+   所以二次确认一律走这里。sub 允许传已经转义好的 HTML。 */
+function askConfirm(title, sub, okText, onOk) {
+  openModal(
+    '<h4>' + esc(title) + '</h4>' +
+    (sub ? '<div class="dlg-sub">' + sub + '</div>' : '') +
+    '<div class="modal-actions">' +
+      '<button data-mclose="1">取消</button>' +
+      '<button class="primary" data-mok="1">' + esc(okText || '确定') + '</button>' +
+    '</div>',
+    function () {
+      closeModal();
+      if (typeof onOk === 'function') onOk();
+    }
+  );
 }
 
 /* ---------- 页面切换 ---------- */
@@ -10850,7 +10877,7 @@ function renderCatSumHTML(cat, ds) {
   if (!DB.settings.showTabTotal) return '';
   var body = catSumHTML(cat, ds);
   if (!body) return '';
-  return '<div class="cat-sum"><span class="cs-k">汇总</span>' + body + '</div>';
+  return '<div class="cat-sum"><span class="cs-k">' + (ds === TODAY ? '今日汇总' : '此日汇总') + '</span>' + body + '</div>';
 }
 function refreshCatSum() {
   var box = $('#cat-sum');
@@ -10893,10 +10920,12 @@ function renderTaskListInto(box, cat) {
         '<div class="gbar"><i style="width:' + pct + '%"></i></div>' +
         '<span class="gtxt">' + n + ' / ' + g + (n >= g ? ' ✓' : '') + '</span>' +
       '</div>') : '';
+    var mtot = showMtot ? taskMonthTotal(t.id) : 0;
+    var mgoal = showMtot ? taskMonthGoal(t) : 0;
     var statsHTML = (showTot || showMtot) ? (
       '<div class="task-stats' + (showMtot && showTot ? '' : ' solo') + '" data-open="' + esc(t.id) + '">' +
-        (showMtot ? '<span class="st-m">本月 ' + taskMonthTotal(t.id) +
-            (taskMonthGoal(t) ? ' / ' + taskMonthGoal(t) : '') + '</span>' : '') +
+        (showMtot ? '<span class="st-m">' + monthWord(UI.date) + ' ' + mtot +
+            monthGoalSuffix(mtot, mgoal) + '</span>' : '') +
         (showTot ? '<span class="st-a">累计 ' + taskTotal(t.id) +
             (taskTarget(t) ? ' / ' + taskTarget(t) : '') + '</span>' : '') +
       '</div>') : '';
@@ -10949,7 +10978,8 @@ function refreshTaskRow(taskId) {
   if (totEl && t) totEl.textContent = '累计 ' + taskTotal(t.id) + (taskTarget(t) ? ' / ' + taskTarget(t) : '');
   var mtotEl = row.querySelector('.st-m');
   if (mtotEl && t) {
-    mtotEl.textContent = '本月 ' + taskMonthTotal(t.id) + (taskMonthGoal(t) ? ' / ' + taskMonthGoal(t) : '');
+    var mt = taskMonthTotal(t.id);
+    mtotEl.textContent = monthWord(UI.date) + ' ' + mt + monthGoalSuffix(mt, taskMonthGoal(t));
   }
 
   var g = taskGoal(t);
@@ -12036,9 +12066,10 @@ function openDeltaModal(taskId, defSign) {
     return deltaSign > 0 ? '确定增加' : (deltaSign < 0 ? '确定减少' : '确定设为');
   }
 
+  var isToday = UI.date === TODAY;
   openModal(
-    '<h4>调整当日数量</h4>' +
-    '<div class="dlg-sub">' + esc(t.name) + ' · 今日 ' + cur + ' ' + esc(t.unit) + '</div>' +
+    '<h4>调整' + (isToday ? '今日' : '此日') + '数量</h4>' +
+    '<div class="dlg-sub">' + esc(t.name) + ' · ' + (isToday ? '今日 ' : '此日 ') + cur + ' ' + esc(t.unit) + '</div>' +
     '<div class="sign-seg" id="m-sign" data-unit="' + esc(t.unit) + '" data-cur="' + cur + '">' +
       '<button data-sign="-1" class="' + (deltaSign < 0 ? 'on' : '') + '">减少</button>' +
       '<button data-sign="1" class="' + (deltaSign > 0 ? 'on' : '') + '">增加</button>' +
@@ -12248,7 +12279,8 @@ function detailDayHTML() {
 }
 
 /* 第二段：当日计数与操作按钮
-   结构：今日数（可点改）→ 日进度条 → 本月（左）/ 累计（右）→ +1 */
+   结构：当日数（可点改）→ 日进度条 → 月合计（左）/ 累计（右）→ +1
+   标题与月合计上的「今日 / 本月」只在选中今天时出现，补录别的日子改称「此日 / 此月」 */
 function detailCountHTML(t) {
   var rec = DB.records[UI.date];
   var n = (rec && rec.c[t.id]) || 0;
@@ -12262,18 +12294,20 @@ function detailCountHTML(t) {
     '</div>') : '';
 
   var mgoal = taskMonthGoal(t);
+  var mt = taskMonthTotal(t.id);
   var totHTML = '<div class="cc-tot' + (DB.settings.showMonthTotal ? '' : ' one') + '">' +
     (DB.settings.showMonthTotal
-      ? '<span class="tot-m">本月 <b>' + taskMonthTotal(t.id) + '</b>' +
-          (mgoal ? ' / ' + mgoal : '') + ' ' + esc(t.unit) + '</span>'
+      ? '<span class="tot-m">' + monthWord(UI.date) + ' <b>' + mt + '</b>' +
+          monthGoalSuffix(mt, mgoal) + '</span>'
       : '') +
     '<span class="tot-all">累计 <b>' + taskTotal(t.id) + '</b>' +
-      (taskTarget(t) ? ' / ' + taskTarget(t) : '') + ' ' + esc(t.unit) + '</span>' +
+      (taskTarget(t) ? ' / ' + taskTarget(t) : '') + '</span>' +
     '</div>';
 
   return '<div class="count-card' + (n > 0 ? ' has' : '') + '">' +
-    '<div class="cc-lbl">今日' + esc(CAT_MAP[t.cat].n) + '</div>' +
-    '<div class="cc-num' + numClass(n) + '" data-count="' + esc(t.id) + '" role="button" aria-label="修改今日遍数">' +
+    '<div class="cc-lbl">' + (UI.date === TODAY ? '今日' : '此日') + esc(CAT_MAP[t.cat].n) + '</div>' +
+    '<div class="cc-num' + numClass(n) + '" data-count="' + esc(t.id) + '" role="button" aria-label="' +
+      (UI.date === TODAY ? '修改今日遍数' : '修改此日遍数') + '">' +
       '<b>' + esc(n) + '</b><small>' + esc(t.unit) + '</small></div>' +
     goalHTML +
     totHTML +
@@ -12307,10 +12341,13 @@ function refreshDetailCount(t) {
   var totEl = box.querySelector('.tot-all');
   if (totEl) {
     totEl.innerHTML = '累计 <b>' + taskTotal(t.id) + '</b>' +
-      (taskTarget(t) ? ' / ' + taskTarget(t) : '') + ' ' + esc(t.unit);
+      (taskTarget(t) ? ' / ' + taskTarget(t) : '');
   }
-  var mtEl = box.querySelector('.tot-m b');
-  if (mtEl) mtEl.textContent = taskMonthTotal(t.id);
+  var mtEl = box.querySelector('.tot-m');
+  if (mtEl) {
+    var mt = taskMonthTotal(t.id);
+    mtEl.innerHTML = monthWord(UI.date) + ' <b>' + mt + '</b>' + monthGoalSuffix(mt, taskMonthGoal(t));
+  }
   box.classList.toggle('has', n > 0);
 
   var g = taskGoal(t);
@@ -12360,7 +12397,7 @@ function renderDetailStats() {
       '<button class="navbtn" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + d.y + ' 年 ' + d.m + ' 月</div>' +
       '<button class="navbtn" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">本月</button>';
+      '<button class="today-btn" data-p="now">回到本月</button>';
     keyLabel = '本月合计';
     sub2 = '<span>记录 <b>' + active + '</b> 天</span>';
     sub3 = '<span>日均 <b>' + avg + '</b></span><span>单日最高 <b>' + peak + '</b></span>';
@@ -12371,7 +12408,7 @@ function renderDetailStats() {
       '<button class="navbtn" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + d.year + ' 年</div>' +
       '<button class="navbtn" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">今年</button>';
+      '<button class="today-btn" data-p="now">回到今年</button>';
     keyLabel = '本年合计';
     sub2 = '<span>记录 <b>' + active + '</b> 个月</span>';
     sub3 = '<span>月均 <b>' + avg + '</b></span><span>单月最高 <b>' + peak + '</b></span>';
@@ -12386,7 +12423,7 @@ function renderDetailStats() {
       '<button class="navbtn' + (y0 <= 1901 ? ' dis' : '') + '" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + (y0 === y1 ? y0 + ' 年' : y0 + ' – ' + y1 + ' 年') + '</div>' +
       '<button class="navbtn' + (y1 >= cy ? ' dis' : '') + '" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">近年</button>';
+      '<button class="today-btn" data-p="now">回到近年</button>';
     keyLabel = '近年合计';
     sub2 = '<span>记录 <b>' + active + '</b> 年</span>';
     sub3 = '<span>年均 <b>' + avg + '</b></span><span>单年最高 <b>' + peak + '</b></span>';
@@ -12580,7 +12617,7 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 增减 ' + t.step +
+          '<em>' + esc(t.unit) + ' · 增量 ' + t.step +
             (taskGoal(t) ? ' · 日目标 ' + taskGoal(t) : '') + '</em>' +
           (taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
@@ -12607,7 +12644,7 @@ function renderTaskSettings() {
 
   html += '<div class="set-sec" style="margin-top:14px">' +
     '<div class="set-card">' +
-      '<div class="set-row" data-restore="1"><div class="lbl">恢复内置功课<em>把删掉的经咒佛号补回来</em></div><span class="chev">›</span></div>' +
+      '<div class="set-row" data-restore="1"><div class="lbl">恢复内置功课<em>把旧版本删掉的经咒佛号补回来</em></div><span class="chev">›</span></div>' +
     '</div></div>';
   html += '<div style="height:90px"></div>';
 
@@ -12629,14 +12666,16 @@ function openTaskEditor(taskId, cat) {
     '<h4>' + (isNew ? '添加功课' : '编辑功课') + '</h4>' +
     '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '" placeholder="如：南无阿弥陀佛"></div>' +
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
-    '<div class="field"><label>默认增量（＋ / － 按钮一次的数量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
+    '<div class="field"><label>默认增量（＋ 按钮一次的数量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
-    '<div class="field"><label>月目标（可选，当月累计到多少）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
-    '<div class="field"><label>总目标（可选，累计到多少）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
+    '<div class="field"><label>月目标（可选，留空则不设）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
+    '<div class="field"><label>总目标（可选，留空则不设）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
     '<div class="field-chk" data-mshow="1">' +
       '<div class="lbl">在功课列表中显示<em>关掉只是藏起来，计数与目标都保留</em></div>' +
       '<span class="switch' + (t && t.hidden ? '' : ' on') + '"></span></div>' +
-    (isNew ? '' : '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-tdel="' + esc(t.id) + '">删除这项功课</button></div>') +
+    (isNew ? '' : (t && t.builtin
+      ? '<div class="tk-note">内置功课只能隐藏，不能删除</div>'
+      : '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-tdel="' + esc(t.id) + '">删除这项功课</button></div>')) +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
       '<button class="primary" data-tsave="1">保存</button>' +
@@ -13009,15 +13048,15 @@ function renderSettings() {
       '<span class="switch ' + (s.useLastPlace ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
-  html += '<div class="set-sec"><div class="set-title">功课</div><div class="set-card">' +
+  html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showTotal">' +
-      '<div class="lbl">显示累计总数<em>显示功课项的累计总数及总目标</em></div>' +
+      '<div class="lbl">显示总累计<em>显示功课项的累计总数及总目标</em></div>' +
       '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showMonthTotal">' +
-      '<div class="lbl">显示当月累计<em>显示功课项的当月累计总数及月目标</em></div>' +
+      '<div class="lbl">显示月累计<em>显示功课项的当月累计总数及月目标</em></div>' +
       '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showTabTotal">' +
-      '<div class="lbl">显示当日分类汇总<em>在念佛 / 诵经 / 持咒 / 仪轨 顶部用一行列出当日各项计数</em></div>' +
+      '<div class="lbl">显示日分类汇总<em>在念佛 / 诵经 / 持咒 / 仪轨 顶部列出此日功课记录汇总</em></div>' +
       '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
@@ -13154,12 +13193,16 @@ function bindEvents() {
       var did = del.dataset.tdel;
       var dt = taskById(did);
       if (!dt) return;
-      if (!confirm('删除「' + dt.name + '」？\n已记录的计数会保留，但不再显示。')) return;
-      DB.tasks = DB.tasks.filter(function (x) { return x.id !== did; });
-      saveNow();
-      closeModal();
-      renderTaskSettings();
-      toast('已删除');
+      if (dt.builtin) { toast('内置功课只能隐藏，不能删除'); return; }
+      askConfirm('删除这项功课？',
+        '「' + esc(dt.name) + '」将从功课列表中移除；已记下的计数会保留，只是不再显示。',
+        '删除',
+        function () {
+          DB.tasks = DB.tasks.filter(function (x) { return x.id !== did; });
+          saveNow();
+          renderTaskSettings();
+          toast('已删除');
+        });
       return;
     }
   });
