@@ -333,6 +333,7 @@ img{max-width:100%;display:block}
   font-variant-numeric:tabular-nums;
 }
 .task-stats .st-a{color:var(--ink3);margin-left:auto}
+.task-stats.solo{justify-content:center}
 .btns{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .btn{
   height:33px;border-radius:9px;border:1px solid var(--line);background:var(--card2);
@@ -10541,18 +10542,17 @@ function closeModal() {
 }
 /* 应用内确认框：原生 confirm 在 APK 里会多出一行「网址为 https://appassets.local 的网页显示」，
    所以二次确认一律走这里。sub 允许传已经转义好的 HTML。
-   如果点「取消」时底下本来就开着一个弹窗（删除功课 / 删除地点 / 删除纪念日这些从编辑弹窗里点出来的），
-   把那个弹窗原样放回去，连刚输入的内容一起还原，不会平白丢掉未保存的编辑。 */
+   点「取消」时，如果底下本来就开着一个弹窗（删除功课 / 删除地点 / 删除纪念日都是从编辑弹窗里点出来的），
+   就把那个弹窗原样放回去。这里挪的是**真实节点**而不是 innerHTML 字符串，
+   所以刚输入的内容、勾选状态、以及绑在省市联动上的监听都还在。 */
 var _ackBack = null;
 function askConfirm(title, sub, okText, onOk) {
   var box = $('#modal-box');
-  var wasOn = $('#modal').classList.contains('on');
   var back = null;
-  if (wasOn && box) {
-    back = { html: box.innerHTML, ok: modalOnOk, vals: [] };
-    Array.prototype.forEach.call(box.querySelectorAll('input,textarea,select'), function (el) {
-      back.vals.push(el.value);
-    });
+  if (box && $('#modal').classList.contains('on') && box.firstChild) {
+    var frag = document.createDocumentFragment();
+    while (box.firstChild) frag.appendChild(box.firstChild);
+    back = { frag: frag, ok: modalOnOk };
   }
   _ackBack = back;
   openModal(
@@ -10574,11 +10574,9 @@ function cancelConfirm() {
   _ackBack = null;
   if (!back) { closeModal(); return; }
   var box = $('#modal-box');
-  box.innerHTML = back.html;
+  box.innerHTML = '';
+  box.appendChild(back.frag);
   modalOnOk = back.ok;
-  Array.prototype.forEach.call(box.querySelectorAll('input,textarea,select'), function (el, i) {
-    if (i < back.vals.length) el.value = back.vals[i];
-  });
   $('#modal').classList.add('on');
 }
 
@@ -12058,7 +12056,7 @@ function openCountEditor(taskId) {
   var cur = rec.c[taskId] || 0;
   openModal(
     '<h4>' + esc(t.name) + '</h4>' +
-    '<div class="field"><label>当日计数（' + esc(t.unit) + '）</label>' +
+    '<div class="field"><label>' + (UI.date === TODAY ? '今日计数（' : '此日计数（') + esc(t.unit) + '）</label>' +
     '<input type="number" id="m-count" inputmode="numeric" value="' + cur + '"></div>' +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
@@ -12336,7 +12334,7 @@ function detailCountHTML(t) {
   return '<div class="count-card' + (n > 0 ? ' has' : '') + '">' +
     '<div class="cc-lbl">' + (UI.date === TODAY ? '今日' : '此日') + esc(CAT_MAP[t.cat].n) + '</div>' +
     '<div class="cc-num' + numClass(n) + '" data-count="' + esc(t.id) + '" role="button" aria-label="' +
-      (UI.date === TODAY ? '修改今日遍数' : '修改此日遍数') + '">' +
+      (UI.date === TODAY ? '修改今日数量' : '修改此日数量') + '">' +
       '<b>' + esc(n) + '</b><small>' + esc(t.unit) + '</small></div>' +
     goalHTML +
     totHTML +
@@ -12427,7 +12425,8 @@ function renderDetailStats() {
       '<div class="pt">' + d.y + ' 年 ' + d.m + ' 月</div>' +
       '<button class="navbtn" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
       '<button class="today-btn" data-p="now">回到本月</button>';
-    keyLabel = '本月合计';
+    /* 翻到别的月份时，表头的合计不再是「本月」 */
+    keyLabel = (d.y === +TODAY.slice(0, 4) && d.m === +TODAY.slice(5, 7)) ? '本月合计' : '此月合计';
     sub2 = '<span>记录 <b>' + active + '</b> 天</span>';
     sub3 = '<span>日均 <b>' + avg + '</b></span><span>单日最高 <b>' + peak + '</b></span>';
     tip = '点按日期回到该日 · 左右滑动切换月份';
@@ -12733,8 +12732,6 @@ function openTaskEditor(taskId, cat) {
       closeModal();
       if (!isNew && UI.view === 'detail' && UI.detail && UI.detail.taskId === t.id) {
         renderDetail();
-      } else if (UI.view === 'tasks') {
-        renderTaskSettings();
       } else {
         renderTaskSettings();
         if (UI.view === 'home') renderHome();
@@ -13079,7 +13076,7 @@ function renderSettings() {
 
   html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showTotal">' +
-      '<div class="lbl">显示总累计及总⠀<em>显示功课项的累计总数及总目标</em></div>' +
+      '<div class="lbl">显示总累计<em>显示功课项的累计总数及总目标</em></div>' +
       '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showMonthTotal">' +
       '<div class="lbl">显示月累计<em>显示功课项的当月累计总数及月目标</em></div>' +
@@ -13130,7 +13127,7 @@ function bindEvents() {
   /* 遮罩 / 弹层 */
   document.getElementById('mask').addEventListener('click', closeSheet);
   document.getElementById('modal').addEventListener('click', function (e) {
-    if (e.target.id === 'modal') { closeModal(); return; }
+    if (e.target.id === 'modal') { if (_ackBack) cancelConfirm(); else closeModal(); return; }
     if (e.target.closest('[data-ack-cancel]')) { cancelConfirm(); return; }
     if (e.target.closest('[data-mclose]')) { closeModal(); return; }
     var mr = e.target.closest('[data-mdrepeat]');
@@ -13202,7 +13199,8 @@ function bindEvents() {
       var okb = document.getElementById('m-dok');
       if (okb) okb.textContent = deltaSign > 0 ? '确定增加' : (deltaSign < 0 ? '确定减少' : '确定设为');
       var lb = document.getElementById('m-lbl');
-      if (lb) lb.textContent = (deltaSign === 0 ? '当日总量（' : '数量（') + (document.getElementById('m-sign').dataset.unit || '') + '）';
+      if (lb) lb.textContent = (deltaSign === 0 ? (UI.date === TODAY ? '今日总量（' : '此日总量（') : '数量（') +
+      (document.getElementById('m-sign').dataset.unit || '') + '）';
       var inp = document.getElementById('m-delta');
       if (inp && deltaSign === 0 && !inp.value.trim()) {
         inp.value = String(+document.getElementById('m-sign').dataset.cur || 0);
@@ -13233,7 +13231,16 @@ function bindEvents() {
         function () {
           DB.tasks = DB.tasks.filter(function (x) { return x.id !== did; });
           saveNow();
-          renderTaskSettings();
+          if (UI.view === 'detail' && UI.detail && UI.detail.taskId === did) {
+            /* 正在看的这项功课被删了：退回首页，别把已删的卡片留在屏幕上 */
+            UI.detail = null;
+            UI.view = 'home';
+            UI.viewStack = [];
+            renderView();
+          } else {
+            renderTaskSettings();
+            if (UI.view === 'home') renderHome();
+          }
           toast('已删除');
         });
       return;
@@ -14362,7 +14369,10 @@ function showLoadError() {
 /* 给外壳用的返回键钩子：先关最上层，没人接才让外壳退出。
    当前 APK 外壳尚未调用它，接入后才会生效 */
 window.__closeTopLayer = function () {
-  if (document.querySelector('#modal.on')) { closeModal(); return true; }
+  if (document.querySelector('#modal.on')) {
+    if (_ackBack) cancelConfirm(); else closeModal();
+    return true;
+  }
   if (document.querySelector('#sheet.on')) { closeSheet(); return true; }
   var nd = document.getElementById('native-date');
   if (nd) { nd.remove(); return true; }
