@@ -9915,7 +9915,7 @@ var FESTIVALS = {
   '9-30': '药师琉璃光如来圣诞',
   '10-5': '达摩祖师圣诞',
   '11-17': '阿弥陀佛圣诞',
-  '12-8': '释迦牟尼佛成道日·腊八',
+  '12-8': '释迦牟尼佛成道日',
   '12-23': '监斋菩萨圣诞'
 };
 /* 传统节日：农历月-日（除夕另按腊月最后一天判断） */
@@ -10897,21 +10897,23 @@ function specialEnabled() {
   if (DB.settings.showFest || DB.settings.showTrad !== false || DB.settings.showJq) return true;
   return (DB.mydays || []).length > 0;
 }
-/* 往后找最近的一个节期，返回 { n: 几天后, label: 名称 }；斋戒日不参与 */
+/* 这一天所有要预告的节期名（斋戒日不参与）：
+   顺序固定为 佛教节日 → 传统节日 → 节气 → 纪念日，同日多类时全部列出 */
+function specialNamesOn(ds, info) {
+  var out = [];
+  if (DB.settings.showFest && info.fest) out.push(info.fest);
+  if (DB.settings.showTrad !== false && info.trad) out.push(info.trad);
+  if (DB.settings.showJq && info.jq) out.push(info.jq);
+  myDaysOn(ds).forEach(function (m) { out.push(m.name); });
+  return out;
+}
+/* 往后找最近的一个节期，返回 { n: 几天后, names: [名称…] }；斋戒日不参与 */
 function nextSpecialDay(ds) {
   var d = ds;
   for (var i = 1; i <= 366; i++) {
     d = addDays(d, 1);
-    var info = lunarOf(d);
-    var label = '';
-    if (DB.settings.showFest && info.fest) label = info.fest;
-    else if (DB.settings.showTrad !== false && info.trad) label = info.trad;
-    else if (DB.settings.showJq && info.jq) label = info.jq;
-    else {
-      var my = myDaysOn(d);
-      if (my.length) label = my[0].name;
-    }
-    if (label) return { n: i, label: label };
+    var names = specialNamesOn(d, lunarOf(d));
+    if (names.length) return { n: i, names: names };
   }
   return null;
 }
@@ -10932,12 +10934,13 @@ function todayBtnHTML(ds) {
 function dateRowsHTML(info, ds) {
   var rel = relDayName(ds);
   var badges = dayBadgesHTML(info, ds);
-  /* 第三行：有 tag 就摆 tag（佛节 / 斋戒日 / 传统节日 / 节气 / 纪念日），
+  /* 第三行：有 tag 就摆 tag（佛教节日 / 斋戒日 / 传统节日 / 节气 / 纪念日），
      一个 tag 都没有时才用一行纯文字预告最近的节期（挑的时候不计算斋戒日） */
   var third = badges;
   if (!badges && specialEnabled()) {
     var nx = nextSpecialDay(ds);
-    if (nx) third = '<span class="dr-next">' + nx.n + '天后：<b>' + esc(nx.label) + '</b></span>';
+    /* 同一天命中多个节期时按固定顺序全部写出，用顿号连接 */
+    if (nx) third = '<span class="dr-next">' + nx.n + '天后：<b>' + esc(nx.names.join('、')) + '</b></span>';
   }
   return '<div class="dl-rows">' +
       /* 前两行单独包一层：「今天」按钮以这一层的竖直中心定位 */
