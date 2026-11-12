@@ -4,6 +4,25 @@
 
 ---
 
+## 2.6 修订（八）（2026-11-13，代码与文档修订，未发版）
+
+> 同前几轮：只改 `index.html`、`README.md`、`CHANGELOG.md`；**未重新打包 APK、未递增 `sw.js` 缓存、界面版本号仍为 2.6**。
+
+**日信息条**
+
+- 左右切换箭头改回**对整块日信息竖直居中**：`.dl-wrap` / `.detail-day` 恢复 `align-items:center`，详情页箭头高度恢复 52px；「今天」按钮仍只对着前两行（`.dl-top`）居中
+
+**审查修正**
+
+- 总览「上面板（功课）」补回 `data-clamp="4"`：`fitPanels()` 只处理 `.panel[data-clamp]`，漏了它就一直不截断、不限高
+- 点计数数字改数量（`openCountEditor` 保存）后补 `refreshCalCell(UI.date)`，日历红点与另两处写数路径一致
+- `askConfirm()` / `askDeleteTask()` 加 `_ackBack` 重入保护：连点两下不会再覆盖暂存的编辑弹窗
+- 纪念日列表「只此一年」的副标题不再留一个孤零零的「 · 」
+- `recHasContent()` / `hasWorkRec()` 改判「现存功课」的计数（新增 `hasLiveCount()`）：用「仅移除功课」删掉的那项留下孤儿计数后，那天不再有红点、总览也不再出空卡片
+- 清掉一批已经没人用的样式：`.cell .dot`、`.cal-legend i.shuo/.z6/.z10/.yz/.gy`、`.cell .mks .shuo/.z6/.z10/.yz/.gy`、`.dateline .row1/.wk/.row2/.row3/.fen`、`.dd-row1/.dd-gd/.dd-wk/.dd-row2/.dd-fen/.dd-row3`
+
+---
+
 ## 2.6 修订（七）（2026-11-12，代码与文档修订，未发版）
 
 > 同前几轮：只改 `index.html`、`README.md`、`CHANGELOG.md`；**未重新打包 APK、未递增 `sw.js` 缓存、界面版本号仍为 2.6**。
@@ -33,6 +52,7 @@
 - 第三行（tag 行）**始终渲染**，`min-height` 按一行 tag 算：有 tag 就摆 tag（多时自然长到第四、五行），一个 tag 都没有时才放「N天后：X」，所以有无预告都固定至少三行、高度一致
 - 有任一 tag（佛教节日 / 斋戒日 / 传统节日 / 节气 / 纪念日）时不再显示纯文字预告；`hasSpecialDay()` 因此不再需要，已删
 - 「今天」按钮改成**以「前两行」的竖直中心定位**：前两行包进 `.dl-top`（`position:relative`），按钮绝对定位居中于它——第三行很长时按钮不会被拖下去；`.dl-wrap` / `.detail-day` 改 `align-items:flex-start`、详情页箭头高度 52→45，左右箭头与按钮落回同一条水平线
+  - 注：**修订（八）已改回**——左右箭头改为对**整块日信息**竖直居中（`align-items:center`，详情页箭头恢复 52px）；只有「今天」按钮仍对着前两行
 
 **滚动区**
 

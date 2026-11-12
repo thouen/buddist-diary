@@ -173,21 +173,12 @@ img{max-width:100%;display:block}
 .cell.sel{background:var(--accent);box-shadow:none}
 .cell.sel .d,.cell.sel .l{color:#fff}
 .cell.sel .l{opacity:.8}
-.cell .dot{
-  position:absolute;bottom:4px;width:3.5px;height:3.5px;border-radius:50%;background:var(--gold);
-}
-.cell.sel .dot{background:rgba(255,255,255,.85)}
 
 .cal-legend{
   display:flex;gap:12px;justify-content:center;padding:6px 0 2px;font-size:9.5px;color:var(--ink3);
 }
 .cal-legend{flex-wrap:wrap;gap:5px 8px}
 .cal-legend i{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--gold);margin-right:3px;vertical-align:1px}
-.cal-legend i.shuo,
-.cal-legend i.z6,
-.cal-legend i.z10,
-.cal-legend i.yz,
-.cal-legend i.gy,
 .cal-legend i.zd{background:#3f6fa8}
 .cal-legend .r{color:var(--accent);opacity:.8}
 
@@ -233,8 +224,9 @@ img{max-width:100%;display:block}
 /* 当天：公历年月日用工课红做记号，背景保持原样（首页 / 详情页同一套） */
 .dateline.today .dr-gd,
 .detail-day.today .dr-gd{color:var(--gold)}
-/* 箭头与「今天」都对着前两行居中：第三行再长也不会把它们带偏 */
-.dl-wrap{display:flex;align-items:flex-start;gap:2px}
+/* 左右箭头对着**整块日信息**竖直居中（三行一起算）；
+   「今天」按钮只对着前两行居中——第三行再长也拖不动它 */
+.dl-wrap{display:flex;align-items:center;gap:2px}
 .dl-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;padding:0 2px}
 .dl-nav{
   flex:0 0 auto;width:26px;height:44px;border-radius:10px;
@@ -245,12 +237,6 @@ img{max-width:100%;display:block}
 .dl-nav svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
 .dl-nav:active{background:var(--accent-soft);color:var(--accent)}
 .dl-nav:active svg{transform:scale(.88)}
-.dateline .row1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-
-.dateline .wk{font-size:12px;color:var(--ink2)}
-.dateline .row2{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
-.dateline .row3{display:flex;flex-wrap:wrap;gap:5px;padding:2px 0 1px}
-.dateline .fen{color:var(--gold);font-family:var(--serif)}
 .badge{
   font-size:10.5px;padding:1.5px 7px;border-radius:20px;letter-spacing:.5px;
   background:var(--accent-soft);color:var(--accent);border:1px solid #ecd0c8;
@@ -796,13 +782,8 @@ img{max-width:100%;display:block}
   display:flex;gap:3px;justify-content:center;align-items:center;pointer-events:none;
 }
 .cell .mks i{width:4px;height:4px;border-radius:50%;display:block}
-/* 斋日：蓝色 */
-.cell .mks .zd,
-.cell .mks .shuo,
-.cell .mks .z6,
-.cell .mks .z10,
-.cell .mks .yz,
-.cell .mks .gy{background:#3f6fa8}
+/* 斋戒日：蓝色（只画一个点，不再按朔望/六斋/十斋分类） */
+.cell .mks .zd{background:#3f6fa8}
 /* 佛教节日：金色 */
 .cell .mks .fd{background:var(--gold)}
 /* 二十四节气：绿色 */
@@ -1059,19 +1040,13 @@ img{max-width:100%;display:block}
 /* ---------- 详情页：日信息 ---------- */
 .detail-day{
   margin:2px 12px 0;background:var(--card);border:1px solid var(--line);
-  border-radius:14px;padding:9px 7px;display:flex;align-items:flex-start;gap:2px;
+  border-radius:14px;padding:9px 7px;display:flex;align-items:center;gap:2px;
 }
 .dd-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;padding:0 1px}
-/* 45 ≈ 前两行的高度（24 + 3 + 18），箭头中心才能和「今天」按钮对齐 */
-.detail-day .dl-nav{height:45px}
-.dd-row1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.dd-gd{font-family:var(--serif);font-size:15.5px;font-weight:600;letter-spacing:.3px}
+.detail-day .dl-nav{height:52px}
 .detail-day{cursor:pointer}
+/* 三行内容由 dateRowsHTML 输出，和首页共用 .dr1/.dr2/.dr3 */
 .detail-day:active .dd-main{opacity:.72}
-.dd-wk{font-size:11.5px;color:var(--ink2)}
-.dd-row2{display:flex;align-items:baseline;gap:10px;font-size:11.5px;color:var(--ink2);flex-wrap:wrap}
-.dd-fen{color:var(--gold);font-family:var(--serif)}
-.dd-row3{display:flex;flex-wrap:wrap;gap:5px;padding-top:3px}
 
 /* ---------- 详情页：当日计数 ---------- */
 .count-card{
@@ -10348,19 +10323,21 @@ function getRec(ds, create) {
   }
   return r || null;
 }
-function recHasContent(r) {
-  if (!r) return false;
-  if (r.c && Object.keys(r.c).length) return true;
-  return !!recDiaryText(r).trim();
-}
-/* 有效功课：任一项功课计数大于 0（日记不计） */
-function hasWorkRec(r) {
+/* 只认「还存在的功课」：用「仅移除功课」删掉的那项会留下孤儿计数，
+   若继续算数，那天在日历上仍会有红点、总览里还会留一张空卡片 */
+function hasLiveCount(r) {
   if (!r || !r.c) return false;
   for (var k in r.c) {
-    if (r.c[k] > 0) return true;
+    if (r.c[k] > 0 && taskById(k)) return true;
   }
   return false;
 }
+function recHasContent(r) {
+  if (!r) return false;
+  return hasLiveCount(r) || !!recDiaryText(r).trim();
+}
+/* 有效功课：任一项现存功课计数大于 0（日记不计） */
+function hasWorkRec(r) { return hasLiveCount(r); }
 
 /* 各项功课的历年累计，按需计算并缓存 */
 var _totals = null;
@@ -10621,6 +10598,8 @@ function stashModal() {
   return null;
 }
 function askConfirm(title, sub, okText, onOk) {
+  /* 已经有一个确认框开着（连点两下）：直接忽略，别把暂存的编辑弹窗覆盖掉 */
+  if (_ackBack) return;
   _ackBack = stashModal();
   openModal(
     '<h4>' + esc(title) + '</h4>' +
@@ -11244,7 +11223,7 @@ function renderSummaryHTML() {
         (meta.length ? '<span class="sum-wx">' + meta.join(' · ') + '</span>' : '') +
         (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') +
       '</div>' +
-      (ctext ? '<div class="panel tasks" data-panel="tasks">' + esc(ctext) + '</div>' : '') +
+      (ctext ? '<div class="panel tasks" data-panel="tasks" data-clamp="4">' + esc(ctext) + '</div>' : '') +
       (dtext ? '<div class="panel diary" data-panel="diary" data-clamp="6" data-scroll="1">' + esc(dtext) + '</div>' : '') +
       '</div>';
   });
@@ -12179,6 +12158,8 @@ function openCountEditor(taskId) {
       invalidateTotals();
       saveNow();
       refreshTaskRow(taskId);
+      /* 日历上的「有功课」标记即时生效 */
+      refreshCalCell(UI.date);
       if (UI.view === 'detail' && UI.detail && UI.detail.taskId === taskId) {
         var tt = taskById(taskId);
         if (tt) { refreshDetailCount(tt); scheduleDetailStats(); }
@@ -12850,6 +12831,8 @@ function openTaskEditor(taskId, cat) {
 /* 删除功课：让用户选「只移除」还是「连计数一起彻底删掉」。
    取消时把底下的编辑弹窗原样放回（stashModal 挪的是真实节点）。 */
 function askDeleteTask(t) {
+  /* 连点两下「删除这项功课」时只认第一次，别把暂存的编辑弹窗覆盖成确认框 */
+  if (_ackBack) return;
   _ackBack = stashModal();
   openModal(
     '<h4>删除这项功课？</h4>' +
@@ -13012,7 +12995,7 @@ function renderMyDays() {
       }
       html += '<div class="md-row" data-mdedit="' + esc(m.id) + '">' +
         '<div class="nm"><b>' + esc(m.name) + '</b>' +
-          '<em>' + myDayText(m) + ' · ' + (myDayOnce(m) ? '' : '每年重复') + '</em></div>' +
+          '<em>' + myDayText(m) + (myDayOnce(m) ? '' : ' · 每年重复') + '</em></div>' +
         '<div class="rt"><span class="nx">' + esc(extra) + '</span><span class="chev">›</span></div>' +
         '</div>';
     });
