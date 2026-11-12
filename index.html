@@ -10953,7 +10953,9 @@ function dateRowsHTML(info, ds) {
         '</div>' +
         todayBtnHTML(ds) +
       '</div>' +
-      /* 空的第三行也照留：高度按一行 tag 算，日信息永远至少三行 */
+      /* 第三行总有内容：有 tag 摆 tag，没 tag 就是那句预告。
+         只有「四类节期全关、当天又没有斋戒日」这种极端设置下它才会是空的，
+         而那个空 div 正是「至少三行」的高度占位，所以固定渲染。 */
       '<div class="dr3">' + third + '</div>' +
     '</div>';
 }
