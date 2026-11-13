@@ -486,14 +486,10 @@ img{max-width:100%;display:block}
 .set-row:active{background:var(--card2)}
 .set-row .chev{color:var(--ink3);font-size:14px}
 .set-row .val{color:var(--ink2);font-size:12.5px}
-/* 卡片内的二级分组：一行小标题 + 若干缩进的开关（如「日历」里的节期预告） */
-.set-head{
-  display:flex;align-items:center;gap:10px;padding:11px 13px 8px;
-  border-bottom:1px solid var(--line2);background:var(--card2);
-}
-.set-head .lbl{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--ink2)}
-.set-head .lbl em{font-style:normal;font-size:11px;color:var(--ink3)}
-.set-row.sub{padding-left:26px;font-size:13.5px}
+/* 弹窗里的开关组（斋戒日 / 节期预告）：沿用设置页那套 set-row，只把边距收紧一点 */
+.modal-card{margin:2px 0 0;border-radius:12px}
+.modal-card .set-row{padding:11px 12px;font-size:13.5px}
+.modal-card .set-row .lbl em{line-height:1.5}
 .switch{
   width:44px;height:26px;border-radius:20px;background:#e4dac6;position:relative;
   transition:background .2s ease;flex:0 0 auto;
@@ -10014,7 +10010,7 @@ function defaultDB() {
       buddhaOffset: 543,
       reverseSwipe: false,
       showShuo: false,
-      showZhai6: false,
+      showZhai6: true,
       showZhai10: true,
       zhaiMulti: true,
       showTotal: true,
@@ -10059,7 +10055,8 @@ function normalizeSettings(src) {
     } else if (typeof s.zhaiMode === 'string') {
       zS = s.zhaiMode === 'shuo'; zL = s.zhaiMode === 'z6'; zT = s.zhaiMode === 'z10';
     } else {
-      zT = true;
+      /* 2.6 修订（十）：默认只启用六斋日与十斋日 */
+      zL = true; zT = true;
     }
     s.showShuo = zS; s.showZhai6 = zL; s.showZhai10 = zT;
     s.zhaiMulti = true;
@@ -10615,6 +10612,7 @@ function openModal(html, onOk) {
 function closeModal() {
   $('#modal').classList.remove('on');
   modalOnOk = null;
+  _swCfg = null;
 }
 /* 应用内确认框：原生 confirm 在 APK 里会多出一行「网址为 https://appassets.local 的网页显示」，
    所以二次确认一律走这里。sub 允许传已经转义好的 HTML。
@@ -10932,22 +10930,32 @@ function hintOn(k) {
   var v = DB.settings[k];
   return typeof v === 'boolean' ? v : HINT_DEFAULT[k] !== false;
 }
+/* 斋戒日有没有开任何一类：没开的类型日历不标，预告里也不提 */
+function zhaiAnyOn() {
+  var st = DB.settings;
+  return !!(st.showShuo || st.showGuanyin || st.showZhai6 || st.showZhai10 || st.showYueZhai);
+}
 /* 五类全关时就不用往后找了 */
 function specialEnabled() {
-  return hintOn('hintFest') || hintOn('hintZhai') || hintOn('hintTrad') ||
-    hintOn('hintJq') || hintOn('hintMyd');
+  if (hintOn('hintFest') && DB.settings.showFest) return true;
+  if (hintOn('hintTrad') && DB.settings.showTrad !== false) return true;
+  if (hintOn('hintJq') && DB.settings.showJq) return true;
+  if (hintOn('hintZhai') && zhaiAnyOn()) return true;
+  return hintOn('hintMyd') && (DB.mydays || []).length > 0;
 }
 /* 这一天所有要预告的节期名，顺序固定为
-   佛教节日 → 斋戒日（朔望 → 观音 → 六斋 → 十斋 → 月斋）→ 传统节日 → 节气 → 纪念日，
-   同日多类时全部列出 */
+   佛教节日 → 斋戒日（朔望 → 观音 → 六斋 → 十斋 → 月斋）→ 传统节日 → 节气 → 纪念日。
+   两类门槛都过才提：预告开关开着，并且日历上正显示这一类——
+   日历上藏起来的东西，预告里再提就成了「看不见却说你错过了」 */
 function specialNamesOn(ds, info) {
-  var out = [];
-  if (hintOn('hintFest') && info.fest) out.push(info.fest);
+  var out = [], st = DB.settings;
+  if (hintOn('hintFest') && st.showFest && info.fest) out.push(info.fest);
+  /* zhaiKeysOf 已经按各类斋日的开关过滤过，没勾的类型不会冒出来 */
   if (hintOn('hintZhai')) {
     zhaiKeysOf(info).forEach(function (k) { out.push(ZHAI_LABEL[k]); });
   }
-  if (hintOn('hintTrad') && info.trad) out.push(info.trad);
-  if (hintOn('hintJq') && info.jq) out.push(info.jq);
+  if (hintOn('hintTrad') && st.showTrad !== false && info.trad) out.push(info.trad);
+  if (hintOn('hintJq') && st.showJq && info.jq) out.push(info.jq);
   if (hintOn('hintMyd')) myDaysOn(ds).forEach(function (m) { out.push(m.name); });
   return out;
 }
@@ -13187,6 +13195,64 @@ function openMyDayEditor(id) {
   setTimeout(function () { var el = $('#f-mdname'); if (el) el.focus(); }, 140);
 }
 
+/* ---------- 设置：一组开关做成一个弹窗 ---------- */
+/* 斋戒日与节期预告都是「几类各自独立的开关」，挤在设置页里太长，
+   统一放进弹窗：点一下即存，弹窗原地刷新，设置页的摘要也跟着变。 */
+var ZHAI_ROWS = [
+  { k: 'showShuo', t: '朔望日', sn: '朔望日', d: '农历初一、十五' },
+  { k: 'showGuanyin', t: '观音斋', sn: '观音斋', d: '农历每月固定日，全年 22 日' },
+  { k: 'showZhai6', t: '六斋日', sn: '六斋日', d: '农历初八、十四、十五、廿三、廿九、三十；小月无三十，以廿八补足' },
+  { k: 'showZhai10', t: '十斋日', sn: '十斋日', d: '农历初一、初八、十四、十五、十八、二十三、二十四、二十八、二十九、三十；小月无三十，以廿七补足' },
+  { k: 'showYueZhai', t: '月斋（三长斋月）', sn: '月斋', d: '农历正月、五月、九月整月持斋' }
+];
+var HINT_ROWS = [
+  { k: 'hintFest', t: '佛教节日', cal: 'showFest' },
+  { k: 'hintTrad', t: '传统节日', cal: 'showTrad' },
+  { k: 'hintZhai', t: '斋戒日', zhai: true },
+  { k: 'hintJq', t: '二十四节气', cal: 'showJq' },
+  { k: 'hintMyd', t: '我的纪念日' }
+];
+function rowsOnNames(rows) {
+  return rows.filter(function (r) { return DB.settings[r.k]; })
+    .map(function (r) { return r.sn || r.t; });
+}
+/* 日历上的显示开关：传统节日当年是「默认开」，历史存档里可能没有这个键 */
+function calShowOn(k) {
+  var v = DB.settings[k];
+  return k === 'showTrad' ? v !== false : !!v;
+}
+/* 这一类虽然勾着，其实一句话也提不出来——把缘由写在副标题里，免得用户以为坏了 */
+function rowNote(r) {
+  if (r.cal && !calShowOn(r.cal)) return '日历上已关闭，暂不预告';
+  if (r.zhai && !zhaiAnyOn()) return '斋戒日五类都关着，暂不预告';
+  return '';
+}
+function switchModalHTML(c) {
+  return '<h4>' + esc(c.title) + '</h4>' +
+    (c.sub ? '<div class="dlg-sub">' + esc(c.sub) + '</div>' : '') +
+    '<div class="set-card modal-card">' + c.rows.map(function (r) {
+      var notes = [];
+      if (r.d) notes.push(r.d);
+      var note = rowNote(r);
+      if (note) notes.push(note);
+      return '<div class="set-row" data-msw="' + esc(r.k) + '">' +
+        '<div class="lbl">' + esc(r.t) +
+          (notes.length ? '<em>' + esc(notes.join('；')) + '</em>' : '') + '</div>' +
+        '<span class="switch ' + (DB.settings[r.k] ? 'on' : '') + '"></span></div>';
+    }).join('') + '</div>' +
+    '<div class="modal-actions"><button class="primary" data-mok="1">完成</button></div>';
+}
+var _swCfg = null;
+function openSwitchModal(cfg) {
+  _swCfg = cfg;
+  /* 「完成」只关窗：每次拨动开关都已经即时保存，并顺手重画了设置页 */
+  openModal(switchModalHTML(cfg), function () { closeModal(); _swCfg = null; });
+}
+function redrawSwitchModal() {
+  if (!_swCfg) return;
+  $('#modal-box').innerHTML = switchModalHTML(_swCfg);
+}
+
 /* ---------- 设置 ---------- */
 function renderSettings() {
   var s = DB.settings;
@@ -13198,28 +13264,16 @@ function renderSettings() {
       '<span class="val">+ ' + esc(s.buddhaOffset) + ' 年</span><span class="chev">›</span></div>' +
     '</div></div>';
 
-  html += '<div class="set-sec"><div class="set-title">斋戒日（可多选）</div><div class="set-card">' +
-    '<div class="set-row" data-toggle="showShuo">' +
-      '<div class="lbl">朔望日<em>农历初一、十五</em></div>' +
-      '<span class="switch ' + (s.showShuo ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showGuanyin">' +
-      '<div class="lbl">观音斋<em>农历每月固定日，全年 22 日</em></div>' +
-      '<span class="switch ' + (s.showGuanyin ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showZhai6">' +
-      '<div class="lbl">六斋日<em>农历初八、十四、十五、廿三、廿九、三十；小月无三十，以廿八补足</em></div>' +
-      '<span class="switch ' + (s.showZhai6 ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showZhai10">' +
-      '<div class="lbl">十斋日<em>农历初一、初八、十四、十五、十八、二十三、二十四、二十八、二十九、三十；小月无三十，以廿七补足</em></div>' +
-      '<span class="switch ' + (s.showZhai10 ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showYueZhai">' +
-      '<div class="lbl">月斋（三长斋月）<em>农历正月、五月、九月整月持斋</em></div>' +
-      '<span class="switch ' + (s.showYueZhai ? 'on' : '') + '"></span></div>' +
-    '</div></div>';
-
+  var zhaiOn = rowsOnNames(ZHAI_ROWS);
+  var hintOnes = rowsOnNames(HINT_ROWS);
   html += '<div class="set-sec"><div class="set-title">日历</div><div class="set-card">' +
     '<div class="set-row" data-toggle="showFest">' +
       '<div class="lbl">佛教节日<em>日历上以金色标记</em></div>' +
       '<span class="switch ' + (s.showFest ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-swset="zhai">' +
+      '<div class="lbl">斋戒日<em>' +
+        (zhaiOn.length ? esc(zhaiOn.join('、')) : '五类都关着，日历上不标蓝点') + '</em></div>' +
+      '<span class="val">' + zhaiOn.length + ' / ' + ZHAI_ROWS.length + '</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-toggle="showTrad">' +
       '<div class="lbl">传统节日<em>春节、端午、中秋等，日历上以黄色标记</em></div>' +
       '<span class="switch ' + (s.showTrad !== false ? 'on' : '') + '"></span></div>' +
@@ -13229,25 +13283,11 @@ function renderSettings() {
     '<div class="set-row" data-actx="mydays">' +
       '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
-    /* 节期预告：日期条第三行没有节期时，预告最近要来的那一个。
-       这五个开关与上面的显示开关互不影响——日历不显示某一类，预告里仍可以提到它 */
-    '<div class="set-head"><div class="lbl">节期预告' +
-      '<em>日信息第三行没有节期时，预告最近要来的节期</em></div></div>' +
-    '<div class="set-row sub" data-toggle="hintFest">' +
-      '<div class="lbl">佛教节日</div>' +
-      '<span class="switch ' + (hintOn('hintFest') ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row sub" data-toggle="hintTrad">' +
-      '<div class="lbl">传统节日</div>' +
-      '<span class="switch ' + (hintOn('hintTrad') ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row sub" data-toggle="hintZhai">' +
-      '<div class="lbl">斋戒日<em>朔望日 → 观音斋 → 六斋日 → 十斋日 → 月斋</em></div>' +
-      '<span class="switch ' + (hintOn('hintZhai') ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row sub" data-toggle="hintJq">' +
-      '<div class="lbl">二十四节气</div>' +
-      '<span class="switch ' + (hintOn('hintJq') ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row sub" data-toggle="hintMyd">' +
-      '<div class="lbl">我的纪念日</div>' +
-      '<span class="switch ' + (hintOn('hintMyd') ? 'on' : '') + '"></span></div>' +
+    /* 节期预告：非节期日的日期条第三行，预告最近的下一个节期。
+       只管「提不提」，日历上没显示的类型说了也是白说，所以两类门槛都要过 */
+    '<div class="set-row" data-swset="hint">' +
+      '<div class="lbl">节期预告<em>非节期日预告最近的下一个节期</em></div>' +
+      '<span class="val">' + hintOnes.length + ' / ' + HINT_ROWS.length + '</span><span class="chev">›</span></div>' +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
@@ -13260,9 +13300,9 @@ function renderSettings() {
     '<div class="set-row" data-toggle="showTabTotal">' +
       '<div class="lbl">显示此日分类汇总<em>在功课分类列表顶部列出今日/此日记录汇总</em></div>' +
       '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
-    /* 开了「目标优先」，设了日目标的功课排最前，其次月目标、总目标，最后是没设目标的 */
+    /* 开了「目标功课置顶」，置顶显示已设置日目标、月目标、总目标的功课 */
     '<div class="set-row" data-toggle="goalFirst">' +
-      '<div class="lbl">目标优先<em>设了日目标的排最前，其次月目标、总目标，最后是未设目标的</em></div>' +
+      '<div class="lbl">目标功课置顶<em>置顶显示已设置日目标、月目标、总目标的功课</em></div>' +
       '<span class="switch ' + (s.goalFirst ? 'on' : '') + '"></span></div>' +
     '</div></div>';
 
@@ -13405,6 +13445,16 @@ function bindEvents() {
     if (ms) {
       var sw = ms.querySelector('.switch');
       if (sw) sw.classList.toggle('on');
+      return;
+    }
+    /* 斋戒日 / 节期预告弹窗：拨一下就存，顺手把弹窗和后面的设置页都重画 */
+    ms = e.target.closest('[data-msw]');
+    if (ms) {
+      var sk = ms.dataset.msw;
+      DB.settings[sk] = !DB.settings[sk];
+      saveNow();
+      redrawSwitchModal();
+      renderSettings();
       return;
     }
     if (e.target.closest('[data-mok]') || e.target.closest('[data-tsave]') || e.target.closest('[data-mdsave]')) {
@@ -13692,6 +13742,25 @@ function bindEvents() {
       DB.settings[key] = !DB.settings[key];
       saveNow();
       renderSettings();
+      return;
+    }
+
+    /* 斋戒日 / 节期预告：几类开关太多，收进弹窗里 */
+    el = e.target.closest('[data-swset]');
+    if (el) {
+      if (el.dataset.swset === 'zhai') {
+        openSwitchModal({
+          title: '斋戒日',
+          sub: '可多选；日历上只画一颗蓝点，命中的几类按顺序列在日期条上',
+          rows: ZHAI_ROWS
+        });
+      } else {
+        openSwitchModal({
+          title: '节期预告',
+          sub: '只预告日历上正在显示的类型；斋戒日还要在「斋戒日」里勾选才会提到',
+          rows: HINT_ROWS
+        });
+      }
       return;
     }
 

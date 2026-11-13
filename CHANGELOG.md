@@ -4,6 +4,30 @@
 
 ---
 
+## 2.6 修订（十）（2026-11-13，代码与文档修订，未发版）
+
+> 同前几轮：只改 `index.html`、`README.md`、`CHANGELOG.md`；**未重新打包 APK、未递增 `sw.js` 缓存、界面版本号仍为 2.6**。
+
+**斋戒日与节期预告收进弹窗**
+
+- 设置页「斋戒日（可多选）」整个分区去掉，改成「日历」里的一行，位置在**佛教节日**之后；行右侧显示 **已启用数 / 5**，副标题直接列出已启用的几类（如「六斋日、十斋日」），点开是五个开关的弹窗
+- 「节期预告」原来的「小标题 + 五行缩进开关」整块去掉，同样改成一行（**已选数 / 5**）+ 弹窗，位置仍在「我的纪念日」之后
+- 新增通用弹窗 `openSwitchModal()` / `switchModalHTML()` / `redrawSwitchModal()` 与 `ZHAI_ROWS` / `HINT_ROWS` 两张表：开关沿用设置页那套 `.set-row`（新增 `.modal-card` 收紧边距），**拨一下即存**，弹窗与设置页上的摘要同时刷新；点「完成」只关窗
+- 原来的 `.set-head` / `.set-row.sub` 两个样式随缩进分组一起删掉
+- 弹窗里对「勾着但提不出来」的类型给出灰字提示：日历上关掉的写「日历上已关闭，暂不预告」，斋戒日一类都没勾的写「斋戒日五类都关着，暂不预告」
+
+**预告逻辑：两道门槛**
+
+- `specialNamesOn()` 与 `specialEnabled()` 现在要求 **预告开关开着 + 日历上正显示这一类** 才提：`showFest && hintFest`、`showTrad !== false && hintTrad`、`showJq && hintJq`；纪念日没有日历开关，只看 `hintMyd`
+- 斋戒日除了 `hintZhai`，还要靠 `zhaiKeysOf()` 按各类开关过滤——没勾的斋日类型不会出现在预告里（新增 `zhaiAnyOn()` 供 `specialEnabled()` 判空）
+- `specialEnabled()` 顺带补回「没有纪念日时不必往后扫」的判断
+
+**默认值**
+
+- 斋戒日默认改为**六斋日 + 十斋日**：`defaultDB()` 的 `showZhai6` 由 `false` 改为 `true`，`normalizeSettings()` 里「旧存档完全没有斋日字段」那条兜底分支也一并改成 `zL = true; zT = true`（已有明确设置的存档不受影响）
+
+---
+
 ## 2.6 修订（九）（2026-11-13，代码与文档修订，未发版）
 
 > 同前几轮：只改 `index.html`、`README.md`、`CHANGELOG.md`；**未重新打包 APK、未递增 `sw.js` 缓存、界面版本号仍为 2.6**。
