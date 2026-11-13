@@ -628,18 +628,6 @@ img{max-width:100%;display:block}
 }
 .field-chk .lbl{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--ink)}
 .field-chk .lbl em{font-style:normal;font-size:10.5px;color:var(--ink3);line-height:1.5}
-/* 删除功课：两个并列的可选项 */
-.del-opts{display:flex;flex-direction:column;gap:8px;margin:2px 0 12px}
-.del-opts button{
-  display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
-  padding:10px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);
-  font-family:var(--serif);font-size:13.5px;color:var(--ink);letter-spacing:.3px;
-  transition:background .12s ease,border-color .12s ease;
-}
-.del-opts button em{font-family:var(--sans);font-style:normal;font-size:10.5px;color:var(--ink3);line-height:1.5}
-.del-opts button:active{background:var(--accent-soft);border-color:#ecd0c8}
-.del-opts button[data-tdelmode="wipe"]{border-color:#e8c9c2;color:#b8442f}
-.del-opts button[data-tdelmode="wipe"] em{color:#b8442f;opacity:.78}
 .tag-def{
   font-size:9.5px;color:var(--accent);background:var(--accent-soft);
   border:1px solid #ecd0c8;border-radius:5px;padding:1px 5px;letter-spacing:.5px;
@@ -12886,35 +12874,26 @@ function openTaskEditor(taskId, cat) {
   );
 }
 
-/* 删除功课：让用户选「只移除」还是「连计数一起彻底删掉」。
-   取消时把底下的编辑弹窗原样放回（stashModal 挪的是真实节点）。 */
+/* 删除功课：既然已经有「隐藏」了，删除就只有一种含义——彻底删掉。
+   先弹一次确认；取消时把底下的编辑弹窗原样放回（stashModal 挪的是真实节点）。 */
 function askDeleteTask(t) {
-  /* 连点两下「删除这项功课」时只认第一次，别把暂存的编辑弹窗覆盖成确认框 */
-  if (_ackBack) return;
-  _ackBack = stashModal();
-  openModal(
-    '<h4>删除这项功课？</h4>' +
-    '<div class="dlg-sub">「' + esc(t.name) + '」将从功课列表中移除，选一种删法。</div>' +
-    '<div class="del-opts">' +
-      '<button data-tdelmode="keep" data-tid="' + esc(t.id) + '">仅移除功课' +
-        '<em>各日期上已记的计数都留着，只是不再显示</em></button>' +
-      '<button data-tdelmode="wipe" data-tid="' + esc(t.id) + '">彻底删除，含计数' +
-        '<em>把它在各日期上记的数量一并删掉，不可恢复</em></button>' +
-    '</div>' +
-    '<div class="modal-actions"><button data-ack-cancel="1">取消</button></div>'
+  askConfirm(
+    '彻底删除这项功课？',
+    '「' + esc(t.name) + '」在各日期上已记的计数会一并删掉，不可恢复。<br>' +
+      '只想暂时不显示，可以在编辑弹窗里关掉「在功课列表中显示」。',
+    '彻底删除',
+    function () { deleteTask(t.id); }
   );
 }
-function deleteTask(id, wipe) {
+function deleteTask(id) {
   DB.tasks = DB.tasks.filter(function (x) { return x.id !== id; });
-  if (wipe) {
-    /* 逐个日期摘掉这项计数；某天因此空了就连这条记录一起清掉 */
-    Object.keys(DB.records || {}).forEach(function (ds) {
-      var r = DB.records[ds];
-      if (!r || !r.c || r.c[id] == null) return;
-      delete r.c[id];
-      pruneRec(ds);
-    });
-  }
+  /* 逐个日期摘掉这项计数；某天因此空了就连这条记录一起清掉 */
+  Object.keys(DB.records || {}).forEach(function (ds) {
+    var r = DB.records[ds];
+    if (!r || !r.c || r.c[id] == null) return;
+    delete r.c[id];
+    pruneRec(ds);
+  });
   invalidateTotals();
   saveNow();
   if (UI.view === 'detail' && UI.detail && UI.detail.taskId === id) {
@@ -12927,7 +12906,7 @@ function deleteTask(id, wipe) {
     renderTaskSettings();
     if (UI.view === 'home') renderHome();
   }
-  toast(wipe ? '已彻底删除' : '已移除');
+  toast('已彻底删除');
 }
 
 /* ---------- 佛教节日一览 ---------- */
@@ -13469,14 +13448,6 @@ function bindEvents() {
       if (!dt) return;
       if (dt.builtin) { toast('内置功课只能隐藏，不能删除'); return; }
       askDeleteTask(dt);
-      return;
-    }
-    /* 删除功课的两种删法 */
-    var dm = e.target.closest('[data-tdelmode]');
-    if (dm) {
-      _ackBack = null;
-      closeModal();
-      deleteTask(dm.dataset.tid, dm.dataset.tdelmode === 'wipe');
       return;
     }
   });
