@@ -1117,9 +1117,18 @@ img{max-width:100%;display:block}
   font-size:17px;font-weight:600;line-height:1;padding-bottom:2px;
 }
 .cbtn.step:active{background:#7e1f15;border-color:#7e1f15}
-/* 专修模式：五个按钮并成一个大按钮，底下一句说明增量从哪来 */
+/* 专修模式：一个按钮顶满原来五个按钮占的那块地方——
+   +1 的高度（clamp 96~150）+ 它下面 9px 的间距 + 一行 38px 的小按钮，共多 47px，
+   所以切换模式时按钮区高度不变，只是按钮本身变大、字也变大 */
+.bigadd.solo{
+  height:calc(clamp(96px,19vh,150px) + 47px);
+  min-height:calc(96px + 47px);
+  margin-bottom:6px;
+  font-size:40px;
+}
+/* 底下一句说明增量从哪来 */
 .cc-mode-tip{
-  margin:-3px 0 2px;text-align:center;
+  margin:-2px 0 2px;text-align:center;
   font-size:11px;line-height:1.7;color:var(--ink3);letter-spacing:.3px;
 }
 .cc-mode-tip b{font-family:var(--serif);font-size:12.5px;color:var(--gold);letter-spacing:0}
@@ -12525,7 +12534,7 @@ function detailCountHTML(t) {
   if (UI.detail && UI.detail.focus) {
     var fst = taskFocusStep(t);
     addHTML =
-      '<button class="bigadd" data-dct="fstep" data-n="' + fst + '"' + futDis + '>+' + fst + '</button>' +
+      '<button class="bigadd solo" data-dct="fstep" data-n="' + fst + '"' + futDis + '>+' + fst + '</button>' +
       '<div class="cc-mode-tip">专修模式 · 每按一次 <b>+' + fst + '</b> ' + esc(t.unit) +
         '，长按可连加；增量在「功课参数」里改</div>';
   } else {
