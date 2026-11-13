@@ -649,6 +649,25 @@ img{max-width:100%;display:block}
 
 /* 自定义增减弹窗 */
 .dlg-sub{font-size:11.5px;color:var(--ink3);margin:-6px 0 12px;letter-spacing:.3px}
+/* 更新内容：按版本分块，一条一行 */
+.wn-wrap{margin:0 0 2px}
+.wn-ver{
+  display:flex;align-items:baseline;gap:7px;
+  margin:14px 0 5px;padding-bottom:5px;border-bottom:1px solid var(--line);
+}
+.wn-ver:first-child{margin-top:2px}
+.wn-ver b{font-family:var(--serif);font-size:14px;font-weight:600;letter-spacing:.5px;color:var(--ink)}
+.wn-ver em{font-style:normal;font-size:10.5px;color:var(--ink3);letter-spacing:.5px}
+.wn-ver em.cur{color:var(--accent);border:1px solid #e6c6bd;border-radius:6px;padding:0 4px}
+.wn-list{margin:0;padding:0;list-style:none}
+.wn-list li{
+  position:relative;padding-left:12px;margin-bottom:5px;
+  font-size:12.5px;line-height:1.75;color:#5a5145;
+}
+.wn-list li::before{
+  content:'';position:absolute;left:2px;top:9px;
+  width:4px;height:4px;border-radius:50%;background:#c9b9a4;
+}
 /* 内置功课的删除位：只留一句说明，不给删除按钮 */
 .tk-note{text-align:center;padding:8px 0 0;font-size:11.5px;color:var(--ink3);letter-spacing:.3px}
 .sign-seg{display:flex;gap:6px}
@@ -9820,6 +9839,10 @@ var CHINA=[["北京市",["东城区","西城区","朝阳区","丰台区","石景
 
 /* ---------- 常量 ---------- */
 var STORE_KEY = 'xuefo.diary.v1';
+/* 当前版本：发版时只改这一处，界面「设置 → 关于」与更新提示都以它为准 */
+var APP_VERSION = '2.8';
+/* 上次打开过的版本，与数据分开存，导入备份不会把它带过来 */
+var SEENVER_KEY = 'xuefo.seenver';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 
 var CATS = [
@@ -13235,6 +13258,102 @@ function redrawSwitchModal() {
   $('#modal-box').innerHTML = switchModalHTML(_swCfg);
 }
 
+/* ---------- 更新内容（应用内的 CHANGELOG） ----------
+   每个版本一条，新的写在最前面；只写用户能看见的变化，一条一句。
+   升级后自动弹一次：只列出「比上次打开过的版本更新」的几条；
+   「设置 → 关于 → 更新内容」可以随时看全部。 */
+var REL_NOTES = [
+  {
+    v: '2.8', date: '2026-11-13',
+    items: [
+      '新增「更新内容」：升级后自动列出这次以及之前错过版本的改动，设置 → 关于里可随时回看',
+      '功课列表新增「目标优先」（默认开启）：设了日目标、月目标、总目标的功课排在前面',
+      '斋戒日与节期预告收进设置页的一行 + 弹窗，已启用几类一眼可见；日期条只预告日历上正显示的节期',
+      '同一天撞上几个节期时按 佛教节日 → 斋戒日 → 传统节日 → 节气 → 纪念日 全部列出',
+      '删除功课只保留「彻底删除」，删前统一弹一次确认，不再留下看不见的孤儿计数',
+      '修正：跨过零点才点「确定」会写进前一天、日记失焦丢掉最后一段、长按连加被打断后一直加数'
+    ]
+  },
+  {
+    v: '2.7', date: '2026-11-13',
+    items: [
+      '纪念日编辑改为「开关 + 年份下拉」，月、日点中文下拉，农历「三十」遇小月按当月最后一天算',
+      '月目标达标：只在「按月」表格里给合计 ≥ 月目标的格子打金色 ✓，统计行显示「月目标 X · 达标 N 个月」',
+      '目标对照改为红色规则：分母与斜杠常红，达标后分子也转红；按年视图不显示目标与达标',
+      '内置功课只能隐藏，删除功课改为应用内确认框；设置页拆出「总览」分区',
+      '日期条左右箭头对整块日信息居中；汇总卡日记 6 行滚动、日分类汇总最多 5 行；没有节期的日子预告最近的节期',
+      '修复：改过计数后日历红点不刷新、确认框连点两下会串、孤儿计数留下空卡片等四处缺陷'
+    ]
+  },
+  {
+    v: '2.6', date: '2026-11-11',
+    items: [
+      '月历上同一天命中多类斋日只画一颗蓝点；「斋日」统一改称「斋戒日」',
+      '年份选择放开到 1900 – 2100，面板打开时自动滚到当年',
+      '「我的重要日」改名「我的纪念日」，位置调到节气之后，标记改粉色；纪念日支持只设某一年',
+      '功课新增可选月目标：月目标与总目标都不画进度条，只有日目标保留',
+      '「日记功能」改名「记录日记」，关闭后总览的日记开关整行置灰',
+      '「今」按钮重画：细圆环 + 顺时针箭头，窄屏下自动缩小'
+    ]
+  },
+  {
+    v: '2.0', date: '2026-11-10',
+    items: [
+      '主页面切到非当天时，五个标签页的文字与下划线仍用功课红，「＋」与 +1 按钮保持米白',
+      '数据概况把功课总计数拆成念佛、诵经、持咒、仪轨、日记五类分别统计，带千分位',
+      '设置页底部回向偈换成「学佛功德殊胜行，无边胜福皆回向／普愿沉溺诸众生，速往无量光佛刹」'
+    ]
+  }
+];
+
+/* 2.7 与 2.8 只差一位小数，按数字比大小即可 */
+function verNum(v) {
+  var p = String(v || '0').split('.');
+  return (+p[0] || 0) * 1000 + (+p[1] || 0);
+}
+/* 比 base 新的版本（新→旧），base 传空则返回全部 */
+function notesSince(base) {
+  var b = verNum(base);
+  return REL_NOTES.filter(function (r) { return verNum(r.v) > b; });
+}
+function notesHTML(list) {
+  return list.map(function (r) {
+    return '<div class="wn-ver"><b>版本 ' + esc(r.v) + '</b>' +
+      (r.v === APP_VERSION ? '<em class="cur">本次更新</em>' : '') +
+      (r.date ? '<em>' + esc(r.date) + '</em>' : '') +
+      '</div>' +
+      '<ul class="wn-list">' + r.items.map(function (t) {
+        return '<li>' + esc(t) + '</li>';
+      }).join('') + '</ul>';
+  }).join('');
+}
+function openWhatsNew(list) {
+  list = list && list.length ? list : REL_NOTES;
+  openModal(
+    '<h4>更新内容</h4>' +
+    '<div class="dlg-sub">学佛日记 ' + esc(APP_VERSION) + ' · 数据照旧保存在本机</div>' +
+    '<div class="wn-wrap">' + notesHTML(list) + '</div>' +
+    '<div class="modal-actions"><button class="primary" data-mok="1">知道了</button></div>',
+    function () { closeModal(); }
+  );
+}
+function seenVersion() {
+  try { return localStorage.getItem(SEENVER_KEY) || ''; } catch (e) { return APP_VERSION; }
+}
+function markSeenVersion() {
+  try { localStorage.setItem(SEENVER_KEY, APP_VERSION); } catch (e) { }
+}
+/* 升级后弹一次。没记过版本号的老存档从 2.0 起算（把错过的几版一起列出来），
+   全新安装则直接记成当前版本，不打扰。 */
+function whatsNewOnBoot(hadData) {
+  if (loadError || document.querySelector('#modal.on')) return;
+  var seen = seenVersion() ||
+    (hadData ? REL_NOTES[REL_NOTES.length - 1].v : APP_VERSION);
+  var list = notesSince(seen);
+  markSeenVersion();
+  if (list.length) openWhatsNew(list);
+}
+
 /* ---------- 设置 ---------- */
 function renderSettings() {
   var s = DB.settings;
@@ -13334,7 +13453,8 @@ function renderSettings() {
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">关于</div><div class="set-card">' +
-    '<div class="set-row"><div class="lbl">学佛日记<em>版本 2.7 · 数据保存在本机，不上传</em></div></div>' +
+    '<div class="set-row"><div class="lbl">学佛日记<em>版本 ' + esc(APP_VERSION) + ' · 数据保存在本机，不上传</em></div></div>' +
+    '<div class="set-row" data-actx="whatsnew"><div class="lbl">更新内容<em>各版本改了什么，升级后自动提示</em></div><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="wipe"><div class="lbl" style="color:#b8442f">清空全部数据<em>不可恢复，请先导出备份</em></div><span class="chev" style="color:#b8442f">›</span></div>' +
     '</div></div>';
 
@@ -13770,6 +13890,7 @@ function bindEvents() {
       else if (act === 'import') importData();
       else if (act === 'wipe') wipeData();
       else if (act === 'stats') showStats();
+      else if (act === 'whatsnew') openWhatsNew(REL_NOTES);
       return;
     }
 
@@ -14498,6 +14619,8 @@ function wipeData() {
               DB = defaultDB();
               invalidateTotals();
               saveNow();
+              /* 清空等于重新开始：别把「错过的版本」当成升级提示再弹一次 */
+              markSeenVersion();
               LunarCache = {};
               UI.date = TODAY; UI.tab = 'nianfo'; UI.view = 'home';
               setMode('record');
@@ -14625,6 +14748,9 @@ var __inited = false;
 function init() {
   if (__inited) return;
   __inited = true;
+  /* 读数据之前先看一眼本机有没有存档：有就是升级上来的，更新提示要列错过的版本 */
+  var hadData = false;
+  try { hadData = !!localStorage.getItem(STORE_KEY); } catch (e) { }
   DB = loadDB();
   if (__dbMigrated) { __dbMigrated = false; saveNow(); }
   var d = new Date();
@@ -14636,6 +14762,9 @@ function init() {
   bindEvents();
   renderView();
   if (loadError) showLoadError();
+
+  /* 更新提示：等首屏画完再弹，读坏数据时（已弹提示）不打扰 */
+  setTimeout(function () { whatsNewOnBoot(hadData); }, 500);
 
   /* 跨天刷新：定时检查 + 回到前台时检查 */
   setInterval(checkDayChange, 20000);
