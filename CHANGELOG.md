@@ -4,6 +4,36 @@
 
 ---
 
+## 2.6 修订（十二）（2026-11-13，全面审查后的修正，未发版）
+
+> 同前几轮：只改 `index.html`、`README.md`、`CHANGELOG.md`；**未重新打包 APK、未递增 `sw.js` 缓存、界面版本号仍为 2.6**。
+
+**交互修正**
+
+- 设置页的「斋戒日」「节期预告」弹窗：拨开关时只重画弹窗，改在 `closeModal()` 里重画设置页。原来每拨一下就重建 `#settings-scroll` 的内容，会把设置页的滚动位置清回顶部
+- `checkDayChange()` 增加「有弹窗 / 底部菜单开着就先跳过」的判断，并把这两个判断挪到改 `TODAY` 之前——原来先把 `TODAY` 推到新的一天再 return，下一轮会直接短路，界面可能一直停在旧日子上
+
+**数据修正**
+
+- `openCountEditor()` 改为按当前 `UI.date` 重新取记录再写入；开窗时只读不建（`getRec(…, false)`），点「取消」不再凭空留下空记录。跨过 00:00 才点「确定」也不会写进前一天
+- `renderDiaryInto()` 改用 `getRec(UI.date, false)`：只是翻到日记页、什么都没写，不再创建并持久化空记录
+- 日记 `blur` 先 `syncDiaryFromDOM()` 再落库（空正文仍不同步）：输入法在失焦瞬间上屏时不会丢掉最后一段
+
+**健壮性**
+
+- 长按连加的 `setInterval` 增加 `window blur` 与 `visibilitychange` 兜底清理，WebView 被打断收不到 `pointerup` 时不会一直加数
+
+**口径统一**
+
+- 总览卡片的功课文本改为「与主页列表同一套口径」：`countsTextOf()` 过滤掉已隐藏的功课（原来只有「今日汇总」过滤），顺序也跟随「目标功课置顶」（抽出 `sortByGoalFirst()` 供两处共用）
+
+**代码卫生**
+
+- 删掉 contenteditable 时代的遗留：`.blk` / `.blk .pre` / `.blk .ed` / `.blk .ed:empty::before` / `.blk .ed[contenteditable]` / `.ed:not([contenteditable])` 六条死样式，以及滑动与键盘处理里的两处 `contenteditable` 分支
+- `defaultDB().settings` 不再重复写五个 `hint*` 默认值，改为 `Object.assign({…}, HINT_DEFAULT)`，默认值只在 `HINT_DEFAULT` 维护一次
+
+---
+
 ## 2.6 修订（十一）（2026-11-13，代码与文档修订，未发版）
 
 > 同前几轮：只改 `index.html`、`README.md`、`CHANGELOG.md`；**未重新打包 APK、未递增 `sw.js` 缓存、界面版本号仍为 2.6**。

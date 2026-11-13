@@ -366,16 +366,6 @@ img{max-width:100%;display:block}
 
 /* ---------- 日记编辑器 ---------- */
 .diary{padding:12px 14px calc(30px + var(--safe-b));display:flex;flex-direction:column;gap:2px}
-.blk{display:flex;gap:7px;align-items:flex-start;padding:2px 0;border-radius:8px}
-.blk .pre{
-  min-width:20px;text-align:right;color:var(--ink3);font-size:14px;
-  padding-top:4px;flex:0 0 auto;font-variant-numeric:tabular-nums;user-select:none;
-}
-.blk .ed{
-  flex:1;min-height:28px;outline:none;font-size:15px;line-height:1.75;
-  white-space:pre-wrap;word-break:break-word;padding:3px 0;color:var(--ink);
-}
-.blk .ed:empty::before{content:attr(data-ph);color:var(--ink3);font-size:13px}
 .diary-bar{
   display:flex;gap:6px;padding:10px 0 0;margin-top:6px;
   border-top:1px dashed var(--line);position:sticky;bottom:0;
@@ -808,8 +798,6 @@ img{max-width:100%;display:block}
 .cal-legend i.tr{background:#d9a520}
 .cal-legend i.jq{background:#5f8b52}
 
-/* 空块占位 */
-.blk .ed[contenteditable]:empty::before{content:attr(data-ph);color:#c4b9a4;font-size:13px;pointer-events:none}
 
 /* ---------- 详情页周期条 ---------- */
 .period{
@@ -952,7 +940,6 @@ img{max-width:100%;display:block}
   display:flex;align-items:center;white-space:nowrap;
 }
 .chip:disabled{opacity:.5}
-.ed:not([contenteditable]){cursor:default}
 
 /* 日记内容撑满可用高度，工具条贴近底部 */
 .diary #blocks{flex:1 1 auto;min-height:0}
@@ -10006,7 +9993,9 @@ function defaultDB() {
     v: 1,
     builtinRev: BUILTIN_REV,
     orderRev: 1,
-    settings: {
+    /* 节期预告那五个开关的默认值只在 HINT_DEFAULT 里写一次，这里合并进来，
+       免得两处各写一遍、改一处忘另一处 */
+    settings: Object.assign({
       buddhaOffset: 543,
       reverseSwipe: false,
       showShuo: false,
@@ -10022,11 +10011,6 @@ function defaultDB() {
       showGuanyin: false,
       showTabTotal: false,
       goalFirst: true,
-      hintFest: true,
-      hintTrad: true,
-      hintZhai: false,
-      hintJq: false,
-      hintMyd: true,
       showSumPlace: true,
       showSumWeather: true,
       showDiary: true,
@@ -10034,7 +10018,7 @@ function defaultDB() {
       defaultPlaceId: '',
       useLastPlace: true,
       lastPlaceId: ''
-    },
+    }, HINT_DEFAULT),
     tasks: tasks,
     mydays: [],
     places: [],
@@ -10338,13 +10322,16 @@ function taskGoalRank(t) {
   if (taskTarget(t)) return 2;
   return 3;
 }
-function tasksOf(cat) {
-  var list = DB.tasks.filter(function (t) { return t.cat === cat && !t.hidden; });
+/* 「目标功课置顶」：按档位重排，同一档里仍保持功课设置里排好的先后。
+   主页列表和总览里的功课文本共用它，两处顺序才不会打架 */
+function sortByGoalFirst(list) {
   if (!DB.settings.goalFirst) return list;
-  /* 「目标优先」：按档位重排，同一档里仍保持功课设置里排好的先后 */
   return list.map(function (t, i) { return { t: t, i: i, r: taskGoalRank(t) }; })
     .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
     .map(function (x) { return x.t; });
+}
+function tasksOf(cat) {
+  return sortByGoalFirst(DB.tasks.filter(function (t) { return t.cat === cat && !t.hidden; }));
 }
 
 function getRec(ds, create) {
@@ -10616,7 +10603,11 @@ function openModal(html, onOk) {
 function closeModal() {
   $('#modal').classList.remove('on');
   modalOnOk = null;
+  /* 斋戒日 / 节期预告弹窗：拨动时只重画弹窗本身，关窗时才重画设置页——
+     每次拨动都重画会把设置页的滚动位置清回顶部 */
+  var wasSwitch = !!_swCfg;
   _swCfg = null;
+  if (wasSwitch) renderSettings();
 }
 /* 应用内确认框：原生 confirm 在 APK 里会多出一行「网址为 https://appassets.local 的网页显示」，
    所以二次确认一律走这里。sub 允许传已经转义好的 HTML。
@@ -11181,7 +11172,8 @@ function refreshTabDots() {
 function countsTextOf(rec) {
   if (!rec || !rec.c) return '';
   var parts = [];
-  DB.tasks.forEach(function (t) {
+  /* 与主页列表同一套口径：隐藏的功课不露出来，顺序也跟随「目标功课置顶」 */
+  sortByGoalFirst(DB.tasks.filter(function (t) { return !t.hidden; })).forEach(function (t) {
     var n = rec.c[t.id];
     if (n > 0) parts.push(t.name + '×' + n);
   });
@@ -11443,9 +11435,10 @@ function diaryChars(s) {
 
 function renderDiaryInto(box) {
   diaryRO = isFutureDate();
-  /* 只读时不落库：翻看未来的日期不会凭空多出一条空记录 */
-  var rec = getRec(UI.date, !diaryRO);
-  if (!rec) rec = { c: {} };              /* 未来的日期不落库，可能没有记录 */
+  /* 一次都不落库：只是翻到日记页、什么都没写，不该凭空多出一条空记录。
+     真正写内容时由 ensureDiaryRec() 建记录 */
+  var rec = getRec(UI.date, false);
+  if (!rec) rec = { c: {} };              /* 还没有记录时，只用于渲染 */
   var txt = recDiaryText(rec);
   var dateChanged = diaryDate !== UI.date;
   diaryText = txt;
@@ -12202,8 +12195,9 @@ function openCountEditor(taskId) {
   if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
-  var rec = getRec(UI.date, true);
-  var cur = rec.c[taskId] || 0;
+  /* 只读当前值：开窗后点「取消」不该凭空留下一条空记录 */
+  var openRec = getRec(UI.date, false);
+  var cur = (openRec && openRec.c[taskId]) || 0;
   openModal(
     '<h4>' + esc(t.name) + '</h4>' +
     '<div class="field"><label>' + (UI.date === TODAY ? '今日计数（' : '此日计数（') + esc(t.unit) + '）</label>' +
@@ -12215,7 +12209,10 @@ function openCountEditor(taskId) {
     function () {
       var v = parseInt($('#m-count').value, 10);
       if (isNaN(v) || v < 0) v = 0;
-      if (v === 0) delete rec.c[taskId]; else rec.c[taskId] = v;
+      /* 弹窗可能开着跨过 00:00（checkDayChange 会跳过弹窗，但时钟也可能从别处更新），
+         这里按当前日期重新取一次，别写进开窗时那一天的记录 */
+      var r0 = getRec(UI.date, true);
+      if (v === 0) delete r0.c[taskId]; else r0.c[taskId] = v;
       invalidateTotals();
       saveNow();
       refreshTaskRow(taskId);
@@ -13252,7 +13249,7 @@ var _swCfg = null;
 function openSwitchModal(cfg) {
   _swCfg = cfg;
   /* 「完成」只关窗：每次拨动开关都已经即时保存，并顺手重画了设置页 */
-  openModal(switchModalHTML(cfg), function () { closeModal(); _swCfg = null; });
+  openModal(switchModalHTML(cfg), function () { closeModal(); });
 }
 function redrawSwitchModal() {
   if (!_swCfg) return;
@@ -13453,14 +13450,13 @@ function bindEvents() {
       if (sw) sw.classList.toggle('on');
       return;
     }
-    /* 斋戒日 / 节期预告弹窗：拨一下就存，顺手把弹窗和后面的设置页都重画 */
+    /* 斋戒日 / 节期预告弹窗：拨一下就存，只重画弹窗（设置页等关窗时再重画） */
     ms = e.target.closest('[data-msw]');
     if (ms) {
       var sk = ms.dataset.msw;
       DB.settings[sk] = !DB.settings[sk];
       saveNow();
       redrawSwitchModal();
-      renderSettings();
       return;
     }
     if (e.target.closest('[data-mok]') || e.target.closest('[data-tsave]') || e.target.closest('[data-mdsave]')) {
@@ -13867,8 +13863,14 @@ function bindEvents() {
   app.addEventListener('input', function (e) {
     if (e.target.closest('.ed')) onDiaryInput(e);
   });
+  /* 失焦：先把握手上的文字读回模型再落库。输入法在失焦瞬间上屏时不会补发 input，
+     不补这一步就会把刚打的最后一段丢掉 */
   app.addEventListener('blur', function (e) {
-    if (e.target.closest && e.target.closest('.ed')) saveNow();
+    if (!e.target.closest || !e.target.closest('.ed')) return;
+    /* 空正文不同步：免得只是点进又点出就凭空建出一条空记录 */
+    var ed = diaryEditor();
+    if (!diaryRO && ed && ed.value.trim()) syncDiaryFromDOM();
+    saveNow();
   }, true);
 
   /* 工具条：点按钮前记住光标位置，便于在文中插入时间 */
@@ -13972,6 +13974,12 @@ function bindEvents() {
   };
   window.addEventListener('pointerup', endHold);
   window.addEventListener('pointercancel', function () { clearHold(); });
+  /* 兜底：WebView 被来电 / 切后台 / 系统手势打断时可能收不到 pointerup，
+     连加定时器会一直跑下去，所以失焦与切后台时也清一次 */
+  window.addEventListener('blur', function () { clearHold(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) clearHold();
+  });
 
   /* 手势 */
   var touch = null;
@@ -14006,10 +14014,7 @@ function bindEvents() {
     if (dt > 900) return;
     if (Math.abs(dx) < 64) return;
     if (Math.abs(dy) > Math.abs(dx) * 0.8) return;
-    if (tgt && tgt.closest) {
-      if (tgt.closest('[contenteditable="plaintext-only"]')) return;
-      if (tgt.closest('input,textarea')) return;
-    }
+    if (tgt && tgt.closest && tgt.closest('input,textarea')) return;
     if (document.getElementById('modal').classList.contains('on')) return;
     if (document.getElementById('sheet').classList.contains('on')) return;
     suppressClick = Date.now() + 360;
@@ -14049,7 +14054,7 @@ function bindEvents() {
 
   /* 键盘（桌面调试） */
   window.addEventListener('keydown', function (e) {
-    if (e.target.closest && e.target.closest('input,textarea,[contenteditable]')) return;
+    if (e.target.closest && e.target.closest('input,textarea')) return;
     if (document.getElementById('modal').classList.contains('on')) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     var kd = e.key === 'ArrowLeft' ? -1 : 1;
@@ -14594,11 +14599,14 @@ function earliestDate() {
 function checkDayChange() {
   var t = fmtDate(new Date());
   if (t === TODAY) return;
-  var old = TODAY;
-  TODAY = t;
-  /* 正在写日记时不打断输入，等下一次检查 */
+  /* 正在写日记时不打断输入；有弹窗 / 底部菜单开着时也先别动，
+     等下一次检查。两个判断都要在改 TODAY 之前，否则 TODAY 已经推到新的一天，
+     下一轮会直接 return，界面就永远停在旧日子上了 */
   var ae = document.activeElement;
   if (ae && ae.closest && ae.closest('.ed')) return;
+  if (document.querySelector('#modal.on') || document.querySelector('#sheet.on')) return;
+  var old = TODAY;
+  TODAY = t;
   if (UI.date === old) {
     UI.date = t;
     var pd = parseYmd(t);
