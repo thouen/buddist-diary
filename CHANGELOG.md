@@ -19,11 +19,18 @@
 - **「关于」里的版本行本身就是入口**（`data-actx="whatsnew"`，右侧写「更新内容 ›」）：不限于升级后弹窗，随时点开都能看全部版本；`.wn-ver` / `.wn-list` 两组样式沿用弹窗的米色卡片风格
 - 版本比较用 `verNum()`（主次版本 ×1000 相加），2.7 → 2.8、2.9 → 2.10 都能正确排序
 
-**新增：日记提示语可改**
+**日记：去掉框里的提示语**
 
-- 日记框那句 placeholder 原来硬编码在 `diaryEditorHTML()` 里，现在读 `DB.settings.diaryHint`，默认值是常量 `DIARY_HINT_DEFAULT`（「谁说写日记不是修行呢？」）；清空后连 `placeholder` 属性都不写，框里就真的空着
-- 设置页「日记」分区新增一行 **日记提示语**（`data-actx="diaryhint"`，副标题直接显示当前那句），点开是单输入框弹窗 `openDiaryHintEditor()`：最多 60 字，留空保存＝不显示
-- `normalizeSettings()` 收口：非字符串回落到默认，超长截到 60 字；`defaultDB().settings` 一并写入默认值，导入备份走同一套归一化
+- 日记正文的 `placeholder`（「谁说写日记不是修行呢？」）整条删掉，`diaryEditorHTML()` 只留 `readonly` 判断；配套的 `#blocks .ed::placeholder` 样式一并清掉
+- 一度加过、又想不出恰当文案，所以**不做可配置**：2.8 中间版本加过的 `diaryHint` 设置项与 `openDiaryHintEditor()` 全部撤掉，`normalizeSettings()` 里加一行 `delete out.diaryHint`，把试用版留下的键从存档里清干净
+
+**新增：专修增量与专修模式**
+
+- 功课新增 `fstep`（**专修增量**，默认 `1`）：`defaultDB()` 的内置功课、`migrateBuiltin()` 补入的批次、恢复内置功课时都写 `fstep: 1`；`loadDB()` 对老存档补 `t.fstep = +t.fstep > 0 ? Math.floor(+t.fstep) : 1`，导入时也走同一套收口
+- 功课编辑弹窗在「默认增量」下面新增 **专修增量** 一栏（`#f-fstep`），留空或非法值一律按 1；功课设置列表的副标题由「单位 · 默认增量 N」扩成「单位 · 默认增量 N · 专修增量 M」
+- 详情页右上角、编辑按钮左边新增 **模式按钮**（`#btn-detail-mode`，`.modebtn`）：平时显示「记录模式」，点一下切到「专修模式」（金色高亮），再点回去；每次进详情页都从记录模式开始，不记忆上次状态
+- 专修模式下 `detailCountHTML()` 把那五个按钮（+1 / +10 / +100 / +1000 / ＋）**并成一个 `+专修增量` 的大按钮**（复用 `.bigadd`，`data-dct="fstep"`、`data-n=fstep`），底下加一句 `专修模式 · 每按一次 +N 单位，长按可连加；增量在「功课参数」里改`；长按走原来那套连加，未来日期仍禁用
+- 切换只替换计数卡一块（`toggleDetailMode()` 用 `replaceChild`），统计区不重算、详情页滚动位置不动；改完功课参数回到详情页会按新的专修增量重画
 
 **并入 2.7 之后的修订（九）～（十三）**
 

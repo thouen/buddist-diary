@@ -436,7 +436,16 @@ img{max-width:100%;display:block}
   font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:1px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.page-head .right{margin-left:auto;display:flex;gap:6px}
+.page-head .right{margin-left:auto;display:flex;gap:6px;align-items:center}
+/* 详情页右上角：记录模式 / 专修模式 切换（关＝记录模式，开＝专修模式，用金色与功课红拉开） */
+.modebtn{
+  height:34px;padding:0 11px;border-radius:11px;white-space:nowrap;
+  background:var(--card);border:1px solid var(--line);color:var(--ink2);
+  font-size:11.5px;letter-spacing:.5px;
+  transition:background .15s ease,color .15s ease,border-color .15s ease;
+}
+.modebtn:active{transform:scale(.96)}
+.modebtn.on{background:var(--gold-soft);border-color:#e2cfa4;color:var(--gold);font-weight:600}
 
 .seg{display:flex;gap:4px;padding:0 14px 10px;flex:0 0 auto}
 .seg button{
@@ -958,7 +967,6 @@ img{max-width:100%;display:block}
   padding:3px 0;font-family:inherit;font-size:15px;line-height:1.75;color:var(--ink);
   overflow-y:auto;-webkit-appearance:none;appearance:none;
 }
-#blocks .ed::placeholder{color:#c4b9a4;font-size:13px}
 #blocks .ed[readonly]{cursor:default}
 
 /* ---------- 重要日（自定义） ---------- */
@@ -1109,6 +1117,12 @@ img{max-width:100%;display:block}
   font-size:17px;font-weight:600;line-height:1;padding-bottom:2px;
 }
 .cbtn.step:active{background:#7e1f15;border-color:#7e1f15}
+/* 专修模式：五个按钮并成一个大按钮，底下一句说明增量从哪来 */
+.cc-mode-tip{
+  margin:-3px 0 2px;text-align:center;
+  font-size:11px;line-height:1.7;color:var(--ink3);letter-spacing:.3px;
+}
+.cc-mode-tip b{font-family:var(--serif);font-size:12.5px;color:var(--gold);letter-spacing:0}
 
 /* ---------- 详情页：统计区 ---------- */
 .detail-stats{margin-top:12px}
@@ -1198,6 +1212,8 @@ img{max-width:100%;display:block}
       </button>
       <div class="page-title" id="detail-title">功课详情</div>
       <div class="right">
+        <!-- 记录模式 / 专修模式 切换：专修模式下五个计数按钮并成一个 +专修增量 的大按钮 -->
+        <button class="modebtn" id="btn-detail-mode" aria-label="切换记录模式 / 专修模式">记录模式</button>
         <button class="iconbtn" id="btn-detail-edit" aria-label="编辑这项功课" title="编辑功课">
           <svg viewBox="0 0 24 24"><path d="M4 20h3.4L18 9.4a2.4 2.4 0 0 0-3.4-3.4L4 16.6V20z"/><path d="M13.6 6.4 17.6 10.4"/></svg>
         </button>
@@ -9843,8 +9859,6 @@ var STORE_KEY = 'xuefo.diary.v1';
 var APP_VERSION = '2.8';
 /* 上次打开过的版本，与数据分开存，导入备份不会把它带过来 */
 var SEENVER_KEY = 'xuefo.seenver';
-/* 日记框里的浅色提示语：可在设置里改，留空则不显示 */
-var DIARY_HINT_DEFAULT = '谁说写日记不是修行呢？';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 
 var CATS = [
@@ -9998,7 +10012,8 @@ function defaultDB() {
     BUILTIN[c.k].forEach(function (name) {
       tasks.push({
         id: uid('t'), cat: c.k, name: name,
-        unit: BUILTIN_UNIT[name] || c.unit, step: c.step, goal: 0, builtin: true, hidden: false
+        unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: 1,
+        goal: 0, builtin: true, hidden: false
       });
     });
   });
@@ -10028,7 +10043,6 @@ function defaultDB() {
       showSumWeather: true,
       showDiary: true,
       showSumDiary: true,
-      diaryHint: DIARY_HINT_DEFAULT,
       defaultPlaceId: '',
       useLastPlace: true,
       lastPlaceId: ''
@@ -10085,9 +10099,8 @@ function normalizeSettings(src) {
   if (typeof out.defaultPlaceId !== 'string') out.defaultPlaceId = '';
   /* 1.18：日记默认沿用最近一次用过的地点 */
   if (typeof out.useLastPlace !== 'boolean') out.useLastPlace = true;
-  /* 2.8：日记框的提示语可在设置里改，非字符串一律回落到默认那句（允许空串＝不显示） */
-  if (typeof out.diaryHint !== 'string') out.diaryHint = DIARY_HINT_DEFAULT;
-  else out.diaryHint = out.diaryHint.slice(0, 60);
+  /* 2.8 一度加过可改的「日记提示语」，试用后取消：把残留的键清掉，别留在数据里 */
+  delete out.diaryHint;
   /* 总览卡片上的地点 / 天气：旧版本是一个总开关 showSumMeta，这里一次性拆成两个，
      之后各自独立保存；没有旧值时默认都显示 */
   if (typeof out.showSumMeta === 'boolean') {
@@ -10181,7 +10194,8 @@ function migrateBuiltin(db) {
           var c = CAT_MAP[cat] || { unit: '遍', step: 1 };
           db.tasks.push({
             id: uid('t'), cat: cat, name: name,
-            unit: BUILTIN_UNIT[name] || c.unit, step: c.step, goal: 0, builtin: true, hidden: false
+            unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: 1,
+            goal: 0, builtin: true, hidden: false
           });
         });
       });
@@ -10245,6 +10259,8 @@ function loadDB() {
     db.tasks.forEach(function (t) {
       t.goal = +t.goal > 0 ? Math.floor(+t.goal) : 0;
       t.mgoal = +t.mgoal > 0 ? Math.floor(+t.mgoal) : 0;
+      /* 2.8：专修增量，老存档没有这个字段就按 1 补上 */
+      t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? Math.floor(+t.fstep) : 1;
       if (t.name === '南无药师琉璃光如来') { t.name = '南无消灾延寿药师佛'; __dbMigrated = true; }
       if (t.name === '文殊师利菩萨心咒') { t.name = '文殊菩萨心咒'; __dbMigrated = true; }
     });
@@ -10331,6 +10347,11 @@ function taskTarget(t) {
 function taskMonthGoal(t) {
   var g = t ? +t.mgoal : 0;
   return g > 0 && isFinite(g) ? Math.floor(g) : 0;
+}
+/* 专修增量：专修模式下一次「＋」加多少，默认 1 */
+function taskFocusStep(t) {
+  var g = t ? +t.fstep : 0;
+  return g > 0 && isFinite(g) ? Math.floor(g) : 1;
 }
 /* 目标优先时的档位：日目标 0、月目标 1、总目标 2、都没设 3 */
 function taskGoalRank(t) {
@@ -11477,11 +11498,9 @@ function renderDiaryInto(box) {
 
 /* 一整篇就是一个 textarea：它本身就是纯文本，光标、粘贴、整篇复制都由浏览器保证正确 */
 function diaryEditorHTML() {
-  /* 提示语在设置里可改；清空后整个 placeholder 属性都不写，框里就真的空着 */
-  var hint = String(DB.settings.diaryHint == null ? DIARY_HINT_DEFAULT : DB.settings.diaryHint).trim();
+  /* 不放 placeholder：写日记这件事没有一句话能替用户开口，空框就是空框 */
   return '<div id="blocks"><textarea class="ed" spellcheck="false"' +
     (diaryRO ? ' readonly' : '') +
-    (hint ? ' placeholder="' + esc(hint) + '"' : '') +
     '></textarea></div>';
 }
 
@@ -12311,6 +12330,8 @@ function openDetail(taskId) {
   var d = parseYmd(UI.date);
   UI.detail = {
     taskId: taskId,
+    /* 每次进详情页都从「记录模式」开始，专修模式不记忆 */
+    focus: false,
     range: 'day',
     y: d.getFullYear(),
     m: d.getMonth() + 1,
@@ -12499,6 +12520,25 @@ function detailCountHTML(t) {
     '<span class="tot-all">累计 ' + goalPair(at, taskTarget(t), true) + '</span>' +
     '</div>';
 
+  /* 专修模式：五个按钮并成一个 +专修增量 的大按钮，别的都不动 */
+  var addHTML;
+  if (UI.detail && UI.detail.focus) {
+    var fst = taskFocusStep(t);
+    addHTML =
+      '<button class="bigadd" data-dct="fstep" data-n="' + fst + '"' + futDis + '>+' + fst + '</button>' +
+      '<div class="cc-mode-tip">专修模式 · 每按一次 <b>+' + fst + '</b> ' + esc(t.unit) +
+        '，长按可连加；增量在「功课参数」里改</div>';
+  } else {
+    addHTML =
+      '<button class="bigadd" data-dct="1"' + futDis + '>+1</button>' +
+      '<div class="cc-row">' +
+        '<button class="cbtn" data-dct="n" data-n="10"' + futDis + '>+10</button>' +
+        '<button class="cbtn" data-dct="n" data-n="100"' + futDis + '>+100</button>' +
+        '<button class="cbtn" data-dct="n" data-n="1000"' + futDis + '>+1000</button>' +
+        '<button class="cbtn step" data-dct="step" data-dir="1"' + futDis + '>+</button>' +
+      '</div>';
+  }
+
   return '<div class="count-card' + (n > 0 ? ' has' : '') + '">' +
     '<div class="cc-lbl">' + (UI.date === TODAY ? '今日' : '此日') + esc(CAT_MAP[t.cat].n) + '</div>' +
     '<div class="cc-num' + numClass(n) + '" data-count="' + esc(t.id) + '" role="button" aria-label="' +
@@ -12506,13 +12546,7 @@ function detailCountHTML(t) {
       '<b>' + esc(n) + '</b><small>' + esc(t.unit) + '</small></div>' +
     goalHTML +
     totHTML +
-    '<button class="bigadd" data-dct="1"' + futDis + '>+1</button>' +
-    '<div class="cc-row">' +
-      '<button class="cbtn" data-dct="n" data-n="10"' + futDis + '>+10</button>' +
-      '<button class="cbtn" data-dct="n" data-n="100"' + futDis + '>+100</button>' +
-      '<button class="cbtn" data-dct="n" data-n="1000"' + futDis + '>+1000</button>' +
-      '<button class="cbtn step" data-dct="step" data-dir="1"' + futDis + '>+</button>' +
-    '</div>' +
+    addHTML +
     '</div>';
 }
 
@@ -12668,6 +12702,31 @@ function renderDetail() {
     '<div style="height:calc(16px + var(--safe-b))"></div>';
 
   renderDetailStats();
+  syncDetailMode();
+}
+
+/* 右上角的模式按钮：按钮文字写当前模式（记录模式 / 专修模式），点一下切换 */
+function syncDetailMode() {
+  var btn = document.getElementById('btn-detail-mode');
+  if (!btn) return;
+  var on = !!(UI.detail && UI.detail.focus);
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '专修模式' : '记录模式';
+}
+function toggleDetailMode() {
+  if (!UI.detail) return;
+  var t = taskById(UI.detail.taskId);
+  if (!t) return;
+  UI.detail.focus = !UI.detail.focus;
+  syncDetailMode();
+  /* 只换计数卡这一块：统计区不重算，详情页的滚动位置也不动 */
+  var old = document.querySelector('#detail-scroll .count-card');
+  if (old && old.parentNode) {
+    var box = document.createElement('div');
+    box.innerHTML = detailCountHTML(t);
+    if (box.firstChild) old.parentNode.replaceChild(box.firstChild, old);
+  }
+  if (navigator.vibrate) navigator.vibrate(8);
 }
 
 /* 计数后只更新数字，统计区延迟刷新 */
@@ -12809,7 +12868,8 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 默认增量 ' + t.step + '</em>' +
+          '<em>' + esc(t.unit) + ' · 默认增量 ' + t.step +
+            ' · 专修增量 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
                 (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
@@ -12851,6 +12911,7 @@ function openTaskEditor(taskId, cat) {
   var name = t ? t.name : '';
   var unit = t ? t.unit : c.unit;
   var step = t ? t.step : c.step;
+  var fstep = t ? taskFocusStep(t) : 1;
   var goal = t ? taskGoal(t) : 0;
   var mgoal = t ? taskMonthGoal(t) : 0;
   var tgoal = t ? taskTarget(t) : 0;
@@ -12860,6 +12921,7 @@ function openTaskEditor(taskId, cat) {
     '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '" placeholder="如：南无阿弥陀佛"></div>' +
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
     '<div class="field"><label>默认增量（＋ 按钮每点击一次的增量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
+    '<div class="field"><label>专修增量（专修模式下一次「＋」的增量，默认 1）</label><input id="f-fstep" type="number" inputmode="numeric" value="' + esc(fstep) + '"></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
     '<div class="field"><label>月目标（可选，留空则不设）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
     '<div class="field"><label>总目标（可选，留空则不设）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
@@ -12877,20 +12939,23 @@ function openTaskEditor(taskId, cat) {
       var nm = ($('#f-name').value || '').trim();
       var un = ($('#f-unit').value || '').trim() || '遍';
       var st = parseInt($('#f-step').value, 10);
+      var fst = parseInt($('#f-fstep').value, 10);
       var gl = parseInt($('#f-goal').value, 10);
       var mgl = parseInt($('#f-mgoal').value, 10);
       var tgl = parseInt($('#f-tgoal').value, 10);
       var showIt = !!(document.querySelector('#modal [data-mshow] .switch.on'));
       if (!nm) { toast('请填写名称'); return; }
       if (isNaN(st) || st <= 0) st = 1;
+      if (isNaN(fst) || fst <= 0) fst = 1;
       if (isNaN(gl) || gl <= 0) gl = 0;
       if (isNaN(mgl) || mgl <= 0) mgl = 0;
       if (isNaN(tgl) || tgl <= 0) tgl = 0;
       if (isNew) {
-        DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st,
+        DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, fstep: fst,
           goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
-        t.name = nm; t.unit = un; t.step = st; t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
+        t.name = nm; t.unit = un; t.step = st; t.fstep = fst;
+        t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
         t.hidden = !showIt;
       }
       saveNow();
@@ -13221,8 +13286,8 @@ var ZHAI_ROWS = [
 ];
 var HINT_ROWS = [
   { k: 'hintFest', t: '佛教节日', cal: 'showFest' },
-  { k: 'hintTrad', t: '传统节日', cal: 'showTrad' },
   { k: 'hintZhai', t: '斋戒日', zhai: true },
+  { k: 'hintTrad', t: '传统节日', cal: 'showTrad' },
   { k: 'hintJq', t: '二十四节气', cal: 'showJq' },
   { k: 'hintMyd', t: '我的纪念日' }
 ];
@@ -13267,29 +13332,6 @@ function redrawSwitchModal() {
   $('#modal-box').innerHTML = switchModalHTML(_swCfg);
 }
 
-/* 日记提示语：一句话、最多 60 字；清空即不显示 */
-function openDiaryHintEditor() {
-  var cur = String(DB.settings.diaryHint == null ? DIARY_HINT_DEFAULT : DB.settings.diaryHint);
-  openModal(
-    '<h4>日记提示语</h4>' +
-    '<div class="dlg-sub">写在日记框里的浅色提示，清空则不显示</div>' +
-    '<div class="field"><label>提示语</label><input id="f-dhint" type="text" maxlength="60"' +
-      ' value="' + esc(cur) + '" placeholder="' + esc(DIARY_HINT_DEFAULT) + '"></div>' +
-    '<div class="modal-actions">' +
-      '<button data-mclose="1">取消</button>' +
-      '<button class="primary" data-mok="1">保存</button>' +
-    '</div>',
-    function () {
-      var v = ($('#f-dhint').value || '').trim().slice(0, 60);
-      DB.settings.diaryHint = v;
-      saveNow();
-      closeModal();
-      renderSettings();
-      toast(v ? '已保存' : '已清空，日记框不再显示提示');
-    }
-  );
-}
-
 /* ---------- 更新内容（应用内的 CHANGELOG） ----------
    每个版本一条，新的写在最前面；只写用户能看见的变化，一条一句。
    升级后自动弹一次：只列出「比上次打开过的版本更新」的几条；
@@ -13299,11 +13341,12 @@ var REL_NOTES = [
     v: '2.8', date: '2026-11-13',
     items: [
       '新增「更新内容」：升级后自动列出这次以及之前错过版本的改动，设置 → 关于里可随时回看',
-      '日记框里的提示语可以在「设置 → 日记 → 日记提示语」里改，清空就不显示',
-      '功课列表新增「目标优先」（默认开启）：设了日目标、月目标、总目标的功课排在前面',
-      '斋戒日与节期预告收进设置页的一行 + 弹窗，已启用几类一眼可见；日期条只预告日历上正显示的节期',
-      '同一天撞上几个节期时按 佛教节日 → 斋戒日 → 传统节日 → 节气 → 纪念日 全部列出',
-      '删除功课只保留「彻底删除」，删前统一弹一次确认，不再留下看不见的孤儿计数',
+      '功课参数新增「专修增量」（默认 1）：排在「默认增量」下面，功课设置列表里两项都会显示出来',
+      '详情页右上角新增「记录模式 / 专修模式」切换：切到专修模式后，+1、+10、+100、+1000、+ 五个按钮并成一个 +专修增量 的大按钮，长按仍可连加',
+      '功课列表新增「目标功课置顶」（默认开启）：设了日目标、月目标、总目标的功课排在前面',
+      '斋戒日与节期预告收进设置页的一行 + 弹窗，已启用几类一眼可见；日期条只预告日历上开启显示的节期类型',
+      '同一天撞上几个节期时按用户配置统一顺序全部列出',
+      '删除功课只保留「彻底删除」，删前统一弹一次确认',
       '修正：跨过零点才点「确定」会写进前一天、日记失焦丢掉最后一段、长按连加被打断后一直加数'
     ]
   },
@@ -13315,7 +13358,7 @@ var REL_NOTES = [
       '目标对照改为红色规则：分母与斜杠常红，达标后分子也转红；按年视图不显示目标与达标',
       '内置功课只能隐藏，删除功课改为应用内确认框；设置页拆出「总览」分区',
       '日期条左右箭头对整块日信息居中；汇总卡日记 6 行滚动、日分类汇总最多 5 行；没有节期的日子预告最近的节期',
-      '修复：改过计数后日历红点不刷新、确认框连点两下会串、孤儿计数留下空卡片等四处缺陷'
+      '修复：改过计数后日历红点不刷新等四处缺陷'
     ]
   },
   {
@@ -13325,8 +13368,8 @@ var REL_NOTES = [
       '年份选择放开到 1900 – 2100，面板打开时自动滚到当年',
       '「我的重要日」改名「我的纪念日」，位置调到节气之后，标记改粉色；纪念日支持只设某一年',
       '功课新增可选月目标：月目标与总目标都不画进度条，只有日目标保留',
-      '「日记功能」改名「记录日记」，关闭后总览的日记开关整行置灰',
-      '「今」按钮重画：细圆环 + 顺时针箭头，窄屏下自动缩小'
+      '「日记功能」开关改名「记录日记」，关闭后总览的日记开关整行置灰',
+      '重画日信息回到今天的「今」字按钮：细圆环 + 顺时针箭头，窄屏下自动缩小'
     ]
   },
   {
@@ -13335,7 +13378,7 @@ var REL_NOTES = [
     items: [
       '首个正式发布版本的功能总览，后面每一版都是在这套底子上加的',
       '首页整月日历：公历与农历对照，佛教节日、斋日、传统节日、二十四节气、我的重要日、当天有功课各用一色标记，下方带图例',
-      '五个标签页记功课：念佛、诵经、持咒、仪轨、日记；点「＋」按默认增量累加，长按可以连加',
+      '五个标签页记功课：念佛、诵经、持咒、仪轨、日记；点「＋」按默认增量累加，长按可以自定义增加、减少、设置计数值',
       '功课详情页：按日 / 按月 / 按年三种表统计，可设日目标与总目标，数量与目标对照着看',
       '汇总视图：连续功课天数、自某日起、累计 N 天记录功课，按日期由近及远列出每天的功课与日记',
       '节日一览：佛教节日与传统节日合在一页，可按年翻看',
@@ -13343,7 +13386,7 @@ var REL_NOTES = [
       '日记：按天记录，可插入时间、图片与拍照',
       '功课设置：增删改、上下移动、恢复内置功课；佛历基准（+543 / +544）、斋日显示、二十四节气都可调',
       '数据概况按念佛 / 诵经 / 持咒 / 仪轨 / 日记五类分项统计；导出、导入 JSON 备份；清空全部数据',
-      '单文件网页应用：离线可用，可「添加到主屏幕」当 App 用，也有安卓安装包'
+      // '单文件网页应用：离线可用，可「添加到主屏幕」当 App 用，也有安卓安装包'
     ]
   }
 ];
@@ -13455,13 +13498,6 @@ function renderSettings() {
     '<div class="set-row" data-toggle="showDiary">' +
       '<div class="lbl">记录日记<em>关闭后首页不再显示日记标签页，已写的内容仍留在数据里</em></div>' +
       '<span class="switch ' + (diaryOn ? 'on' : '') + '"></span></div>' +
-    /* 日记框里那句浅色提示，默认「谁说写日记不是修行呢？」，清空就不显示 */
-    '<div class="set-row" data-actx="diaryhint">' +
-      '<div class="lbl">日记提示语<em>' +
-        (String(s.diaryHint || '').trim()
-          ? '「' + esc(String(s.diaryHint).trim()) + '」'
-          : '已清空，日记框里不再显示提示') +
-      '</em></div><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="places">' +
       '<div class="lbl">常用地点<em>' + (function () {
         var dp = defaultPlace();
@@ -13664,7 +13700,8 @@ function bindEvents() {
     /* 返回 */
     if (e.target.closest('[data-back]')) { goBack(); return; }
 
-    /* 详情页右上角：编辑这项功课 */
+    /* 详情页右上角：专修模式切换 / 编辑这项功课 */
+    if (e.target.closest('#btn-detail-mode')) { toggleDetailMode(); return; }
     if (e.target.closest('#btn-detail-edit')) {
       if (UI.detail) openTaskEditor(UI.detail.taskId);
       return;
@@ -13942,7 +13979,6 @@ function bindEvents() {
       else if (act === 'wipe') wipeData();
       else if (act === 'stats') showStats();
       else if (act === 'whatsnew') openWhatsNew(REL_NOTES);
-      else if (act === 'diaryhint') openDiaryHintEditor();
       return;
     }
 
@@ -14467,7 +14503,7 @@ function restoreBuiltin() {
     BUILTIN[c.k].forEach(function (name) {
       var exists = DB.tasks.some(function (t) { return t.cat === c.k && t.name === name; });
       if (!exists) {
-        DB.tasks.push({ id: uid('t'), cat: c.k, name: name, unit: BUILTIN_UNIT[name] || c.unit, step: c.step, goal: 0, builtin: true, hidden: false });
+        DB.tasks.push({ id: uid('t'), cat: c.k, name: name, unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: 1, goal: 0, builtin: true, hidden: false });
         added++;
       }
     });
@@ -14547,6 +14583,7 @@ function sanitizeImport(src) {
       name: t.name.slice(0, 60),
       unit: (typeof t.unit === 'string' ? t.unit : '').slice(0, 8),
       step: Math.min(100000, Math.max(1, Math.floor(Number(t.step)) || 1)),
+      fstep: Math.min(100000, Math.max(1, Math.floor(Number(t.fstep)) || 1)),
       goal: Math.max(0, Math.floor(Number(t.goal)) || 0),
       mgoal: Math.max(0, Math.floor(Number(t.mgoal)) || 0),
       tgoal: Math.max(0, Math.floor(Number(t.tgoal)) || 0),
