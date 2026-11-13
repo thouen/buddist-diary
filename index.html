@@ -1117,21 +1117,19 @@ img{max-width:100%;display:block}
   font-size:17px;font-weight:600;line-height:1;padding-bottom:2px;
 }
 .cbtn.step:active{background:#7e1f15;border-color:#7e1f15}
-/* 专修模式：一个按钮顶满原来五个按钮占的那块地方——
-   +1 的高度（clamp 96~150）+ 它下面 9px 的间距 + 一行 38px 的小按钮，共多 47px，
-   所以切换模式时按钮区高度不变，只是按钮本身变大、字也变大 */
+/* 专修模式：一个按钮顶满原来五个按钮占的那块地方。
+   账要这样算：记录模式下从 +1 顶端到最后一行小按钮底端
+   = clamp(96px,19vh,150px) + 9px(间距) + 38px(一行小按钮) = 高度 + 47px，
+   所以这里高度 +47px、margin-bottom 归零（那 9px 已经算进高度里了），
+   按钮之外的任何说明都不再加，切换模式时卡片高度分毫不差 */
 .bigadd.solo{
   height:calc(clamp(96px,19vh,150px) + 47px);
   min-height:calc(96px + 47px);
-  margin-bottom:6px;
-  font-size:40px;
+  margin-bottom:0;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1.15;
 }
-/* 底下一句说明增量从哪来 */
-.cc-mode-tip{
-  margin:-2px 0 2px;text-align:center;
-  font-size:11px;line-height:1.7;color:var(--ink3);letter-spacing:.3px;
-}
-.cc-mode-tip b{font-family:var(--serif);font-size:12.5px;color:var(--gold);letter-spacing:0}
+.bigadd.solo .solo-num{font-family:var(--serif);font-size:40px;font-weight:600;letter-spacing:1px}
 
 /* ---------- 详情页：统计区 ---------- */
 .detail-stats{margin-top:12px}
@@ -12534,9 +12532,11 @@ function detailCountHTML(t) {
   if (UI.detail && UI.detail.focus) {
     var fst = taskFocusStep(t);
     addHTML =
-      '<button class="bigadd solo" data-dct="fstep" data-n="' + fst + '"' + futDis + '>+' + fst + '</button>' +
-      '<div class="cc-mode-tip">专修模式 · 每按一次 <b>+' + fst + '</b> ' + esc(t.unit) +
-        '，长按可连加；增量在「功课参数」里改</div>';
+      '<button class="bigadd solo" data-dct="fstep" data-n="' + fst + '" data-norep="1"' + futDis +
+        ' title="长按可修改专修增量"' +
+        ' aria-label="专修模式 +' + fst + '，长按修改专修增量">' +
+        '<span class="solo-num">+' + fst + '</span>' +
+      '</button>';
   } else {
     addHTML =
       '<button class="bigadd" data-dct="1"' + futDis + '>+1</button>' +
@@ -12728,14 +12728,41 @@ function toggleDetailMode() {
   if (!t) return;
   UI.detail.focus = !UI.detail.focus;
   syncDetailMode();
-  /* 只换计数卡这一块：统计区不重算，详情页的滚动位置也不动 */
-  var old = document.querySelector('#detail-scroll .count-card');
-  if (old && old.parentNode) {
-    var box = document.createElement('div');
-    box.innerHTML = detailCountHTML(t);
-    if (box.firstChild) old.parentNode.replaceChild(box.firstChild, old);
-  }
+  redrawDetailCount(t);
   if (navigator.vibrate) navigator.vibrate(8);
+}
+/* 只换计数卡这一块：统计区不重算，详情页的滚动位置也不动 */
+function redrawDetailCount(t) {
+  var old = document.querySelector('#detail-scroll .count-card');
+  if (!old || !old.parentNode) return;
+  var box = document.createElement('div');
+  box.innerHTML = detailCountHTML(t);
+  if (box.firstChild) old.parentNode.replaceChild(box.firstChild, old);
+}
+/* 长按专修大按钮：就地改这项功课的专修增量 */
+function openFocusStepModal(taskId) {
+  var t = taskById(taskId);
+  if (!t) return;
+  openModal(
+    '<h4>专修增量</h4>' +
+    '<div class="dlg-sub">专修模式下「＋」每按一次加多少</div>' +
+    '<div class="field"><label>' + esc(t.name) + '</label>' +
+      '<input id="f-fstep-quick" type="number" inputmode="numeric" min="1" value="' +
+        taskFocusStep(t) + '"></div>' +
+    '<div class="modal-actions">' +
+      '<button data-mclose="1">取消</button>' +
+      '<button class="primary" data-mok="1">保存</button>' +
+    '</div>',
+    function () {
+      var v = parseInt($('#f-fstep-quick').value, 10);
+      if (isNaN(v) || v <= 0) v = 1;
+      t.fstep = Math.min(100000, Math.floor(v));
+      saveNow();
+      closeModal();
+      if (UI.view === 'detail' && UI.detail && UI.detail.taskId === t.id) redrawDetailCount(t);
+      toast('专修增量已改为 ' + taskFocusStep(t));
+    }
+  );
 }
 
 /* 计数后只更新数字，统计区延迟刷新 */
@@ -13351,7 +13378,7 @@ var REL_NOTES = [
     items: [
       '新增「更新内容」：升级后自动列出这次以及之前错过版本的改动，设置 → 关于里可随时回看',
       '功课参数新增「专修增量」（默认 1）：排在「默认增量」下面，功课设置列表里两项都会显示出来',
-      '详情页右上角新增「记录模式 / 专修模式」切换：切到专修模式后，+1、+10、+100、+1000、+ 五个按钮并成一个 +专修增量 的大按钮，长按仍可连加',
+      '详情页右上角新增「记录模式 / 专修模式」切换：切到专修模式后，+1、+10、+100、+1000、+ 五个按钮并成一个 +专修增量 的大按钮（不连加，长按可改专修增量）',
       '功课列表新增「目标功课置顶」（默认开启）：设了日目标、月目标、总目标的功课排在前面',
       '斋戒日与节期预告收进设置页的一行 + 弹窗，已启用几类一眼可见；日期条只预告日历上开启显示的节期类型',
       '同一天撞上几个节期时按用户配置统一顺序全部列出',
@@ -14094,6 +14121,16 @@ function bindEvents() {
 
     clearHold();
     holdState = { run: runD, timer: null, rep: null, fired: false };
+    if (dbtn.dataset.norep) {
+      /* 专修模式的大按钮：不连加。轻点抬手加一次；长按不计数，改成弹窗修改专修增量 */
+      holdState.timer = setTimeout(function () {
+        if (!holdState) return;
+        holdState.fired = true;
+        if (navigator.vibrate) navigator.vibrate(12);
+        openFocusStepModal(tt.id);
+      }, 420);
+      return;
+    }
     if (dk === 'step') {
       /* 长按「+」「−」：弹窗输入自定义数量增减 */
       holdState.timer = setTimeout(function () {
