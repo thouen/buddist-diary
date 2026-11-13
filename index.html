@@ -9843,6 +9843,8 @@ var STORE_KEY = 'xuefo.diary.v1';
 var APP_VERSION = '2.8';
 /* 上次打开过的版本，与数据分开存，导入备份不会把它带过来 */
 var SEENVER_KEY = 'xuefo.seenver';
+/* 日记框里的浅色提示语：可在设置里改，留空则不显示 */
+var DIARY_HINT_DEFAULT = '谁说写日记不是修行呢？';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 
 var CATS = [
@@ -10026,6 +10028,7 @@ function defaultDB() {
       showSumWeather: true,
       showDiary: true,
       showSumDiary: true,
+      diaryHint: DIARY_HINT_DEFAULT,
       defaultPlaceId: '',
       useLastPlace: true,
       lastPlaceId: ''
@@ -10082,6 +10085,9 @@ function normalizeSettings(src) {
   if (typeof out.defaultPlaceId !== 'string') out.defaultPlaceId = '';
   /* 1.18：日记默认沿用最近一次用过的地点 */
   if (typeof out.useLastPlace !== 'boolean') out.useLastPlace = true;
+  /* 2.8：日记框的提示语可在设置里改，非字符串一律回落到默认那句（允许空串＝不显示） */
+  if (typeof out.diaryHint !== 'string') out.diaryHint = DIARY_HINT_DEFAULT;
+  else out.diaryHint = out.diaryHint.slice(0, 60);
   /* 总览卡片上的地点 / 天气：旧版本是一个总开关 showSumMeta，这里一次性拆成两个，
      之后各自独立保存；没有旧值时默认都显示 */
   if (typeof out.showSumMeta === 'boolean') {
@@ -11471,9 +11477,12 @@ function renderDiaryInto(box) {
 
 /* 一整篇就是一个 textarea：它本身就是纯文本，光标、粘贴、整篇复制都由浏览器保证正确 */
 function diaryEditorHTML() {
+  /* 提示语在设置里可改；清空后整个 placeholder 属性都不写，框里就真的空着 */
+  var hint = String(DB.settings.diaryHint == null ? DIARY_HINT_DEFAULT : DB.settings.diaryHint).trim();
   return '<div id="blocks"><textarea class="ed" spellcheck="false"' +
     (diaryRO ? ' readonly' : '') +
-    ' placeholder="今日功课与心念，随意写下…"></textarea></div>';
+    (hint ? ' placeholder="' + esc(hint) + '"' : '') +
+    '></textarea></div>';
 }
 
 function diaryEditor() {
@@ -13258,6 +13267,29 @@ function redrawSwitchModal() {
   $('#modal-box').innerHTML = switchModalHTML(_swCfg);
 }
 
+/* 日记提示语：一句话、最多 60 字；清空即不显示 */
+function openDiaryHintEditor() {
+  var cur = String(DB.settings.diaryHint == null ? DIARY_HINT_DEFAULT : DB.settings.diaryHint);
+  openModal(
+    '<h4>日记提示语</h4>' +
+    '<div class="dlg-sub">写在日记框里的浅色提示，清空则不显示</div>' +
+    '<div class="field"><label>提示语</label><input id="f-dhint" type="text" maxlength="60"' +
+      ' value="' + esc(cur) + '" placeholder="' + esc(DIARY_HINT_DEFAULT) + '"></div>' +
+    '<div class="modal-actions">' +
+      '<button data-mclose="1">取消</button>' +
+      '<button class="primary" data-mok="1">保存</button>' +
+    '</div>',
+    function () {
+      var v = ($('#f-dhint').value || '').trim().slice(0, 60);
+      DB.settings.diaryHint = v;
+      saveNow();
+      closeModal();
+      renderSettings();
+      toast(v ? '已保存' : '已清空，日记框不再显示提示');
+    }
+  );
+}
+
 /* ---------- 更新内容（应用内的 CHANGELOG） ----------
    每个版本一条，新的写在最前面；只写用户能看见的变化，一条一句。
    升级后自动弹一次：只列出「比上次打开过的版本更新」的几条；
@@ -13267,6 +13299,7 @@ var REL_NOTES = [
     v: '2.8', date: '2026-11-13',
     items: [
       '新增「更新内容」：升级后自动列出这次以及之前错过版本的改动，设置 → 关于里可随时回看',
+      '日记框里的提示语可以在「设置 → 日记 → 日记提示语」里改，清空就不显示',
       '功课列表新增「目标优先」（默认开启）：设了日目标、月目标、总目标的功课排在前面',
       '斋戒日与节期预告收进设置页的一行 + 弹窗，已启用几类一眼可见；日期条只预告日历上正显示的节期',
       '同一天撞上几个节期时按 佛教节日 → 斋戒日 → 传统节日 → 节气 → 纪念日 全部列出',
@@ -13298,10 +13331,19 @@ var REL_NOTES = [
   },
   {
     v: '2.0', date: '2026-11-10',
+    /* 2.0 是实际对外发布的第一个版本，所以这一条不是「改了什么」，而是「这一版就有什么」 */
     items: [
-      '主页面切到非当天时，五个标签页的文字与下划线仍用功课红，「＋」与 +1 按钮保持米白',
-      '数据概况把功课总计数拆成念佛、诵经、持咒、仪轨、日记五类分别统计，带千分位',
-      '设置页底部回向偈换成「学佛功德殊胜行，无边胜福皆回向／普愿沉溺诸众生，速往无量光佛刹」'
+      '首个正式发布版本的功能总览，后面每一版都是在这套底子上加的',
+      '首页整月日历：公历与农历对照，佛教节日、斋日、传统节日、二十四节气、我的重要日、当天有功课各用一色标记，下方带图例',
+      '五个标签页记功课：念佛、诵经、持咒、仪轨、日记；点「＋」按默认增量累加，长按可以连加',
+      '功课详情页：按日 / 按月 / 按年三种表统计，可设日目标与总目标，数量与目标对照着看',
+      '汇总视图：连续功课天数、自某日起、累计 N 天记录功课，按日期由近及远列出每天的功课与日记',
+      '节日一览：佛教节日与传统节日合在一页，可按年翻看',
+      '我的重要日：自定义农历 / 公历纪念日，列表按最近到来排序并显示还有多少天',
+      '日记：按天记录，可插入时间、图片与拍照',
+      '功课设置：增删改、上下移动、恢复内置功课；佛历基准（+543 / +544）、斋日显示、二十四节气都可调',
+      '数据概况按念佛 / 诵经 / 持咒 / 仪轨 / 日记五类分项统计；导出、导入 JSON 备份；清空全部数据',
+      '单文件网页应用：离线可用，可「添加到主屏幕」当 App 用，也有安卓安装包'
     ]
   }
 ];
@@ -13413,6 +13455,13 @@ function renderSettings() {
     '<div class="set-row" data-toggle="showDiary">' +
       '<div class="lbl">记录日记<em>关闭后首页不再显示日记标签页，已写的内容仍留在数据里</em></div>' +
       '<span class="switch ' + (diaryOn ? 'on' : '') + '"></span></div>' +
+    /* 日记框里那句浅色提示，默认「谁说写日记不是修行呢？」，清空就不显示 */
+    '<div class="set-row" data-actx="diaryhint">' +
+      '<div class="lbl">日记提示语<em>' +
+        (String(s.diaryHint || '').trim()
+          ? '「' + esc(String(s.diaryHint).trim()) + '」'
+          : '已清空，日记框里不再显示提示') +
+      '</em></div><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="places">' +
       '<div class="lbl">常用地点<em>' + (function () {
         var dp = defaultPlace();
@@ -13453,8 +13502,10 @@ function renderSettings() {
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">关于</div><div class="set-card">' +
-    '<div class="set-row"><div class="lbl">学佛日记<em>版本 ' + esc(APP_VERSION) + ' · 数据保存在本机，不上传</em></div></div>' +
-    '<div class="set-row" data-actx="whatsnew"><div class="lbl">更新内容<em>各版本改了什么，升级后自动提示</em></div><span class="chev">›</span></div>' +
+    /* 版本行本身就是「更新内容」入口：点一下随时看各版本改了什么 */
+    '<div class="set-row" data-actx="whatsnew">' +
+      '<div class="lbl">学佛日记<em>版本 ' + esc(APP_VERSION) + ' · 数据保存在本机，不上传</em></div>' +
+      '<span class="val">更新内容</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="wipe"><div class="lbl" style="color:#b8442f">清空全部数据<em>不可恢复，请先导出备份</em></div><span class="chev" style="color:#b8442f">›</span></div>' +
     '</div></div>';
 
@@ -13891,6 +13942,7 @@ function bindEvents() {
       else if (act === 'wipe') wipeData();
       else if (act === 'stats') showStats();
       else if (act === 'whatsnew') openWhatsNew(REL_NOTES);
+      else if (act === 'diaryhint') openDiaryHintEditor();
       return;
     }
 
