@@ -10021,7 +10021,7 @@ function defaultDB() {
       showYueZhai: false,
       showGuanyin: false,
       showTabTotal: false,
-      goalFirst: false,
+      goalFirst: true,
       hintFest: true,
       hintTrad: true,
       hintZhai: false,
@@ -10105,8 +10105,12 @@ function normalizeSettings(src) {
   if (typeof out.showYueZhai !== 'boolean') out.showYueZhai = false;
   /* 观音斋同样独立开关，默认关闭 */
   if (typeof out.showGuanyin !== 'boolean') out.showGuanyin = false;
-  /* 2.6 修订（九）：功课列表「目标优先」默认关闭 */
-  if (typeof out.goalFirst !== 'boolean') out.goalFirst = false;
+  /* 2.6 修订（十一）：功课列表「目标功课置顶」改为默认开启。
+     这个开关是同一版里刚加的、还没发布过，所以旧存档一律打开一次 */
+  if (!out.goalFirstMigrated) {
+    out.goalFirst = true;
+    out.goalFirstMigrated = true;
+  }
   /* 2.6 修订（九）：节期预告的五类独立开关，默认只开佛教节日、传统节日、纪念日 */
   Object.keys(HINT_DEFAULT).forEach(function (k) {
     if (typeof out[k] !== 'boolean') out[k] = HINT_DEFAULT[k];
@@ -11278,7 +11282,8 @@ function renderSummaryHTML() {
         (meta.length ? '<span class="sum-wx">' + meta.join(' · ') + '</span>' : '') +
         (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') +
       '</div>' +
-      (ctext ? '<div class="panel tasks" data-panel="tasks" data-clamp="4">' + esc(ctext) + '</div>' : '') +
+      /* 功课内容不截断、不限行：当天记了几项就铺几行，卡片自然长高 */
+      (ctext ? '<div class="panel tasks" data-panel="tasks">' + esc(ctext) + '</div>' : '') +
       (dtext ? '<div class="panel diary" data-panel="diary" data-clamp="6" data-scroll="1">' + esc(dtext) + '</div>' : '') +
       '</div>';
   });
@@ -11286,7 +11291,8 @@ function renderSummaryHTML() {
   return html;
 }
 
-/* 精确按行数限制高度：上面板 4 行（超出用省略号截断）、下面板日记 6 行（超出框内滚动） */
+/* 精确按行数限制高度：现在只剩日记面板 6 行（超出在框内滚动）。
+   功课面板不再带 data-clamp，当天记多少项就显示多少行 */
 function fitPanels() {
   var els = document.querySelectorAll('.panel[data-clamp]');
   Array.prototype.forEach.call(els, function (el) {
