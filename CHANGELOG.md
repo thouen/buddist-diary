@@ -6,7 +6,7 @@
 
 ## 2.9（2026-11-14）
 
-> `APP_VERSION` 2.9（未变）、`sw.js` 缓存 `v34` → `v36`、`versionCode 41`。仓库里的 `学佛日记-2.9.apk` 仍是早前那一版（内嵌页面为改动前的 `index.html`，SHA-256 `f4f733a8…`），要带上本节改动需重新打包；证书不变（`9ad2a321…1bcc14`），可直接覆盖安装。
+> `APP_VERSION` 2.9（未变）、`sw.js` 缓存 `v34` → `v37`、`versionCode 41`。仓库里的 `学佛日记-2.9.apk` 仍是早前那一版（内嵌页面为改动前的 `index.html`，SHA-256 `f4f733a8…`），要带上本节改动需重新打包；证书不变（`9ad2a321…1bcc14`），可直接覆盖安装。
 
 **修订：全量代码审查后的修复**
 
@@ -27,6 +27,12 @@
 - **无障碍**：放开缩放（去掉 `maximum-scale=1,user-scalable=no`）、新增全局 `:focus-visible`、弹窗 / 底部菜单收起后 `visibility:hidden` 退出 Tab 顺序、`#toast` 加 `role="status" aria-live`、弹窗加 `role="dialog"`、Esc 关窗、恢复清单支持 Space / Enter；`--ink2` / `--ink3` 与零值数字整体压深一档；补 `prefers-reduced-motion`
 - **老内核兜底**：`86dvh` / `80dvh` / `48dvh` / `46dvh` 全部补 `vh` 双声明（老 WebView 不认 `dvh` 时编辑弹窗会顶出屏幕、按钮点不到）
 - **sw.js**：只缓存同源且 `res.ok` 的响应（不再把 404 缓存到下次改版本号）、离线兜底只对导航请求返回 `index.html`、`addAll` 改逐个 `add`（一个资源 404 不再让整个 install 失败）
+
+**界面：恢复内置改为勾选、功课设置窄屏收口**
+
+- 「恢复内置功课」弹窗里的开关换成原生勾选框（`.rb-ck`，整行是 `<label>`，点名字也能勾、键盘 Space 可用，不再靠 `class="on"` 记状态）；已有的条目不给勾选框，只标「已有 / 已隐藏」
+- 功课行右侧从五颗小按钮（眼睛 / 置顶 / ↑ / ↓ / 编辑）收成两颗：**编辑**与 **⋯ 更多**；排序 / 隐藏 / 删除进 `openTaskActions()` 的底部菜单（只列当前真能做的动作），`.mini` 由 24px 放大到 30px，`data-ttop` / `data-tmove` / `data-thide` 三个委托分支随之删掉（改由 `toggleTaskHidden()` 等函数直接调用）
+- 行内副标题（单位 · 快捷 · 默认 · 专修，以及目标行）改为 `nowrap + ellipsis` 单行省略，不再折行把行高撑开
 
 **功课：快捷增量两套方案**
 

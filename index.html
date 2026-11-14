@@ -519,21 +519,25 @@ img{max-width:100%;display:block}
 .switch.on::after{transform:translateX(18px)}
 
 .tk-row{
-  display:flex;align-items:center;gap:4px;padding:10px 10px 10px 12px;border-bottom:1px solid var(--line2);
+  display:flex;align-items:center;gap:6px;padding:11px 9px 11px 12px;border-bottom:1px solid var(--line2);
 }
 .tk-row:last-child{border-bottom:0}
 /* 已隐藏：只把文字调淡，按钮仍然清楚可点 */
 .tk-row.hid .nm{opacity:.45}
 .tk-row .mini.eye.on{color:var(--accent);background:var(--accent-soft);border-color:#ecd0c8}
-.tk-row .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.tk-row .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .tk-row .nm b{font-weight:400;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif)}
-.tk-row .nm em{font-style:normal;font-size:10.5px;color:var(--ink3)}
+/* 窄屏：副标题长就省略，不再折成两行把整行撑高（完整参数在编辑弹窗里） */
+.tk-row .nm em{
+  font-style:normal;font-size:10.5px;color:var(--ink3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .tk-row .mini{
-  flex:0 0 auto;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;
-  color:var(--ink2);font-size:12.5px;background:var(--card2);border:1px solid var(--line);
+  flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  color:var(--ink2);font-size:15px;line-height:1;background:var(--card2);border:1px solid var(--line);
 }
 .tk-row .mini:active{background:var(--accent-soft);color:var(--accent)}
-.tk-row .mini svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tk-row .mini svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .fest-item .dd{width:66px}
 .tk-row .mini.del{color:#b8442f}
 
@@ -672,7 +676,7 @@ img{max-width:100%;display:block}
   border:1px solid #ecd0c8;border-radius:5px;padding:1px 5px;letter-spacing:.5px;
 }
 
-/* 恢复内置功课：按分类分组、可勾选的清单（点行即切换） */
+/* 恢复内置功课：按分类分组、勾选框选择（整行是 label，点哪都能勾） */
 .rb-wrap{max-height:46vh;max-height:46dvh;overflow-y:auto;overscroll-behavior:contain;margin:0 -2px 0}
 .rb-sec{
   display:flex;align-items:baseline;gap:6px;padding:9px 2px 4px;
@@ -681,9 +685,23 @@ img{max-width:100%;display:block}
 }
 .rb-sec em{font-style:normal;font-family:var(--sans);font-size:10.5px;color:var(--ink3);letter-spacing:0}
 .rb-row{
-  display:flex;align-items:center;gap:8px;padding:6px 2px;
-  border-top:1px solid var(--line2);min-height:34px;
+  display:flex;align-items:center;gap:9px;padding:7px 2px;
+  border-top:1px solid var(--line2);min-height:38px;
 }
+label.rb-row{cursor:pointer}
+/* 勾选框：自己画一个方框，老 WebView 里也不依赖 accent-color */
+.rb-ck{
+  -webkit-appearance:none;appearance:none;flex:0 0 auto;
+  width:20px;height:20px;margin:0;position:relative;
+  border:1.5px solid var(--line);border-radius:6px;background:#fff;
+  transition:background .15s ease,border-color .15s ease;
+}
+.rb-ck:checked{background:var(--accent);border-color:var(--accent)}
+.rb-ck:checked::after{
+  content:'';position:absolute;left:6px;top:2px;width:5px;height:10px;
+  border:2px solid #fff;border-top:0;border-left:0;transform:rotate(42deg);
+}
+.rb-ck:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rb-row .rb-nm{
   flex:1;min-width:0;font-size:13px;color:var(--ink);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -691,7 +709,6 @@ img{max-width:100%;display:block}
 .rb-row .rb-tag{font-size:10.5px;color:var(--ink3);flex:0 0 auto}
 .rb-row.has{opacity:.6}
 .rb-row.has .rb-nm{color:var(--ink2)}
-.rb-row .switch{flex:0 0 auto;transform:scale(.78);transform-origin:right center}
 
 /* 年 / 月选择面板 */
 .pick-grid{
@@ -13530,32 +13547,29 @@ function renderTaskSettings() {
   if (!list.length) {
     html += '<div class="empty-state" style="padding:40px 20px;font-size:12.5px">还没有功课，点下方按钮添加</div>';
   } else {
+    /* 窄屏每行只留两颗按钮：编辑 + 更多。
+       置顶 / 上移 / 下移 / 隐藏 / 删除都收进「更多」的底部菜单，
+       一行文字才有地方，点击目标也从 24px 涨到 30px */
     list.forEach(function (t) {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 快 ' + SCHEME_LBL[taskScheme(t)] +
-            ' · 默 ' + t.step + ' · 专 ' + taskFocusStep(t) + '</em>' +
+          '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
+            ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
-                (taskGoal(t) ? '日 ' + taskGoal(t) : '') +
+                (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
                 (taskGoal(t) && (taskMonthGoal(t) || taskTarget(t)) ? ' · ' : '') +
-                (taskMonthGoal(t) ? '月 ' + taskMonthGoal(t) : '') +
+                (taskMonthGoal(t) ? '月目标 ' + taskMonthGoal(t) : '') +
                 (taskMonthGoal(t) && taskTarget(t) ? ' · ' : '') +
-                (taskTarget(t) ? '总 ' + taskTarget(t) : '') +
+                (taskTarget(t) ? '总目标 ' + taskTarget(t) : '') +
               '</em>'
             : '') +
         '</div>' +
-        '<button class="mini eye' + (t.hidden ? ' on' : '') + '" data-thide="1" aria-label="' +
-          (t.hidden ? '取消隐藏' : '隐藏这项功课') + '" title="' + (t.hidden ? '取消隐藏' : '隐藏') + '">' +
-          (t.hidden
-            ? '<svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 6.7A9.6 9.6 0 0 1 12 6.6c6 0 9.5 5.4 9.5 5.4a15 15 0 0 1-3 3.5"/><path d="M6.4 8.2A14.6 14.6 0 0 0 2.5 12S6 17.4 12 17.4c1.4 0 2.6-.3 3.7-.7"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>'
-            : '<svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.6 12 6.6 21.5 12 21.5 12 18 17.4 12 17.4 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.9"/></svg>') +
-        '</button>' +
-        '<button class="mini" data-ttop="1" aria-label="置顶"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M12 20V9"/><path d="M8 12l4-4 4 4"/></svg></button>' +
-        '<button class="mini" data-tmove="-1">↑</button>' +
-        '<button class="mini" data-tmove="1">↓</button>' +
-        '<button class="mini" data-tedit="' + esc(t.id) + '"><svg viewBox="0 0 24 24"><path d="M4 20h3.5L18 9.5a2.4 2.4 0 0 0-3.4-3.4L4 16.5V20z"/></svg></button>' +
+        '<button class="mini" data-tedit="' + esc(t.id) + '" aria-label="编辑这项功课" title="编辑">' +
+          '<svg viewBox="0 0 24 24"><path d="M4 20h3.5L18 9.5a2.4 2.4 0 0 0-3.4-3.4L4 16.5V20z"/></svg></button>' +
+        '<button class="mini" data-tmore="' + esc(t.id) + '" aria-label="更多操作：' + esc(t.name) +
+          '" title="更多操作">⋯</button>' +
         '</div>';
     });
   }
@@ -14275,6 +14289,7 @@ var REL_NOTES = [
       '导出备份可直接调系统分享面板发到网盘、微信，也可以只存到下载目录，两种方式都会说明存到哪',
       '设置 → 关于里的版本行可随时回看「更新内容」',
       '内置功课现在也能彻底删除；删错了点「功课设置」右上角的恢复图标，勾选着补回',
+      '功课设置每行只留「编辑」与「⋯ 更多」，排序 / 隐藏 / 删除都收进菜单；恢复内置改成勾选框',
       '念佛类功课的专修增量默认值改为 3（其余分类仍是 1），可在「编辑功课」里逐项改',
       '详情页右上角「专」点亮即进入专修模式并开始计时；退出、返回、换日期前都先确认一次，并写明本次已专修多久',
       '功课新增「专修计时」开关（只有「行法」类默认开启）：关掉后不显示计时，退出专修模式也不用确认',
@@ -14636,16 +14651,7 @@ function bindEvents() {
       if (sw) sw.classList.toggle('on');
       return;
     }
-    /* 恢复内置功课：整行都是开关，点哪都算，顺便同步 aria-checked */
-    ms = e.target.closest('[data-rpick]');
-    if (ms) {
-      var rsw = ms.querySelector('.switch');
-      if (rsw) {
-        rsw.classList.toggle('on');
-        ms.setAttribute('aria-checked', rsw.classList.contains('on') ? 'true' : 'false');
-      }
-      return;
-    }
+
     /* 斋戒日 / 节日预告弹窗：拨一下就存，只重画弹窗（设置页等关窗时再重画） */
     ms = e.target.closest('[data-msw]');
     if (ms) {
@@ -14895,36 +14901,9 @@ function bindEvents() {
     el = e.target.closest('[data-tcat]');
     if (el) { UI.taskCat = el.dataset.tcat; renderTaskSettings(); return; }
 
-    /* 置顶 */
-    el = e.target.closest('[data-ttop]');
-    if (el) {
-      var topRow = el.closest('[data-tid]');
-      if (topRow) topTask(topRow.dataset.tid);
-      return;
-    }
-
-    /* 移动排序 */
-    el = e.target.closest('[data-tmove]');
-    if (el) {
-      var row = el.closest('[data-tid]');
-      var id = row.dataset.tid;
-      moveTask(id, +el.dataset.tmove);
-      return;
-    }
-
-    /* 隐藏 / 取消隐藏 */
-    el = e.target.closest('[data-thide]');
-    if (el) {
-      var hrow = el.closest('[data-tid]');
-      var htk = hrow && taskById(hrow.dataset.tid);
-      if (htk) {
-        htk.hidden = !htk.hidden;
-        saveNow();
-        renderTaskSettings();
-        toast(htk.hidden ? '已隐藏，主页不再显示' : '已恢复显示');
-      }
-      return;
-    }
+    /* 功课行右上角的「⋯」：排序 / 隐藏 / 删除都从这里进，窄屏不再堆一排小按钮 */
+    el = e.target.closest('[data-tmore]');
+    if (el) { openTaskActions(el.dataset.tmore); return; }
 
     /* 编辑功课 */
     el = e.target.closest('[data-tedit]');
@@ -15290,25 +15269,13 @@ function bindEvents() {
     else shiftDate(kd);
   });
 
-  /* 弹窗里的键盘操作：Space / Enter 切换「恢复内置功课」清单里的开关，Esc 关窗
-     （Esc 走 cancelConfirm，才能把底下被暂存的编辑弹窗放回去） */
+  /* 弹窗里的键盘操作：Esc 关窗
+     （走 cancelConfirm，才能把底下被暂存的编辑弹窗放回去） */
   window.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
     if (!document.getElementById('modal').classList.contains('on')) return;
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      if (_confirmOpen) cancelConfirm(); else closeModal();
-      return;
-    }
-    var row = e.target.closest && e.target.closest('[data-rpick]');
-    if (!row) return;
-    if (e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar') {
-      e.preventDefault();
-      var sw = row.querySelector('.switch');
-      if (sw) {
-        sw.classList.toggle('on');
-        row.setAttribute('aria-checked', sw.classList.contains('on') ? 'true' : 'false');
-      }
-    }
+    e.preventDefault();
+    if (_confirmOpen) cancelConfirm(); else closeModal();
   });
 }
 
@@ -15509,7 +15476,7 @@ function openMenu() {
       fn: function () { UI.taskCat = UI.tab === 'diary' ? 'nianfo' : UI.tab; showView('tasks'); }
     },
     {
-      k: 'fest', t: '节日一览', s: '佛教节日 · 公共节日',
+      k: 'fest', t: '节日一览', s: '佛教节日、公共节日等',
       icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>',
       fn: function () {
         if (UI.festKind !== 'pub') UI.festKind = 'buddha';
@@ -15537,6 +15504,42 @@ function openMenu() {
 
 /* ---------- 功课维护 ---------- */
 /* 置顶：移到同一分类的最前面（DB.tasks 里混着 5 个分类） */
+/* 隐藏 / 取消隐藏一项功课（功课行、「更多」菜单共用） */
+function toggleTaskHidden(t) {
+  if (!t) return;
+  t.hidden = !t.hidden;
+  saveNow();
+  renderTaskSettings();
+  toast(t.hidden ? '已隐藏，主页不再显示' : '已恢复显示');
+}
+
+/* 功课行的「⋯」菜单：原来挤在一行里的四颗小按钮都收进来。
+   只列当前真能做的动作（已经在第一位就不给「上移」），免得点了没反应 */
+function openTaskActions(taskId) {
+  var t = taskById(taskId);
+  if (!t) return;
+  var vis = DB.tasks.filter(function (x) { return x.cat === t.cat && (t.hidden || !x.hidden); });
+  var pos = vis.indexOf(t);
+  var canUp = pos > 0;
+  var canDown = pos >= 0 && pos < vis.length - 1;
+  var items = [];
+  if (canUp) items.push({ t: '置顶', s: '移到这个分类的第一位', fn: function () { topTask(t.id); } });
+  if (canUp) items.push({ t: '上移一位', fn: function () { moveTask(t.id, -1); } });
+  if (canDown) items.push({ t: '下移一位', fn: function () { moveTask(t.id, 1); } });
+  items.push({
+    t: t.hidden ? '取消隐藏' : '隐藏这项功课',
+    s: t.hidden ? '重新在功课列表里显示' : '计数与目标都保留，随时能再打开',
+    fn: function () { toggleTaskHidden(taskById(t.id)); }
+  });
+  items.push({
+    t: '删除这项功课',
+    s: '计数一并删掉，不可恢复',
+    warn: true,
+    fn: function () { var cur = taskById(t.id); if (cur) askDeleteTask(cur); }
+  });
+  openSheet(t.name, items, { compact: true });
+}
+
 function topTask(id) {
   var idx = DB.tasks.findIndex(function (t) { return t.id === id; });
   if (idx < 0) return;
@@ -15589,16 +15592,20 @@ function openRestoreBuiltin() {
     var miss = 0, rows = '';
     names.forEach(function (name) {
       var t = findBuiltinTask(c.k, name);
-      if (!t) miss++;
-      rows += '<div class="rb-row' + (t ? ' has' : '') + '"' +
-        (t
-          ? ''
-          : ' data-rpick="' + c.k + '|' + esc(name) + '" role="switch" aria-checked="true" tabindex="0"') + '>' +
+      if (t) {
+        /* 已经有了：只显示状态，不给勾选框，避免「勾了也没用」的困惑 */
+        rows += '<div class="rb-row has">' +
+          '<span class="rb-nm">' + esc(name) + '</span>' +
+          '<span class="rb-tag">' + (t.hidden ? '已隐藏' : '已有') + '</span>' +
+          '</div>';
+        return;
+      }
+      miss++;
+      /* 整行是 label：点名字、点方框都能勾上，键盘 Space 也照常生效 */
+      rows += '<label class="rb-row">' +
+        '<input type="checkbox" class="rb-ck" data-rpick="' + c.k + '|' + esc(name) + '" checked>' +
         '<span class="rb-nm">' + esc(name) + '</span>' +
-        (t
-          ? '<span class="rb-tag">' + (t.hidden ? '已隐藏' : '已有') + '</span>'
-          : '<span class="switch on"></span>') +
-        '</div>';
+        '</label>';
     });
     missing += miss;
     html += '<div class="rb-sec">' + c.n + '<em>' + (miss ? '缺 ' + miss + ' 项' : '齐全') + '</em></div>' + rows;
@@ -15607,7 +15614,7 @@ function openRestoreBuiltin() {
   openModal(
     '<h4>恢复内置功课</h4>' +
     '<div class="dlg-sub">' + (missing
-      ? '缺的都默认勾上了，取消勾选就不补；已有的不会重复添加，也不会动你改过的参数'
+      ? '缺的都已勾上，取消勾选就不补；已有的不会重复添加，也不会动你改过的参数'
       : '内置功课一项不缺，没有需要补回的') + '</div>' +
     '<div class="rb-wrap">' + html + '</div>' +
     '<div class="modal-actions">' +
@@ -15616,10 +15623,9 @@ function openRestoreBuiltin() {
     '</div>',
     function () {
       var picked = [];
-      Array.prototype.forEach.call(document.querySelectorAll('#modal .rb-row[data-rpick]'), function (row) {
-        var sw = row.querySelector('.switch');
-        if (!sw || !sw.classList.contains('on')) return;
-        var v = String(row.dataset.rpick || '').split('|');
+      Array.prototype.forEach.call(document.querySelectorAll('#modal .rb-ck'), function (ck) {
+        if (!ck.checked) return;
+        var v = String(ck.dataset.rpick || '').split('|');
         if (v.length === 2 && CAT_MAP[v[0]]) picked.push({ cat: v[0], name: v[1] });
       });
       restoreBuiltin(picked);
