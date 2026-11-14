@@ -1114,7 +1114,7 @@ img{max-width:100%;display:block}
 .bigadd:active{transform:scale(.975);background:linear-gradient(180deg,#a23826,#86241a)}
 .cc-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .cbtn{
-  height:38px;border-radius:10px;border:1px solid var(--line);background:var(--card2);
+  height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card2);
   font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;
   display:flex;align-items:center;justify-content:center;
   touch-action:manipulation;user-select:none;
@@ -1128,12 +1128,12 @@ img{max-width:100%;display:block}
 .cbtn.step:active{background:#7e1f15;border-color:#7e1f15}
 /* 专修模式：一个按钮顶满原来五个按钮占的那块地方。
    账要这样算：记录模式下从 +1 顶端到最后一行小按钮底端
-   = clamp(96px,19vh,150px) + 9px(间距) + 38px(一行小按钮) = 高度 + 47px，
-   所以这里高度 +47px、margin-bottom 归零（那 9px 已经算进高度里了），
+   = clamp(96px,19vh,150px) + 9px(间距) + 44px(一行小按钮) = 高度 + 53px，
+   所以这里高度 +53px、margin-bottom 归零（那 9px 已经算进高度里了），
    按钮之外的任何说明都不再加，切换模式时卡片高度分毫不差 */
 .bigadd.solo{
-  height:calc(clamp(96px,19vh,150px) + 47px);
-  min-height:calc(96px + 47px);
+  height:calc(clamp(96px,19vh,150px) + 53px);
+  min-height:calc(96px + 53px);
   margin-bottom:0;
   display:flex;align-items:center;justify-content:center;
   line-height:1.15;
@@ -1248,8 +1248,8 @@ img{max-width:100%;display:block}
       </button>
       <div class="page-title" id="detail-title">功课详情</div>
       <div class="right">
-        <!-- 记录模式 / 专修模式 切换：专修模式下五个计数按钮并成一个 +专修增量 的大按钮 -->
-        <button class="modebtn" id="btn-detail-mode" aria-label="切换记录模式 / 专修模式">记录模式</button>
+        <!-- 专修模式开关：按钮恒写「专」，点亮即进入（五个计数按钮并成一个 +专修增量 的大按钮） -->
+        <button class="modebtn" id="btn-detail-mode" aria-label="进入专修模式">专</button>
         <button class="iconbtn" id="btn-detail-edit" aria-label="编辑这项功课" title="编辑功课">
           <svg viewBox="0 0 24 24"><path d="M4 20h3.4L18 9.4a2.4 2.4 0 0 0-3.4-3.4L4 16.6V20z"/><path d="M13.6 6.4 17.6 10.4"/></svg>
         </button>
@@ -9934,8 +9934,8 @@ var SCHEMES = {
   small: [1, 3, 7, 21]
 };
 var SCHEME_LBL = {
-  big: '1/10/100/1000',
-  small: '1/3/7/21'
+  big: '10/100/1000',
+  small: '3/7/21'
 };
 function taskScheme(t) {
   var s = t && t.scheme;
@@ -12951,14 +12951,30 @@ function syncDetailMode() {
   var on = !!(UI.detail && UI.detail.focus);
   var can = UI.date === TODAY;
   btn.classList.toggle('on', on);
-  btn.textContent = on ? '专' : '记';
+  /* 按钮上永远是「专」：亮＝在专修模式里，灰＝没进 */
+  btn.textContent = '专';
   btn.disabled = !can;
   btn.setAttribute('aria-label',
     !can ? '只有当天才能进入专修模式' : (on ? '退出专修模式' : '进入专修模式'));
 }
 function toggleDetailMode() {
   if (!UI.detail) return;
-  setFocusMode(!UI.detail.focus);
+  if (UI.detail.focus) confirmExitFocus();
+  else setFocusMode(true);
+}
+
+/* 退出专修模式（或离开详情页）前先确认一次，弹窗里写清这一次已经坐了多久 */
+function confirmExitFocus(afterOk) {
+  var d = UI.detail;
+  if (!d || !d.focus) { if (afterOk) afterOk(); return; }
+  var used = focusElapsedText(Date.now() - d.focusStart);
+  askConfirm('退出专修模式？',
+    '本次已专修 <b>' + used + '</b>，退出后计时结束',
+    '退出',
+    function () {
+      setFocusMode(false);
+      if (afterOk) afterOk();
+    });
 }
 
 /* 进入 / 退出专修模式：进入时就地开始计时，退出即结束 */
@@ -13182,7 +13198,7 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 快捷 +' + SCHEME_LBL[taskScheme(t)] +
+          '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
             ' · 默认 +' + t.step + ' · 专修 +' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
@@ -13235,7 +13251,7 @@ function openTaskEditor(taskId, cat) {
     '<h4>' + (isNew ? '添加功课' : '编辑功课') + '</h4>' +
     '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '" placeholder="如：南无阿弥陀佛"></div>' +
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
-    '<div class="field"><label>快捷增量方案（功课卡上四个 ＋ 按钮）</label>' +
+    '<div class="field"><label>快捷增量方案（+1 固定，另选一组）</label>' +
       '<div class="sign-seg" id="f-scheme">' +
         '<button type="button" data-scheme="small" class="' + (scheme === 'small' ? 'on' : '') + '">' +
           SCHEME_LBL.small + '</button>' +
@@ -14210,13 +14226,19 @@ function bindEvents() {
       return;
     }
 
-    /* 返回 */
-    if (e.target.closest('[data-back]')) { goBack(); return; }
+    /* 返回：详情页里正开着专修计时，先问一句再走 */
+    if (e.target.closest('[data-back]')) {
+      if (UI.view === 'detail' && UI.detail && UI.detail.focus) {
+        confirmExitFocus(function () { goBack(); });
+        return;
+      }
+      goBack(); return;
+    }
 
     /* 详情页右上角：专修模式切换 / 编辑这项功课 */
     if (e.target.closest('#btn-detail-mode')) { toggleDetailMode(); return; }
     /* 专修计时卡里的「退出专修模式」 */
-    if (e.target.closest('#btn-exit-focus')) { setFocusMode(false); return; }
+    if (e.target.closest('#btn-exit-focus')) { confirmExitFocus(); return; }
     if (e.target.closest('#btn-detail-edit')) {
       if (UI.detail) openTaskEditor(UI.detail.taskId);
       return;
@@ -14944,14 +14966,17 @@ function openDatePicker(inDetail) {
 }
 
 /* ---------- 模式 / 菜单 ---------- */
+/* 首页右上角的视图开关：图标写的是「点下去会去哪」——
+   总览用清单，单日用太阳 */
 var ICON_LIST = '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/></svg>';
-var ICON_EDIT = '<svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20z"/><path d="M13.5 6.5 17.5 10.5"/></svg>';
+var ICON_SUN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.1"/>' +
+  '<path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>';
 
 function setMode(m) {
   UI.mode = m;
   var btn = $('#btn-mode');
   if (!btn) return;
-  btn.innerHTML = m === 'summary' ? ICON_EDIT : ICON_LIST;
+  btn.innerHTML = m === 'summary' ? ICON_SUN : ICON_LIST;
   btn.classList.toggle('active', m === 'summary');
   btn.setAttribute('aria-label', m === 'summary' ? '切回单日视图' : '切换到总览视图');
 }
