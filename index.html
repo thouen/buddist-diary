@@ -539,6 +539,12 @@ img{max-width:100%;display:block}
 }
 .fest-item .dd{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums;flex:0 0 auto;width:58px}
 .fest-item .nm{flex:1;font-family:var(--serif);letter-spacing:.3px}
+/* 自己添加的节日：名字后面挂一个「自定」小标，与内置的一眼可分 */
+.fest-item .nm .own{
+  font-style:normal;font-family:var(--sans);font-size:9.5px;letter-spacing:0;
+  color:var(--accent);background:var(--accent-soft);border:1px solid #ecd0c8;
+  border-radius:5px;padding:0 4px;margin-left:5px;vertical-align:1px;
+}
 .fest-item .ln{font-size:10.5px;color:var(--gold);flex:0 0 auto}
 .fest-item.today{border-color:#e2b7ab;background:#fff9f5}
 
@@ -1248,16 +1254,37 @@ img{max-width:100%;display:block}
     </button>
   </section>
 
-  <!-- ============ 节日一览（佛教 / 传统，左右划动切换） ============ -->
+  <!-- ============ 节日一览（佛教 / 公共，左右划动切换） ============ -->
   <section id="view-fest" class="view hidden">
     <div class="page-head">
       <button class="back" data-back="1" aria-label="返回">
         <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
       <div class="page-title" id="fest-title">节日一览</div>
+      <div class="right">
+        <button class="iconbtn" id="btn-fest-manage" aria-label="节日管理" title="添加 / 隐藏节日">
+          <svg viewBox="0 0 24 24"><path d="M4 20h3.4L18 9.4a2.4 2.4 0 0 0-3.4-3.4L4 16.6V20z"/><path d="M13.6 6.4 17.6 10.4"/></svg>
+        </button>
+      </div>
     </div>
     <div class="seg" id="fest-seg"></div>
     <div class="scroll" id="fest-scroll"></div>
+  </section>
+
+  <!-- ============ 节日管理：自定义节日 / 隐藏内置节日 ============ -->
+  <section id="view-festset" class="view hidden">
+    <div class="page-head">
+      <button class="back" data-back="1" aria-label="返回">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="page-title">节日管理</div>
+    </div>
+    <div class="seg" id="festset-seg"></div>
+    <div class="scroll" id="festset-scroll"></div>
+    <button class="addbtn" id="btn-add-fest">
+      <svg viewBox="0 0 24 24" width="15" height="15" stroke="#fff" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      添加节日
+    </button>
   </section>
 
   <!-- ============ 我的纪念日 ============ -->
@@ -9940,60 +9967,158 @@ var BUILTIN_BATCHES = [
 /* 追加批次：每往 BUILTIN 补一批条目就 +1 */
 var BUILTIN_REV = 3;
 
-/* 农历节日表：月-日（月为农历月，闰月不匹配） */
-var FESTIVALS = {
-  '1-1': '弥勒菩萨圣诞',
-  '1-6': '定光佛圣诞',
-  '2-8': '释迦牟尼佛出家日',
-  '2-15': '释迦牟尼佛涅槃日',
-  '2-19': '观世音菩萨圣诞',
-  '2-21': '普贤菩萨圣诞',
-  '3-16': '准提菩萨圣诞',
-  '4-4': '文殊师利菩萨圣诞',
-  '4-8': '释迦牟尼佛圣诞·浴佛节',
-  '5-13': '伽蓝菩萨圣诞',
-  '6-3': '韦驮菩萨圣诞',
-  '6-19': '观世音菩萨成道日',
-  '7-13': '大势至菩萨圣诞',
-  '7-15': '佛欢喜日·盂兰盆节',
-  '7-24': '龙树菩萨圣诞',
-  '7-30': '地藏菩萨圣诞',
-  '8-15': '月光菩萨圣诞',
-  '9-19': '观世音菩萨出家日',
-  '9-30': '药师琉璃光如来圣诞',
-  '10-5': '达摩祖师圣诞',
-  '11-17': '阿弥陀佛圣诞',
-  '12-8': '释迦牟尼佛成道日',
-  '12-23': '监斋菩萨圣诞'
+/* 内置节日表。分两类：buddha 佛教节日、pub 公共节日。
+   每条带一个稳定的 k（存「隐藏」状态用），cal 是它的历法：
+     lunar 农历 m-d —— d 写 30 表示「该月最后一天」，遇到只有廿九的小月就按廿九
+     solar 公历 m-d —— 2 月 29 日遇到平年按 2 月 28 日
+     jq    按节气 —— jq 写节气名（清明节）
+   内置节日只能隐藏，不能改也不能删；用户自己加的另存在 DB.fests 里 */
+var FEST_BUILTIN = {
+  buddha: [
+    { k: 'l1-1', n: '弥勒菩萨圣诞', cal: 'lunar', m: 1, d: 1 },
+    { k: 'l1-6', n: '定光佛圣诞', cal: 'lunar', m: 1, d: 6 },
+    { k: 'l2-8', n: '释迦牟尼佛出家日', cal: 'lunar', m: 2, d: 8 },
+    { k: 'l2-15', n: '释迦牟尼佛涅槃日', cal: 'lunar', m: 2, d: 15 },
+    { k: 'l2-19', n: '观世音菩萨圣诞', cal: 'lunar', m: 2, d: 19 },
+    { k: 'l2-21', n: '普贤菩萨圣诞', cal: 'lunar', m: 2, d: 21 },
+    { k: 'l3-16', n: '准提菩萨圣诞', cal: 'lunar', m: 3, d: 16 },
+    { k: 'l4-4', n: '文殊师利菩萨圣诞', cal: 'lunar', m: 4, d: 4 },
+    { k: 'l4-8', n: '释迦牟尼佛圣诞·浴佛节', cal: 'lunar', m: 4, d: 8 },
+    { k: 'l5-13', n: '伽蓝菩萨圣诞', cal: 'lunar', m: 5, d: 13 },
+    { k: 'l6-3', n: '韦驮菩萨圣诞', cal: 'lunar', m: 6, d: 3 },
+    { k: 'l6-19', n: '观世音菩萨成道日', cal: 'lunar', m: 6, d: 19 },
+    { k: 'l7-13', n: '大势至菩萨圣诞', cal: 'lunar', m: 7, d: 13 },
+    { k: 'l7-15', n: '佛欢喜日·盂兰盆节', cal: 'lunar', m: 7, d: 15 },
+    { k: 'l7-24', n: '龙树菩萨圣诞', cal: 'lunar', m: 7, d: 24 },
+    { k: 'l7-30', n: '地藏菩萨圣诞', cal: 'lunar', m: 7, d: 30 },
+    { k: 'l8-15', n: '月光菩萨圣诞', cal: 'lunar', m: 8, d: 15 },
+    { k: 'l9-19', n: '观世音菩萨出家日', cal: 'lunar', m: 9, d: 19 },
+    { k: 'l9-30', n: '药师琉璃光如来圣诞', cal: 'lunar', m: 9, d: 30 },
+    { k: 'l10-5', n: '达摩祖师圣诞', cal: 'lunar', m: 10, d: 5 },
+    { k: 'l11-17', n: '阿弥陀佛圣诞', cal: 'lunar', m: 11, d: 17 },
+    { k: 'l12-8', n: '释迦牟尼佛成道日', cal: 'lunar', m: 12, d: 8 },
+    { k: 'l12-23', n: '监斋菩萨圣诞', cal: 'lunar', m: 12, d: 23 }
+  ],
+  pub: [
+    /* 农历 */
+    { k: 'l1-1', n: '春节', cal: 'lunar', m: 1, d: 1 },
+    { k: 'l1-15', n: '元宵节', cal: 'lunar', m: 1, d: 15 },
+    { k: 'l2-2', n: '龙抬头', cal: 'lunar', m: 2, d: 2 },
+    { k: 'l3-3', n: '上巳节', cal: 'lunar', m: 3, d: 3 },
+    { k: 'l5-5', n: '端午节', cal: 'lunar', m: 5, d: 5 },
+    { k: 'l7-7', n: '七夕', cal: 'lunar', m: 7, d: 7 },
+    { k: 'l7-15', n: '中元节', cal: 'lunar', m: 7, d: 15 },
+    { k: 'l8-15', n: '中秋节', cal: 'lunar', m: 8, d: 15 },
+    { k: 'l9-9', n: '重阳节', cal: 'lunar', m: 9, d: 9 },
+    { k: 'l10-1', n: '寒衣节', cal: 'lunar', m: 10, d: 1 },
+    { k: 'l10-15', n: '下元节', cal: 'lunar', m: 10, d: 15 },
+    { k: 'l12-8', n: '腊八节', cal: 'lunar', m: 12, d: 8 },
+    { k: 'l12-23', n: '北方小年', cal: 'lunar', m: 12, d: 23 },
+    { k: 'l12-24', n: '南方小年', cal: 'lunar', m: 12, d: 24 },
+    { k: 'l12-30', n: '除夕', cal: 'lunar', m: 12, d: 30 },
+    /* 公历 */
+    { k: 's1-1', n: '元旦节', cal: 'solar', m: 1, d: 1 },
+    { k: 's3-8', n: '国际妇女节', cal: 'solar', m: 3, d: 8 },
+    { k: 's3-21', n: '国际消除种族歧视日', cal: 'solar', m: 3, d: 21 },
+    { k: 's3-22', n: '世界水日', cal: 'solar', m: 3, d: 22 },
+    { k: 's4-22', n: '世界地球日', cal: 'solar', m: 4, d: 22 },
+    { k: 's4-23', n: '世界读书日', cal: 'solar', m: 4, d: 23 },
+    { k: 's5-1', n: '劳动节', cal: 'solar', m: 5, d: 1 },
+    { k: 's5-4', n: '青年节', cal: 'solar', m: 5, d: 4 },
+    { k: 's6-1', n: '国际儿童节', cal: 'solar', m: 6, d: 1 },
+    { k: 's6-5', n: '世界环境日', cal: 'solar', m: 6, d: 5 },
+    { k: 's6-26', n: '国际禁毒日', cal: 'solar', m: 6, d: 26 },
+    { k: 's8-1', n: '建军节', cal: 'solar', m: 8, d: 1 },
+    { k: 's9-10', n: '教师节', cal: 'solar', m: 9, d: 10 },
+    { k: 's9-18', n: '九一八', cal: 'solar', m: 9, d: 18 },
+    { k: 's10-1', n: '国庆节', cal: 'solar', m: 10, d: 1 },
+    { k: 's10-1b', n: '国际老年人日', cal: 'solar', m: 10, d: 1 },
+    { k: 's10-16', n: '世界粮食日', cal: 'solar', m: 10, d: 16 },
+    { k: 's12-1', n: '世界艾滋病日', cal: 'solar', m: 12, d: 1 },
+    { k: 's12-3', n: '国际残疾人日', cal: 'solar', m: 12, d: 3 },
+    { k: 's12-10', n: '世界人权日', cal: 'solar', m: 12, d: 10 },
+    /* 按节气 */
+    { k: 'jq-清明', n: '清明节', cal: 'jq', jq: '清明' }
+  ]
 };
-/* 传统节日：农历月-日（除夕另按腊月最后一天判断） */
-var TRAD_FESTIVALS = {
-  '1-1': '春节',
-  '1-15': '元宵节',
-  '2-2': '龙抬头',
-  '3-3': '上巳节',
-  '5-5': '端午节',
-  '7-7': '七夕',
-  '7-15': '中元节',
-  '8-15': '中秋节',
-  '9-9': '重阳节',
-  '10-1': '寒衣节',
-  '10-15': '下元节',
-  '12-8': '腊八节',
-  '12-23': '北方小年',
-  '12-24': '南方小年'
-};
-var TRAD_LIST = Object.keys(TRAD_FESTIVALS).map(function (k) {
-  var p = k.split('-');
-  return { m: +p[0], d: +p[1], name: TRAD_FESTIVALS[k] };
-}).sort(function (a, b) { return a.m - b.m || a.d - b.d; });
-TRAD_LIST.push({ m: 12, d: 30, name: '除夕' });
 
-/* 节日一览用的有序列表（含月份展示） */
-var FESTIVAL_LIST = Object.keys(FESTIVALS).map(function (k) {
-  var p = k.split('-');
-  return { m: +p[0], d: +p[1], name: FESTIVALS[k] };
-}).sort(function (a, b) { return a.m - b.m || a.d - b.d; });
+function isLeapYear(y) {
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+}
+/* 节日内置表 + 用户自加，hidden 由 DB.festHidden 决定（只对内置生效）。
+   一个月历要算 42 天，每次都重新拼一遍太浪费，这里缓存一份；
+   改动节日数据时统一调 festsCacheClear() */
+var _festsCache = {};
+function festsCacheClear() { _festsCache = {}; }
+function festsOf(kind) {
+  if (DB && _festsCache[kind]) return _festsCache[kind];
+  var out = [];
+  var hid = (DB && DB.festHidden) || {};
+  (FEST_BUILTIN[kind] || []).forEach(function (f) {
+    out.push({
+      key: f.k, name: f.n, cal: f.cal, m: f.m, d: f.d, jq: f.jq,
+      builtin: true,
+      hidden: !!hid[kind + ':' + f.k]
+    });
+  });
+  ((DB && DB.fests) || []).forEach(function (f) {
+    if (f.kind !== kind) return;
+    out.push({
+      key: f.id, id: f.id, name: f.name, cal: f.cal, m: +f.m, d: +f.d,
+      builtin: false, hidden: false
+    });
+  });
+  if (DB) _festsCache[kind] = out;
+  return out;
+}
+/* 某个节日是否落在这一天：农历三十遇小月按廿九，公历 2/29 遇平年按 2/28 */
+function festMatch(f, info) {
+  if (f.cal === 'jq') return !!f.jq && info.jq === f.jq;
+  if (f.cal === 'solar') {
+    if (f.m !== info.shm) return false;
+    if (f.d === info.shd) return true;
+    return f.m === 2 && f.d === 29 && info.shd === 28 && !isLeapYear(info.shy);
+  }
+  if (f.cal !== 'lunar') return false;
+  if (f.m !== info.m) return false;
+  if (f.d === info.d) return true;
+  return f.d === 30 && info.d === info.lunarDays && info.lunarDays < 30;
+}
+/* 这一天该类的节日名（隐藏的不算） */
+function festNamesOn(info, kind) {
+  var out = [];
+  festsOf(kind).forEach(function (f) {
+    if (f.hidden) return;
+    if (festMatch(f, info)) out.push(f.name);
+  });
+  return out;
+}
+/* 这一年里某个节日的公历日期（'YYYY-MM-DD'），取不到返回 null */
+var JQ_MONTH = { '清明': 4 };
+function jqSolarDate(y, name) {
+  var m = JQ_MONTH[name] || 4;
+  for (var d = 1; d <= 15; d++) {
+    try {
+      var s = Solar.fromYmd(y, m, d);
+      if (s.getLunar().getJieQi() === name) return s.toYmd();
+    } catch (e) { }
+  }
+  return null;
+}
+function festSolarDate(y, f) {
+  if (f.cal === 'jq') return jqSolarDate(y, f.jq);
+  if (f.cal === 'solar') {
+    /* 2/29、2/30 这类在当年不存在就落到该月最后一天（平年 2/29 → 2/28） */
+    return y + '-' + pad2(f.m) + '-' + pad2(Math.min(f.d, daysInMonth(y, f.m)));
+  }
+  return festivalSolarDate(y, f.m, f.d);
+}
+/* 节日日期文字：列表与设置页共用 */
+function festDateText(f) {
+  if (f.cal === 'jq') return '节气 · ' + f.jq;
+  if (f.cal === 'solar') return '公历 ' + f.m + ' 月 ' + f.d + ' 日';
+  return '农历' + LUNAR_MONTH_CN[f.m - 1] + lunarDayCN(f.d);
+}
 
 /* 六斋日 / 十斋日：大月照常；小月无三十时，末尾两天顺延为廿七/廿八、廿九 */
 var ZHAI6 = [8, 14, 15, 23, 29, 30];
@@ -10014,7 +10139,7 @@ var GUANYIN_ZHAI = [
 /* 斋日显示：多选，可选任意组合（朔望 / 六斋 / 十斋 / 月斋 / 观音斋） */
 var ZHAI_LABEL = { shuo: '朔望日', z6: '六斋日', z10: '十斋日', yz: '月斋', gy: '观音斋' };
 /* 节期预告的五类开关，与日历上的显示开关相互独立：日历不显示某一类，
-   仍可以在预告里提到它，反之亦然。默认只开佛教节日、传统节日、纪念日 */
+   仍可以在预告里提到它，反之亦然。默认只开佛教节日、公共节日、纪念日 */
 var HINT_DEFAULT = { hintFest: true, hintTrad: true, hintZhai: false, hintJq: false, hintMyd: true };
 
 /* ---------- 基础工具 ---------- */
@@ -10080,6 +10205,10 @@ function defaultDB() {
     tasks: tasks,
     mydays: [],
     places: [],
+    /* 用户自定义的佛教 / 公共节日，与内置节日分开放 */
+    fests: [],
+    /* 内置节日的隐藏表，键写作「buddha:l1-1」「pub:s3-8」 */
+    festHidden: {},
     records: {}
   };
 }
@@ -10155,7 +10284,7 @@ function normalizeSettings(src) {
     out.goalFirst = true;
     out.goalFirstMigrated = true;
   }
-  /* 2.6 修订（九）：节期预告的五类独立开关，默认只开佛教节日、传统节日、纪念日 */
+  /* 2.6 修订（九）：节期预告的五类独立开关，默认只开佛教节日、公共节日、纪念日 */
   Object.keys(HINT_DEFAULT).forEach(function (k) {
     if (typeof out[k] !== 'boolean') out[k] = HINT_DEFAULT[k];
   });
@@ -10207,6 +10336,37 @@ function normalizeMyDays(list) {
       repeat: rep
     };
   });
+}
+
+/* 用户自己加的节日：字段一律收口，历法只认公历 / 农历 */
+function normalizeFests(list) {
+  if (!Array.isArray(list)) return [];
+  var out = [];
+  list.forEach(function (f) {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) return;
+    var nm = String(f.name || '').trim();
+    if (!nm) return;
+    var m = Math.floor(+f.m), d = Math.floor(+f.d);
+    if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= 31)) return;
+    out.push({
+      id: typeof f.id === 'string' && f.id ? f.id.slice(0, 64) : uid('ft'),
+      kind: f.kind === 'pub' ? 'pub' : 'buddha',
+      name: nm.slice(0, 40),
+      cal: f.cal === 'lunar' ? 'lunar' : 'solar',
+      m: m,
+      d: d
+    });
+  });
+  return out;
+}
+/* 内置节日的隐藏表：键写作「buddha:l1-1」「pub:s3-8」，值只认 true */
+function normalizeFestHidden(src) {
+  var out = {};
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return out;
+  Object.keys(src).slice(0, 600).forEach(function (k) {
+    if (/^(buddha|pub):[A-Za-z0-9-]+$/.test(k) && src[k]) out[k] = true;
+  });
+  return out;
 }
 
 /* 老数据补入后续版本新增的内置功课（存在同名项则跳过，不影响用户改名/隐藏） */
@@ -10313,6 +10473,8 @@ function loadDB() {
     });
     db.mydays = normalizeMyDays(db.mydays);
     db.places = normalizePlaces(db.places);
+    db.fests = normalizeFests(db.fests);
+    db.festHidden = normalizeFestHidden(db.festHidden);
     if (!db.places.some(function (p) { return p.id === db.settings.defaultPlaceId; })) {
       db.settings.defaultPlaceId = '';
     }
@@ -10514,13 +10676,13 @@ function lunarOf(ds) {
   var lm = null;
   try { lm = LunarYear.fromYear(info.y).getMonth(info.m); } catch (e) { }
   info.lunarDays = lm ? lm.getDayCount() : 30;
-  info.fest = FESTIVALS[info.m + '-' + info.d] || '';
-  /* 佛教节日都按农历；定在三十的，遇小月（只有廿九）就落在该月最后一天 */
-  if (!info.fest && info.d === info.lunarDays && info.lunarDays < 30) {
-    info.fest = FESTIVALS[info.m + '-30'] || '';
-  }
-  info.trad = TRAD_FESTIVALS[info.m + '-' + info.d] || '';
-  if (!info.trad && info.m === 12 && info.d === info.lunarDays) info.trad = '除夕';
+  /* 佛教节日 / 公共节日：同一天可能撞上好几个，用「、」连起来；
+     隐藏的内置节日与用户自己加的都在这套里算（festNamesOn）。
+     trad 这个字段名沿用旧叫法，指的正是公共节日 */
+  info.fests = festNamesOn(info, 'buddha');
+  info.pubs = festNamesOn(info, 'pub');
+  info.fest = info.fests.join('、');
+  info.trad = info.pubs.join('、');
   var small = info.lunarDays < 30;
   info.isShuo = info.d === 1;                 // 朔
   info.isWang = info.d === 15;                // 望
@@ -10565,7 +10727,11 @@ function myDaysOn(ds) {
       if (+m.m !== info.m) continue;
       /* 三十号遇到只有廿九天的小月，按当月最后一天（廿九）算，与佛教节日同一套规则 */
       if (+m.d === info.d || (+m.d === 30 && info.d === info.lunarDays)) out.push(m);
-    } else if (+m.m === info.shm && +m.d === info.shd) out.push(m);
+    } else if (+m.m === info.shm && (
+        +m.d === info.shd ||
+        /* 2 月 29 日：平年按 2 月 28 日，与节日同一套规则 */
+        (+m.m === 2 && +m.d === 29 && info.shd === 28 && !isLeapYear(info.shy))
+      )) out.push(m);
   }
   return out;
 }
@@ -10619,6 +10785,7 @@ var UI = {
   taskCat: 'nianfo',
   festY: 0,
   festKind: 'buddha',
+  festSetCat: 'buddha',
   viewStack: []
 };
 
@@ -10743,7 +10910,7 @@ function syncTodayUI() {
 }
 
 function renderView() {
-  ['home', 'detail', 'tasks', 'fest', 'mydays', 'places', 'settings'].forEach(function (v) {
+  ['home', 'detail', 'tasks', 'fest', 'festset', 'mydays', 'places', 'settings'].forEach(function (v) {
     var el = document.getElementById('view-' + v);
     if (el) el.classList.toggle('hidden', v !== UI.view);
   });
@@ -10751,6 +10918,7 @@ function renderView() {
   else if (UI.view === 'detail') renderDetail();
   else if (UI.view === 'tasks') renderTaskSettings();
   else if (UI.view === 'fest') renderFestivals();
+  else if (UI.view === 'festset') renderFestSettings();
   else if (UI.view === 'mydays') renderMyDays();
   else if (UI.view === 'places') renderPlaces();
   else if (UI.view === 'settings') renderSettings();
@@ -10823,14 +10991,14 @@ function renderCalHTML() {
 
   var legend = '';
   var legs = [];
-  /* 图例自左至右：佛教节日、斋戒日、传统节日、节气、纪念日、功课
+  /* 图例自左至右：佛教节日、公共节日、斋戒日、节气、纪念日、功课
      斋戒日只占一项：朔望 / 六斋 / 十斋 / 观音斋 / 月斋 都叫「斋戒日」，不再逐类列出 */
   if (DB.settings.showFest) legs.push('<span><i class="fd"></i>佛教节日</span>');
+  if (DB.settings.showTrad !== false) legs.push('<span><i class="tr"></i>公共节日</span>');
   var st0 = DB.settings;
   if (st0.showShuo || st0.showZhai6 || st0.showZhai10 || st0.showGuanyin || st0.showYueZhai) {
     legs.push('<span><i class="zd"></i>斋戒日</span>');
   }
-  if (DB.settings.showTrad !== false) legs.push('<span><i class="tr"></i>传统节日</span>');
   if (DB.settings.showJq) legs.push('<span><i class="jq"></i>节气</span>');
   if ((DB.mydays || []).length) legs.push('<span><i class="my"></i>纪念日</span>');
   legs.push('<span><i class="hw"></i>功课</span>');
@@ -10933,12 +11101,12 @@ function cellHTML(ds, dayNum, out) {
   else if (customs.length) sub = customs[0].name;
   else if (trad) sub = trad;
 
-  /* 功课：标在日期右上方；下方一行自左至右：佛教节日、斋日、传统节日、节气、重要日 */
+  /* 功课：标在日期右上方；下方一行自左至右：佛教节日、公共节日、斋戒日、节气、纪念日 */
   var botMks = [];
   if (fest) botMks.push('fd');
+  if (trad) botMks.push('tr');
   /* 斋戒日只占一个点：同一天既是六斋又是十斋，也只画一颗 */
   if (zhaiKeysOf(info).length) botMks.push('zd');
-  if (trad) botMks.push('tr');
   if (jq) botMks.push('jq');
   if (customs.length) botMks.push('my');
 
@@ -10958,7 +11126,7 @@ function cellHTML(ds, dayNum, out) {
 /* 日期信息条：三行
    一、佛历年 · 公历年月日 · 相对日
    二、农历月日 · 星期
-   三、佛教节日 · 斋日 · 传统节日 · 节气 · 重要日 */
+   三、佛教节日 · 公共节日 · 斋戒日 · 节气 · 纪念日 */
 function daysFromToday(ds) {
   return Math.round((parseYmd(ds).setHours(12, 0, 0, 0) - parseYmd(TODAY).setHours(12, 0, 0, 0)) / 86400000);
 }
@@ -10975,11 +11143,12 @@ function relDayName(ds) {
 }
 function dayBadgesHTML(info, ds) {
   var h = '';
+  /* 顺序固定：佛教节日 → 公共节日 → 斋戒日 → 节气 → 纪念日 */
   if (DB.settings.showFest && info.fest) h += '<span class="badge gold">' + esc(info.fest) + '</span>';
+  if (DB.settings.showTrad !== false && info.trad) h += '<span class="badge trd">' + esc(info.trad) + '</span>';
   zhaiKeysOf(info).forEach(function (k) {
     h += '<span class="badge blue">' + ZHAI_LABEL[k] + '</span>';
   });
-  if (DB.settings.showTrad !== false && info.trad) h += '<span class="badge trd">' + esc(info.trad) + '</span>';
   if (DB.settings.showJq && info.jq) h += '<span class="badge green">' + esc(info.jq) + '</span>';
   myDaysOn(ds).forEach(function (m) {
     h += '<span class="badge myd">' + esc(m.name) + '</span>';
@@ -11009,17 +11178,17 @@ function specialEnabled() {
   return hintOn('hintMyd') && (DB.mydays || []).length > 0;
 }
 /* 这一天所有要预告的节期名，顺序固定为
-   佛教节日 → 斋戒日（朔望 → 观音 → 六斋 → 十斋 → 月斋）→ 传统节日 → 节气 → 纪念日。
+   佛教节日 → 公共节日 → 斋戒日（朔望 → 观音 → 六斋 → 十斋 → 月斋）→ 节气 → 纪念日。
    两类门槛都过才提：预告开关开着，并且日历上正显示这一类——
    日历上藏起来的东西，预告里再提就成了「看不见却说你错过了」 */
 function specialNamesOn(ds, info) {
   var out = [], st = DB.settings;
   if (hintOn('hintFest') && st.showFest && info.fest) out.push(info.fest);
+  if (hintOn('hintTrad') && st.showTrad !== false && info.trad) out.push(info.trad);
   /* zhaiKeysOf 已经按各类斋日的开关过滤过，没勾的类型不会冒出来 */
   if (hintOn('hintZhai')) {
     zhaiKeysOf(info).forEach(function (k) { out.push(ZHAI_LABEL[k]); });
   }
-  if (hintOn('hintTrad') && st.showTrad !== false && info.trad) out.push(info.trad);
   if (hintOn('hintJq') && st.showJq && info.jq) out.push(info.jq);
   if (hintOn('hintMyd')) myDaysOn(ds).forEach(function (m) { out.push(m.name); });
   return out;
@@ -11051,7 +11220,7 @@ function todayBtnHTML(ds) {
 function dateRowsHTML(info, ds) {
   var rel = relDayName(ds);
   var badges = dayBadgesHTML(info, ds);
-  /* 第三行：有 tag 就摆 tag（佛教节日 / 斋戒日 / 传统节日 / 节气 / 纪念日），
+  /* 第三行：有 tag 就摆 tag（佛教节日 / 公共节日 / 斋戒日 / 节气 / 纪念日），
      一个 tag 都没有时才用一行纯文字预告最近的节期（挑的时候不计算斋戒日） */
   var third = badges;
   if (!badges && specialEnabled()) {
@@ -13097,7 +13266,7 @@ function festivalSolarDate(y, m, d) {
   return null;
 }
 
-/* 左右划动切换：佛教节日 <-> 传统节日 */
+/* 左右划动切换：佛教节日 <-> 公共节日 */
 var festSwipe = null;
 var festSwiped = false;
 var festSwipeAt = 0;
@@ -13109,24 +13278,26 @@ function festSwitchTo(kind) {
   renderFestivals();
 }
 
+var FEST_KIND_LABEL = { buddha: '佛教节日', pub: '公共节日' };
+
 function renderFestivals() {
   var y = UI.festY;
-  var kind = UI.festKind || 'buddha';
-  var isTrad = kind === 'trad';
-  var list = isTrad ? TRAD_LIST : FESTIVAL_LIST;
+  var kind = UI.festKind === 'pub' ? 'pub' : 'buddha';
+  var isPub = kind === 'pub';
   var rows = [];
-  list.forEach(function (f) {
-    var ds = festivalSolarDate(y, f.m, f.d);
+  festsOf(kind).forEach(function (f) {
+    if (f.hidden) return;
+    var ds = festSolarDate(y, f);
     if (!ds) return;
-    rows.push({ ds: ds, name: f.name, m: f.m, d: f.d });
+    rows.push({ ds: ds, name: f.name, builtin: f.builtin });
   });
-  rows.sort(function (a, b) { return a.ds < b.ds ? -1 : 1; });
+  rows.sort(function (a, b) { return a.ds < b.ds ? -1 : a.ds > b.ds ? 1 : 0; });
 
   var seg = $('#fest-seg');
   if (seg) {
     seg.innerHTML =
-      '<button class="' + (isTrad ? '' : 'on') + '" data-fk="buddha">佛教节日</button>' +
-      '<button class="' + (isTrad ? 'on' : '') + '" data-fk="trad">传统节日</button>';
+      '<button class="' + (isPub ? '' : 'on') + '" data-fk="buddha">佛教节日</button>' +
+      '<button class="' + (isPub ? 'on' : '') + '" data-fk="pub">公共节日</button>';
   }
 
   var html = '<div class="period">' +
@@ -13148,9 +13319,9 @@ function renderFestivals() {
     }
     var info = lunarOf(r.ds);
     var isToday = r.ds === TODAY;
-    html += '<div class="fest-item' + (isToday ? ' today' : '') + (isTrad ? ' trad' : '') + '" data-fds="' + r.ds + '">' +
+    html += '<div class="fest-item' + (isToday ? ' today' : '') + (isPub ? ' trad' : '') + '" data-fds="' + r.ds + '">' +
       '<span class="dd">' + mm + '月' + dd + '日</span>' +
-      '<span class="nm">' + esc(r.name) + '</span>' +
+      '<span class="nm">' + esc(r.name) + (r.builtin ? '' : '<i class="own">自定</i>') + '</span>' +
       '<span class="ln">' + esc(info.monthCn + info.dayCn) + '</span>' +
       '</div>';
   });
@@ -13158,9 +13329,9 @@ function renderFestivals() {
   html += '</div>';
 
   html += '<div style="padding:0 18px calc(30px + var(--safe-b));font-size:11px;color:#b5a992;line-height:1.9">' +
-    (isTrad
-      ? '传统节日按农历计算，闰月不计；除夕取腊月最后一天。春节、元宵、端午、中秋等为民间通行日期。'
-      : '节日按农历计算，闰月不计。诸佛菩萨圣诞、成道、出家等纪念日，汉传佛教各寺所用历法略有出入，此表依通行之说。') +
+    (isPub
+      ? '公共节日按公历或农历计算，闰月不计；除夕取腊月最后一天，清明节按清明节气。农历三十遇小月按廿九、公历 2 月 29 日遇平年按 2 月 28 日。'
+      : '佛教节日按农历计算，闰月不计。诸佛菩萨圣诞、成道、出家等纪念日，汉传佛教各寺所用历法略有出入，此表依通行之说。') +
     '</div>';
 
   $('#fest-title').textContent = '节日一览';
@@ -13175,6 +13346,145 @@ function renderFestivals() {
     void sc.offsetWidth;
     sc.classList.add('sw-in');
   }
+}
+
+/* ---------- 节日管理：自定义节日 / 隐藏内置节日 ---------- */
+function renderFestSettings() {
+  var cat = UI.festSetCat === 'pub' ? 'pub' : 'buddha';
+  var seg = $('#festset-seg');
+  if (seg) {
+    seg.innerHTML =
+      '<button class="' + (cat === 'pub' ? '' : 'on') + '" data-fsetcat="buddha">佛教节日</button>' +
+      '<button class="' + (cat === 'pub' ? 'on' : '') + '" data-fsetcat="pub">公共节日</button>';
+  }
+
+  /* slice：下面要排序，别把缓存里的数组搅乱 */
+  var list = festsOf(cat).slice();
+  var own = list.filter(function (f) { return !f.builtin; });
+  var nHide = list.filter(function (f) { return f.builtin && f.hidden; }).length;
+  /* 按今年的实际日期排，农历 / 公历混排也顺眼 */
+  var cy = new Date().getFullYear();
+  list.sort(function (a, b) {
+    var da = festSolarDate(cy, a) || '9999', db2 = festSolarDate(cy, b) || '9999';
+    return da < db2 ? -1 : da > db2 ? 1 : 0;
+  });
+
+  var html = '<div class="set-title" style="padding:2px 18px 7px">' + FEST_KIND_LABEL[cat] +
+    ' · 共 ' + list.length + ' 项 · 自定 ' + own.length + ' 项' +
+    (nHide ? ' · 隐藏 ' + nHide + ' 项' : '') +
+    '</div><div class="set-card" style="margin:0 12px">';
+
+  list.forEach(function (f) {
+    var key = f.builtin ? f.key : f.id;
+    html += '<div class="tk-row' + (f.hidden ? ' hid' : '') + '" data-fkey="' + esc(key) +
+        '" data-fkind="' + cat + '">' +
+      '<div class="nm"' + (f.builtin ? '' : ' data-fedit="' + esc(f.id) + '"') + '>' +
+        '<b>' + esc(f.name) + '</b>' +
+        '<em>' + festDateText(f) + (f.builtin ? ' · 内置' : ' · 自定') + '</em>' +
+      '</div>' +
+      (f.builtin
+        ? '<button class="mini eye' + (f.hidden ? ' on' : '') + '" data-fhide="1" aria-label="' +
+            (f.hidden ? '取消隐藏' : '隐藏这个节日') + '" title="' + (f.hidden ? '取消隐藏' : '隐藏') + '">' +
+            (f.hidden
+              ? '<svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 6.7A9.6 9.6 0 0 1 12 6.6c6 0 9.5 5.4 9.5 5.4a15 15 0 0 1-3 3.5"/><path d="M6.4 8.2A14.6 14.6 0 0 0 2.5 12S6 17.4 12 17.4c1.4 0 2.6-.3 3.7-.7"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>'
+              : '<svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.6 12 6.6 21.5 12 21.5 12 18 17.4 12 17.4 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.9"/></svg>') +
+          '</button>'
+        : '<button class="mini" data-fedit="' + esc(f.id) + '" aria-label="编辑">' +
+            '<svg viewBox="0 0 24 24"><path d="M4 20h3.5L18 9.5a2.4 2.4 0 0 0-3.4-3.4L4 16.5V20z"/></svg></button>' +
+          '<button class="mini del" data-fdel="' + esc(f.id) + '" aria-label="删除">' +
+            '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg></button>') +
+      '</div>';
+  });
+  html += '</div>';
+
+  html += '<div style="padding:14px 20px calc(100px + var(--safe-b));font-size:11px;color:#b5a992;line-height:1.9">' +
+    '内置节日只能隐藏，不能修改，也不能删除；自己添加的节日可以改、可以删。' +
+    '日期规则：农历三十遇小月按廿九，公历 2 月 29 日遇平年按 2 月 28 日。' +
+    '</div>';
+
+  $('#festset-scroll').innerHTML = html;
+}
+
+/* 隐藏 / 显示一个内置节日 */
+function toggleFestHidden(kind, key) {
+  if (!DB.festHidden) DB.festHidden = {};
+  var k = kind + ':' + key;
+  if (DB.festHidden[k]) delete DB.festHidden[k];
+  else DB.festHidden[k] = true;
+  saveNow();
+  LunarCache = {};
+  festsCacheClear();
+  renderFestSettings();
+  if (UI.view === 'home') renderHome();
+  toast(DB.festHidden[k] ? '已隐藏，日历上不再显示' : '已恢复显示');
+}
+
+function festOwnById(id) {
+  var hit = null;
+  (DB.fests || []).forEach(function (f) { if (f.id === id) hit = f; });
+  return hit;
+}
+
+function openFestEditor(cat, id) {
+  var f = id ? festOwnById(id) : null;
+  var isNew = !f;
+  var kind = f ? f.kind : (cat === 'pub' ? 'pub' : 'buddha');
+  var cal = f ? f.cal : 'solar';
+  var mm = f ? +f.m : 1;
+  var dd = f ? +f.d : 1;
+
+  openModal(
+    '<h4>' + (isNew ? '添加节日' : '编辑节日') + '</h4>' +
+    '<div class="field"><label>名称</label>' +
+      '<input id="f-fname" type="text" value="' + esc(f ? f.name : '') + '" placeholder="如：观音菩萨成道日、母亲节"></div>' +
+    '<div class="field"><label>归到哪一类</label><div class="seg2" id="f-fkind">' +
+      '<button data-fkindset="buddha" class="' + (kind === 'buddha' ? 'on' : '') + '">佛教节日</button>' +
+      '<button data-fkindset="pub" class="' + (kind === 'pub' ? 'on' : '') + '">公共节日</button>' +
+    '</div></div>' +
+    '<div class="field"><label>历法</label><div class="seg2" id="f-mdkind">' +
+      '<button data-mdkind="solar" class="' + (cal === 'solar' ? 'on' : '') + '">公历</button>' +
+      '<button data-mdkind="lunar" class="' + (cal === 'lunar' ? 'on' : '') + '">农历</button>' +
+    '</div></div>' +
+    '<div class="field-row">' +
+      '<div class="field"><label>月</label><select id="f-mdm">' + myDayMonthOpts(cal, mm) + '</select></div>' +
+      '<div class="field"><label>日</label><select id="f-mdd">' + myDayDayOpts(cal, dd) + '</select></div>' +
+    '</div>' +
+    '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十遇小月按廿九；公历 2 月 29 日遇平年按 2 月 28 日</div>' +
+    (isNew ? '' : '<div style="text-align:center;padding:4px 0 0">' +
+      '<button style="color:#b8442f;font-size:12.5px" data-fdel="' + esc(f.id) + '">删除这个节日</button></div>') +
+    '<div class="modal-actions">' +
+      '<button data-mclose="1">取消</button>' +
+      '<button class="primary" data-fsave="1">保存</button>' +
+    '</div>',
+    function () {
+      var nm = ($('#f-fname').value || '').trim();
+      var kd = $('#f-mdkind .on');
+      var kdVal = kd ? kd.dataset.mdkind : 'solar';
+      var cd = $('#f-fkind .on');
+      var cdVal = cd ? cd.dataset.fkindset : 'buddha';
+      var mv = parseInt($('#f-mdm').value, 10) || 1;
+      var dv = parseInt($('#f-mdd').value, 10) || 1;
+      if (!nm) { toast('请填写名称'); return; }
+      if (kdVal === 'lunar') dv = Math.min(dv, 30);
+      else dv = Math.min(dv, daysInMonth(2024, mv));
+      if (isNew) {
+        DB.fests = DB.fests || [];
+        DB.fests.push({ id: uid('ft'), kind: cdVal, name: nm, cal: kdVal, m: mv, d: dv });
+      } else {
+        f.kind = cdVal; f.name = nm; f.cal = kdVal; f.m = mv; f.d = dv;
+      }
+      saveNow();
+      LunarCache = {};
+      festsCacheClear();
+      closeModal();
+      UI.festSetCat = cdVal;
+      renderFestSettings();
+      if (UI.view === 'home') renderHome();
+      if (UI.view === 'fest') renderFestivals();
+      toast(isNew ? '已添加节日' : '已保存');
+    }
+  );
+  setTimeout(function () { var el = $('#f-fname'); if (el) el.focus(); }, 140);
 }
 
 /* ---------- 我的纪念日 ---------- */
@@ -13365,8 +13675,8 @@ var ZHAI_ROWS = [
 ];
 var HINT_ROWS = [
   { k: 'hintFest', t: '佛教节日', cal: 'showFest' },
+  { k: 'hintTrad', t: '公共节日', cal: 'showTrad' },
   { k: 'hintZhai', t: '斋戒日', zhai: true },
-  { k: 'hintTrad', t: '传统节日', cal: 'showTrad' },
   { k: 'hintJq', t: '二十四节气', cal: 'showJq' },
   { k: 'hintMyd', t: '我的纪念日' }
 ];
@@ -13374,7 +13684,7 @@ function rowsOnNames(rows) {
   return rows.filter(function (r) { return DB.settings[r.k]; })
     .map(function (r) { return r.sn || r.t; });
 }
-/* 日历上的显示开关：传统节日当年是「默认开」，历史存档里可能没有这个键 */
+/* 日历上的显示开关：公共节日当年是「默认开」，历史存档里可能没有这个键 */
 function calShowOn(k) {
   var v = DB.settings[k];
   return k === 'showTrad' ? v !== false : !!v;
@@ -13456,11 +13766,11 @@ var REL_NOTES = [
     /* 2.0 是实际对外发布的第一个版本，所以这一条不是「改了什么」，而是「这一版就有什么」 */
     items: [
       '首个正式发布版本的功能总览，后面每一版都是在这套底子上加的',
-      '首页整月日历：公历与农历对照，佛教节日、斋日、传统节日、二十四节气、我的重要日、当天有功课各用一色标记，下方带图例',
+      '首页整月日历：公历与农历对照，佛教节日、公共节日、斋戒日、二十四节气、我的纪念日、当天有功课各用一色标记，下方带图例',
       '五个标签页记功课：念佛、诵经、持咒、行法、日记；点「＋」按默认增量累加，长按可以自定义增加、减少、设置计数值',
       '功课详情页：按日 / 按月 / 按年三种表统计，可设日目标与总目标，数量与目标对照着看',
       '汇总视图：连续功课天数、自某日起、累计 N 天记录功课，按日期由近及远列出每天的功课与日记',
-      '节日一览：佛教节日与传统节日合在一页，可按年翻看',
+      '节日一览：佛教节日与公共节日合在一页，可按年翻看',
       '我的重要日：自定义农历 / 公历纪念日，列表按最近到来排序并显示还有多少天',
       '日记：按天记录，可插入时间、图片与拍照',
       '功课设置：增删改、上下移动、恢复内置功课；佛历基准（+543 / +544）、斋日显示、二十四节气都可调',
@@ -13535,19 +13845,22 @@ function renderSettings() {
     '<div class="set-row" data-toggle="showFest">' +
       '<div class="lbl">佛教节日<em>日历上以金色标记</em></div>' +
       '<span class="switch ' + (s.showFest ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showTrad">' +
+      '<div class="lbl">公共节日<em>春节、国庆、元旦等，日历上以黄色标记</em></div>' +
+      '<span class="switch ' + (s.showTrad !== false ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-swset="zhai">' +
       '<div class="lbl">斋戒日<em>' +
         (zhaiOn.length ? esc(zhaiOn.join('、')) : '五类都关着，日历上不标蓝点') + '</em></div>' +
       '<span class="val">' + zhaiOn.length + ' / ' + ZHAI_ROWS.length + '</span><span class="chev">›</span></div>' +
-    '<div class="set-row" data-toggle="showTrad">' +
-      '<div class="lbl">传统节日<em>春节、端午、中秋等，日历上以黄色标记</em></div>' +
-      '<span class="switch ' + (s.showTrad !== false ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showJq">' +
       '<div class="lbl">二十四节气<em>日历上以绿色标记</em></div>' +
       '<span class="switch ' + (s.showJq ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-actx="mydays">' +
       '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
+    '<div class="set-row" data-actx="festset">' +
+      '<div class="lbl">节日管理<em>添加自定义佛教 / 公共节日，隐藏内置节日</em></div>' +
+      '<span class="val">' + (DB.fests || []).length + ' 个</span><span class="chev">›</span></div>' +
     /* 节期预告：非节期日的日期条第三行，预告最近的下一个节期。
        只管「提不提」，日历上没显示的类型说了也是白说，所以两类门槛都要过 */
     '<div class="set-row" data-swset="hint">' +
@@ -13656,6 +13969,35 @@ function bindEvents() {
       if (dsel) dsel.innerHTML = myDayDayOpts(kd, parseInt(dsel.value, 10) || 1);
       return;
     }
+    /* 节日编辑弹窗：佛教 / 公共 二选一 */
+    var fks = e.target.closest('[data-fkindset]');
+    if (fks) {
+      Array.prototype.forEach.call(document.querySelectorAll('#f-fkind button'), function (b) {
+        b.classList.toggle('on', b === fks);
+      });
+      return;
+    }
+    /* 节日编辑弹窗：删除自己添加的节日 */
+    var fdel = e.target.closest('[data-fdel]');
+    if (fdel) {
+      var fid = fdel.dataset.fdel;
+      var fo = festOwnById(fid);
+      if (!fo) return;
+      askConfirm('删除这个节日？',
+        '「' + esc(fo.name) + '」将从节日列表中移除。内置节日不能删除，只能隐藏。',
+        '删除',
+        function () {
+          DB.fests = (DB.fests || []).filter(function (x) { return x.id !== fid; });
+          saveNow();
+          LunarCache = {};
+          festsCacheClear();
+          renderFestSettings();
+          if (UI.view === 'home') renderHome();
+          if (UI.view === 'fest') renderFestivals();
+          toast('已删除');
+        });
+      return;
+    }
     var mdel = e.target.closest('[data-mddel]');
     if (mdel) {
       var mid = mdel.dataset.mddel;
@@ -13739,7 +14081,8 @@ function bindEvents() {
       redrawSwitchModal();
       return;
     }
-    if (e.target.closest('[data-mok]') || e.target.closest('[data-tsave]') || e.target.closest('[data-mdsave]')) {
+    if (e.target.closest('[data-mok]') || e.target.closest('[data-tsave]') ||
+        e.target.closest('[data-mdsave]') || e.target.closest('[data-fsave]')) {
       if (modalOnOk) modalOnOk();
       return;
     }
@@ -14043,6 +14386,33 @@ function bindEvents() {
     /* 打开重要日管理 */
     if (e.target.closest('[data-actx="mydays"]')) { showView('mydays'); return; }
 
+    /* 打开节日管理 */
+    if (e.target.closest('[data-actx="festset"]')) {
+      UI.festSetCat = UI.festKind === 'pub' ? 'pub' : 'buddha';
+      showView('festset');
+      return;
+    }
+    if (e.target.closest('#btn-fest-manage')) {
+      UI.festSetCat = UI.festKind === 'pub' ? 'pub' : 'buddha';
+      showView('festset');
+      return;
+    }
+
+    el = e.target.closest('[data-fsetcat]');
+    if (el) { UI.festSetCat = el.dataset.fsetcat; renderFestSettings(); return; }
+
+    /* 隐藏 / 取消隐藏内置节日 */
+    el = e.target.closest('[data-fhide]');
+    if (el) {
+      var frow = el.closest('[data-fkey]');
+      if (frow) toggleFestHidden(frow.dataset.fkind, frow.dataset.fkey);
+      return;
+    }
+
+    /* 编辑 / 删除自定义节日 */
+    el = e.target.closest('[data-fedit]');
+    if (el) { openFestEditor(UI.festSetCat, el.dataset.fedit); return; }
+
     /* 打开常用地点管理 */
     if (e.target.closest('[data-actx="places"]')) { showView('places'); return; }
 
@@ -14096,6 +14466,7 @@ function bindEvents() {
     if (e.target.closest('#btn-menu')) { openMenu(); return; }
     if (e.target.closest('#btn-add-task')) { openTaskEditor(null, UI.taskCat); return; }
     if (e.target.closest('#btn-add-myday')) { openMyDayEditor(null); return; }
+    if (e.target.closest('#btn-add-fest')) { openFestEditor(UI.festSetCat, null); return; }
     if (e.target.closest('#btn-add-place')) { openPlaceForm({ mode: 'manage' }); return; }
   });
 
@@ -14122,7 +14493,7 @@ function bindEvents() {
     if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
     festSwipeAt = Date.now();
     /* 两页互为前后，往哪边划都换成另一页 */
-    festSwitchTo(UI.festKind === 'trad' ? 'buddha' : 'trad');
+    festSwitchTo(UI.festKind === 'pub' ? 'buddha' : 'pub');
   }, true);
 
   /* 刚划动过就别再把这一次当成点击（避免误跳日期） */
@@ -14522,10 +14893,10 @@ function openMenu() {
       fn: function () { UI.taskCat = UI.tab === 'diary' ? 'nianfo' : UI.tab; showView('tasks'); }
     },
     {
-      k: 'fest', t: '节日一览', s: '佛教节日 · 传统节日',
+      k: 'fest', t: '节日一览', s: '佛教节日 · 公共节日',
       icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>',
       fn: function () {
-        if (UI.festKind !== 'trad') UI.festKind = 'buddha';
+        if (UI.festKind !== 'pub') UI.festKind = 'buddha';
         UI.festY = new Date().getFullYear();
         showView('fest');
       }
@@ -14656,6 +15027,8 @@ function sanitizeImport(src) {
     tasks: [],
     mydays: normalizeMyDays(src.mydays),
     places: normalizePlaces(src.places),
+    fests: normalizeFests(src.fests),
+    festHidden: normalizeFestHidden(src.festHidden),
     records: {}
   };
   var catSet = {};
@@ -14754,6 +15127,7 @@ function importData() {
             loadError = false;
             invalidateTotals();
             LunarCache = {};
+            festsCacheClear();
             saveNow();
             renderView();
             toast('导入成功');
@@ -14801,6 +15175,7 @@ function wipeData() {
               /* 清空等于重新开始：别把「错过的版本」当成升级提示再弹一次 */
               markSeenVersion();
               LunarCache = {};
+              festsCacheClear();
               UI.date = TODAY; UI.tab = 'nianfo'; UI.view = 'home';
               setMode('record');
               renderView();
