@@ -14164,15 +14164,15 @@ function renderSettings() {
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">功课列表</div><div class="set-card">' +
-    '<div class="set-row" data-toggle="showTotal">' +
-      '<div class="lbl">显示总累计及总目标<em>显示功课项的累计总数及总目标</em></div>' +
-      '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-toggle="showMonthTotal">' +
-      '<div class="lbl">显示月累计及月目标<em>显示功课项的本月/此月累计总数及月目标</em></div>' +
-      '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-toggle="showTabTotal">' +
       '<div class="lbl">显示此日分类汇总<em>在功课分类列表顶部列出今日/此日记录汇总</em></div>' +
       '<span class="switch ' + (s.showTabTotal ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showMonthTotal">' +
+      '<div class="lbl">显示月累计及月目标<em>显示功课项的本月/此月累计总数及月目标</em></div>' +
+      '<span class="switch ' + (s.showMonthTotal ? 'on' : '') + '"></span></div>' +
+    '<div class="set-row" data-toggle="showTotal">' +
+      '<div class="lbl">显示总累计及总目标<em>显示功课项的累计总数及总目标</em></div>' +
+      '<span class="switch ' + (s.showTotal ? 'on' : '') + '"></span></div>' +
     /* 开了「目标功课置顶」，置顶显示已设置日目标、月目标、总目标的功课 */
     '<div class="set-row" data-toggle="goalFirst">' +
       '<div class="lbl">目标功课置顶<em>置顶显示已设置日目标、月目标、总目标的功课</em></div>' +
