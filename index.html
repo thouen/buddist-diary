@@ -1147,6 +1147,26 @@ img{max-width:100%;display:block}
    全局 .seg button.on 保持功课红，首页标签页、节日一览、历法分段都不受影响 */
 .detail-stats .seg button.on{background:#e7ddc9;color:#4a3b2a;border-color:#cdbf9f;font-weight:600}
 
+/* ---------- 详情页：专修计时（只在专修模式下出现，插在计数卡与统计区之间） ---------- */
+.focus-card{
+  margin:10px 12px 0;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:12px 14px 13px;text-align:center;
+  box-shadow:0 1px 2px rgba(90,70,40,.04);
+}
+.focus-card .fc-lbl{font-size:11px;letter-spacing:2px;color:var(--gold)}
+.focus-card .fc-time{
+  font-family:var(--serif);font-size:32px;line-height:1.25;font-weight:600;
+  color:var(--accent);letter-spacing:1px;font-variant-numeric:tabular-nums;
+}
+.focus-card .fc-sub{font-size:11px;color:var(--ink3);padding-top:1px}
+.focus-card .fc-exit{
+  margin-top:10px;width:100%;height:38px;border-radius:10px;
+  background:var(--card2);border:1px solid var(--line);color:var(--ink2);font-size:13px;
+}
+.focus-card .fc-exit:active{background:var(--accent-soft);border-color:#ecd0c8;color:var(--accent)}
+/* 非当天：专修按钮不可点 */
+.modebtn:disabled{opacity:.38;color:var(--ink3);background:var(--card2);border-color:var(--line)}
+
 /* ---------- 2.0 交互补充 ---------- */
 /* 「今天」：只在这一天不是今天时出现。
    它竖直居中于**前两行**（佛历/公历 + 农历/星期），不跟着第三行走——
@@ -10914,6 +10934,8 @@ function renderView() {
     var el = document.getElementById('view-' + v);
     if (el) el.classList.toggle('hidden', v !== UI.view);
   });
+  /* 离开详情页就别再空转专修计时 */
+  if (UI.view !== 'detail') stopFocusTick();
   if (UI.view === 'home') renderHome();
   else if (UI.view === 'detail') renderDetail();
   else if (UI.view === 'tasks') renderTaskSettings();
@@ -12538,8 +12560,9 @@ function openDetail(taskId) {
   var d = parseYmd(UI.date);
   UI.detail = {
     taskId: taskId,
-    /* 每次进详情页都从「记录模式」开始，专修模式不记忆 */
+    /* 每次进详情页都从「记录模式」开始，专修模式与计时都不记忆 */
     focus: false,
+    focusStart: 0,
     range: 'day',
     y: d.getFullYear(),
     m: d.getMonth() + 1,
@@ -12906,32 +12929,85 @@ function renderDetail() {
 
   $('#detail-title').textContent = t.name;
 
+  /* 专修模式只在当天可用；翻到别的日子还留着状态就强制退掉 */
+  if (d.focus && UI.date !== TODAY) { d.focus = false; d.focusStart = 0; }
+
   $('#detail-scroll').innerHTML =
     detailDayHTML() +
     detailCountHTML(t) +
+    '<div id="detail-focus"></div>' +
     '<div class="detail-stats" id="detail-stats"></div>' +
     '<div style="height:calc(16px + var(--safe-b))"></div>';
 
   renderDetailStats();
   syncDetailMode();
+  renderFocusPanel();
 }
 
-/* 右上角的模式按钮：按钮文字写当前模式（记录模式 / 专修模式），点一下切换 */
+/* 右上角的模式按钮：点亮＝专修模式，再点一下退出；非当天整颗按钮置灰不可点 */
 function syncDetailMode() {
   var btn = document.getElementById('btn-detail-mode');
   if (!btn) return;
   var on = !!(UI.detail && UI.detail.focus);
+  var can = UI.date === TODAY;
   btn.classList.toggle('on', on);
   btn.textContent = on ? '专' : '记';
+  btn.disabled = !can;
+  btn.setAttribute('aria-label',
+    !can ? '只有当天才能进入专修模式' : (on ? '退出专修模式' : '进入专修模式'));
 }
 function toggleDetailMode() {
   if (!UI.detail) return;
-  var t = taskById(UI.detail.taskId);
-  if (!t) return;
-  UI.detail.focus = !UI.detail.focus;
+  setFocusMode(!UI.detail.focus);
+}
+
+/* 进入 / 退出专修模式：进入时就地开始计时，退出即结束 */
+function setFocusMode(on) {
+  var d = UI.detail;
+  if (!d) return;
+  on = !!on;
+  if (on && UI.date !== TODAY) { toast('只有当天才能进入专修模式'); return; }
+  d.focus = on;
+  d.focusStart = on ? Date.now() : 0;
   syncDetailMode();
-  redrawDetailCount(t);
+  var t = taskById(d.taskId);
+  if (t) redrawDetailCount(t);
+  renderFocusPanel();
   if (navigator.vibrate) navigator.vibrate(8);
+  toast(on ? '进入专修模式' : '退出专修模式');
+}
+
+/* ---------- 专修计时：只在专修模式下出现在计数卡与统计区之间 ---------- */
+var focusTick = null;
+function stopFocusTick() {
+  if (focusTick) { clearInterval(focusTick); focusTick = null; }
+}
+function focusElapsedText(ms) {
+  var s = Math.max(0, Math.floor(ms / 1000));
+  var h = Math.floor(s / 3600), mi = Math.floor((s % 3600) / 60), se = s % 60;
+  return h > 0 ? (h + ':' + pad2(mi) + ':' + pad2(se)) : (pad2(mi) + ':' + pad2(se));
+}
+function updateFocusTime() {
+  var el = document.getElementById('focus-time');
+  if (!el) { stopFocusTick(); return; }
+  var d = UI.detail;
+  el.textContent = focusElapsedText(d && d.focusStart ? Date.now() - d.focusStart : 0);
+}
+function renderFocusPanel() {
+  var box = document.getElementById('detail-focus');
+  stopFocusTick();
+  if (!box) return;
+  var d = UI.detail;
+  if (!d || !d.focus) { box.innerHTML = ''; return; }
+  box.innerHTML =
+    '<div class="focus-card">' +
+      '<div class="fc-lbl">专修计时</div>' +
+      '<div class="fc-time" id="focus-time">00:00</div>' +
+      '<div class="fc-sub">已进入专修模式 · 上方按钮按专修增量记数</div>' +
+      '<button class="fc-exit" id="btn-exit-focus">退出专修模式</button>' +
+    '</div>';
+  updateFocusTime();
+  focusTick = setInterval(updateFocusTime, 1000);
 }
 /* 只换计数卡这一块：统计区不重算，详情页的滚动位置也不动 */
 function redrawDetailCount(t) {
@@ -14139,6 +14215,8 @@ function bindEvents() {
 
     /* 详情页右上角：专修模式切换 / 编辑这项功课 */
     if (e.target.closest('#btn-detail-mode')) { toggleDetailMode(); return; }
+    /* 专修计时卡里的「退出专修模式」 */
+    if (e.target.closest('#btn-exit-focus')) { setFocusMode(false); return; }
     if (e.target.closest('#btn-detail-edit')) {
       if (UI.detail) openTaskEditor(UI.detail.taskId);
       return;
@@ -14882,7 +14960,7 @@ function toggleMode() {
   setMode(UI.mode === 'record' ? 'summary' : 'record');
   $('#home-scroll').scrollTop = 0;
   renderHome();
-  toast(UI.mode === 'summary' ? '总览视图' : '单日视图');
+  toast(UI.mode === 'summary' ? '切换到总览视图' : '切换到单日视图');
 }
 
 function openMenu() {
@@ -14900,11 +14978,6 @@ function openMenu() {
         UI.festY = new Date().getFullYear();
         showView('fest');
       }
-    },
-    {
-      k: 'mydays', t: '我的纪念日', s: '自定义农历 / 公历纪念日',
-      icon: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7-4.2-7-9.2a3.9 3.9 0 0 1 7-2.2 3.9 3.9 0 0 1 7 2.2c0 5-7 9.2-7 9.2z"/></svg>',
-      fn: function () { showView('mydays'); }
     },
     {
       k: 'today', t: '回到今天', s: TODAY,
