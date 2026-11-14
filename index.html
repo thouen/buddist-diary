@@ -442,7 +442,9 @@ img{max-width:100%;display:block}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .page-head .right{margin-left:auto;display:flex;gap:6px;align-items:center}
-/* 详情页右上角：记录模式 / 专修模式 切换（关＝记录模式，开＝专修模式，用金色与功课红拉开） */
+/* 详情页右上角：专修模式开关（熄灭＝记录模式，点亮＝专修模式）。
+   点亮态与首页右上角 .iconbtn.active（单日 / 总览切换那颗）保持一致：
+   功课红实底、白字，不再用金色，也不用浅色底 */
 .modebtn{
   height:34px;padding:0 11px;border-radius:11px;white-space:nowrap;
   background:var(--card);border:1px solid var(--line);color:var(--ink2);
@@ -450,7 +452,7 @@ img{max-width:100%;display:block}
   transition:background .15s ease,color .15s ease,border-color .15s ease;
 }
 .modebtn:active{transform:scale(.96)}
-.modebtn.on{background:var(--gold-soft);border-color:#e2cfa4;color:var(--gold);font-weight:600}
+.modebtn.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 
 .seg{display:flex;gap:4px;padding:0 14px 10px;flex:0 0 auto}
 .seg button{
