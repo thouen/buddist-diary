@@ -209,10 +209,15 @@ img{max-width:100%;display:block}
   display:flex;justify-content:flex-start;align-items:baseline;gap:9px;
   font-size:11.5px;color:var(--ink2);padding-top:2px;
 }
-/* 第三行：先占住一行 tag 的高度（.badge 约 17.6），tag 多时自然往下长成第四、五行 */
-.dr3{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 0 1px;min-height:18px}
-/* 一个 tag 都没有时，这行放一句纯文字预告，行高与一行 tag 一致 */
-.dr-next{font-size:10.5px;color:var(--ink3);letter-spacing:.3px;line-height:1}
+/* 第三行：先占住一行 tag 的高度（一个 .badge 约 20.8 = 10.5×1.5 + 内边距 3 + 描边 2），
+   tag 多时自然往下长成第四、五行；一个 tag 都没有时空着也占同样的高度 */
+.dr3{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 0 1px;min-height:21px}
+/* 一个 tag 都没有时，这行放一句纯文字预告；盒子照 .badge 的尺寸来（同字号、同内边距、一圈透明描边），
+   换日期时第三行才不会因为「摆 tag」和「写预告」而高低不一 */
+.dr-next{
+  font-size:10.5px;color:var(--ink3);letter-spacing:.3px;
+  padding:1.5px 0;border:1px solid transparent;
+}
 .dr-next b{font-weight:500;color:var(--ink2)}
 
 /* 日期信息条：三行 */
@@ -10504,6 +10509,8 @@ function loadDB() {
       t.mgoal = +t.mgoal > 0 ? Math.floor(+t.mgoal) : 0;
       /* 2.8：专修增量，老存档没有这个字段就按 1 补上 */
       t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? Math.floor(+t.fstep) : 1;
+      /* 专修计时开关：没存过就交给 taskFocusTimer() 按分类默认值走，不用写回存档 */
+      if (t.ftimer !== true && t.ftimer !== false) delete t.ftimer;
       /* 快捷增量方案：没存过就交给 taskScheme() 按分类默认值走，不用写回存档 */
       if (t.scheme !== 'big' && t.scheme !== 'small') delete t.scheme;
       if (t.name === '南无药师琉璃光如来') { t.name = '南无消灾延寿药师佛'; __dbMigrated = true; }
@@ -10599,6 +10606,12 @@ function taskMonthGoal(t) {
 function taskFocusStep(t) {
   var g = t ? +t.fstep : 0;
   return g > 0 && isFinite(g) ? Math.floor(g) : 1;
+}
+/* 专修计时：只有「行法」类功课默认打开，其余分类默认关掉。
+   关掉后仍可进专修模式，只是不显示计时、也不拦着确认退出 */
+function taskFocusTimer(t) {
+  if (t && typeof t.ftimer === 'boolean') return t.ftimer;
+  return !!(t && t.cat === 'yigui');
 }
 /* 目标优先时的档位：日目标 0、月目标 1、总目标 2、都没设 3 */
 function taskGoalRank(t) {
@@ -11297,9 +11310,10 @@ function dateRowsHTML(info, ds) {
         '</div>' +
         todayBtnHTML(ds) +
       '</div>' +
-      /* 第三行总有内容：有 tag 摆 tag，没 tag 就是那句预告。
-         只有「四类节期全关、当天又没有斋戒日」这种极端设置下它才会是空的，
-         而那个空 div 正是「至少三行」的高度占位，所以固定渲染。 */
+      /* 第三行：有 tag 摆 tag，没 tag 就是那句预告。
+         佛教节日、公共节日、四类斋戒日、二十四节气全关（或对应的预告开关全关掉），
+         当天又没有纪念日时，这里既没有 tag 也没有预告，是个空 div——照样渲染，
+         它占住「至少三行」的高度，翻日期时整块日信息才不会忽高忽低。 */
       '<div class="dr3">' + third + '</div>' +
     '</div>';
 }
@@ -12807,7 +12821,7 @@ function detailCountHTML(t) {
   }
 
   return '<div class="count-card' + (n > 0 ? ' has' : '') + '">' +
-    '<div class="cc-lbl">' + (UI.date === TODAY ? '今日' : '此日') + esc(CAT_MAP[t.cat].n) + '</div>' +
+    '<div class="cc-lbl">' + (UI.date === TODAY ? '今日' : '此日') + '总计</div>' +
     '<div class="cc-num' + numClass(n) + '" data-count="' + esc(t.id) + '" role="button" aria-label="' +
       (UI.date === TODAY ? '修改今日数量' : '修改此日数量') + '">' +
       '<b>' + esc(n) + '</b><small>' + esc(t.unit) + '</small></div>' +
@@ -12999,10 +13013,16 @@ function toggleDetailMode() {
   else setFocusMode(true);
 }
 
-/* 退出专修模式（或离开详情页）前先确认一次，弹窗里写清这一次已经坐了多久 */
+/* 退出专修模式（或离开详情页）前先确认一次，弹窗里写清这一次已经坐了多久。
+   没开「专修计时」的功课不用问，直接退 */
 function confirmExitFocus(afterOk) {
   var d = UI.detail;
   if (!d || !d.focus) { if (afterOk) afterOk(); return; }
+  if (!taskFocusTimer(taskById(d.taskId))) {
+    setFocusMode(false);
+    if (afterOk) afterOk();
+    return;
+  }
   var used = focusElapsedText(Date.now() - d.focusStart);
   askConfirm('退出专修模式？',
     '本次已专修 <b>' + used + '</b>，退出后计时结束',
@@ -13051,6 +13071,8 @@ function renderFocusPanel() {
   if (!box) return;
   var d = UI.detail;
   if (!d || !d.focus) { box.innerHTML = ''; return; }
+  /* 没开「专修计时」的功课：进专修模式也不摆计时卡和退出按钮 */
+  if (!taskFocusTimer(taskById(d.taskId))) { box.innerHTML = ''; return; }
   box.innerHTML =
     '<div class="focus-card">' +
       '<div class="fc-lbl">专修计时</div>' +
@@ -13242,7 +13264,7 @@ function renderTaskSettings() {
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
           '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
-            ' · 默认 +' + t.step + ' · 专修 +' + taskFocusStep(t) + '</em>' +
+            ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
                 (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
@@ -13286,6 +13308,7 @@ function openTaskEditor(taskId, cat) {
   var step = t ? t.step : c.step;
   var scheme = taskScheme(t || { cat: c.k });
   var fstep = t ? taskFocusStep(t) : 1;
+  var ftimer = taskFocusTimer(t || { cat: c.k });
   var goal = t ? taskGoal(t) : 0;
   var mgoal = t ? taskMonthGoal(t) : 0;
   var tgoal = t ? taskTarget(t) : 0;
@@ -13303,6 +13326,9 @@ function openTaskEditor(taskId, cat) {
       '</div></div>' +
     '<div class="field"><label>默认增量（「＋」弹窗里增 / 减的初始值）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>专修增量（专修模式下一次「＋」的增量，默认 1）</label><input id="f-fstep" type="number" inputmode="numeric" value="' + esc(fstep) + '"></div>' +
+    '<div class="field-chk" data-mftimer="1">' +
+      '<div class="lbl">专修计时<em>关掉后不显示计时，退出专修模式也不用确认</em></div>' +
+      '<span class="switch' + (ftimer ? ' on' : '') + '"></span></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
     '<div class="field"><label>月目标（可选，留空则不设）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
     '<div class="field"><label>总目标（可选，留空则不设）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
@@ -13325,6 +13351,7 @@ function openTaskEditor(taskId, cat) {
       var mgl = parseInt($('#f-mgoal').value, 10);
       var tgl = parseInt($('#f-tgoal').value, 10);
       var showIt = !!(document.querySelector('#modal [data-mshow] .switch.on'));
+      var ftimerOn = !!(document.querySelector('#modal [data-mftimer] .switch.on'));
       var scEl = document.querySelector('#f-scheme button.on');
       var sch = scEl && SCHEMES[scEl.dataset.scheme] ? scEl.dataset.scheme : scheme;
       if (!nm) { toast('请填写名称'); return; }
@@ -13335,9 +13362,10 @@ function openTaskEditor(taskId, cat) {
       if (isNaN(tgl) || tgl <= 0) tgl = 0;
       if (isNew) {
         DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, scheme: sch, fstep: fst,
-          goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
+          ftimer: ftimerOn, goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
         t.name = nm; t.unit = un; t.step = st; t.scheme = sch; t.fstep = fst;
+        t.ftimer = ftimerOn;
         t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
         t.hidden = !showIt;
       }
@@ -14263,8 +14291,8 @@ function bindEvents() {
       });
       return;
     }
-    /* 弹窗里的开关：功课的「在功课列表中显示」与纪念日的「每年重复」 */
-    var ms = e.target.closest('[data-mshow],[data-mtog]');
+    /* 弹窗里的开关：功课的「在功课列表中显示」「专修计时」与纪念日的「每年重复」 */
+    var ms = e.target.closest('[data-mshow],[data-mftimer],[data-mtog]');
     if (ms) {
       var sw = ms.querySelector('.switch');
       if (sw) sw.classList.toggle('on');
