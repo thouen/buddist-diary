@@ -485,7 +485,7 @@ img{max-width:100%;display:block}
 .set-row:active{background:var(--card2)}
 .set-row .chev{color:var(--ink3);font-size:14px}
 .set-row .val{color:var(--ink2);font-size:12.5px}
-/* 弹窗里的开关组（斋戒日 / 节期预告）：沿用设置页那套 set-row，只把边距收紧一点 */
+/* 弹窗里的开关组（斋戒日 / 节日预告）：沿用设置页那套 set-row，只把边距收紧一点 */
 .modal-card{margin:2px 0 0;border-radius:12px}
 .modal-card .set-row{padding:11px 12px;font-size:13.5px}
 .modal-card .set-row .lbl em{line-height:1.5}
@@ -10138,7 +10138,7 @@ var GUANYIN_ZHAI = [
 
 /* 斋日显示：多选，可选任意组合（朔望 / 六斋 / 十斋 / 月斋 / 观音斋） */
 var ZHAI_LABEL = { shuo: '朔望日', z6: '六斋日', z10: '十斋日', yz: '月斋', gy: '观音斋' };
-/* 节期预告的五类开关，与日历上的显示开关相互独立：日历不显示某一类，
+/* 节日预告的五类开关，与日历上的显示开关相互独立：日历不显示某一类，
    仍可以在预告里提到它，反之亦然。默认只开佛教节日、公共节日、纪念日 */
 var HINT_DEFAULT = { hintFest: true, hintTrad: true, hintZhai: false, hintJq: false, hintMyd: true };
 
@@ -10176,7 +10176,7 @@ function defaultDB() {
     v: 1,
     builtinRev: BUILTIN_REV,
     orderRev: 1,
-    /* 节期预告那五个开关的默认值只在 HINT_DEFAULT 里写一次，这里合并进来，
+    /* 节日预告那五个开关的默认值只在 HINT_DEFAULT 里写一次，这里合并进来，
        免得两处各写一遍、改一处忘另一处 */
     settings: Object.assign({
       buddhaOffset: 543,
@@ -10284,7 +10284,7 @@ function normalizeSettings(src) {
     out.goalFirst = true;
     out.goalFirstMigrated = true;
   }
-  /* 2.6 修订（九）：节期预告的五类独立开关，默认只开佛教节日、公共节日、纪念日 */
+  /* 2.6 修订（九）：节日预告的五类独立开关，默认只开佛教节日、公共节日、纪念日 */
   Object.keys(HINT_DEFAULT).forEach(function (k) {
     if (typeof out[k] !== 'boolean') out[k] = HINT_DEFAULT[k];
   });
@@ -10840,7 +10840,7 @@ function openModal(html, onOk) {
 function closeModal() {
   $('#modal').classList.remove('on');
   modalOnOk = null;
-  /* 斋戒日 / 节期预告弹窗：拨动时只重画弹窗本身，关窗时才重画设置页——
+  /* 斋戒日 / 节日预告弹窗：拨动时只重画弹窗本身，关窗时才重画设置页——
      每次拨动都重画会把设置页的滚动位置清回顶部 */
   var wasSwitch = !!_swCfg;
   _swCfg = null;
@@ -11159,7 +11159,7 @@ function dayBadgesHTML(info, ds) {
 function gregDateText(info) {
   return info.shy + '年' + info.shm + '月' + info.shd + '日';
 }
-/* 节期预告的某一类是否开着（默认值见 HINT_DEFAULT） */
+/* 节日预告的某一类是否开着（默认值见 HINT_DEFAULT） */
 function hintOn(k) {
   var v = DB.settings[k];
   return typeof v === 'boolean' ? v : HINT_DEFAULT[k] !== false;
@@ -11484,7 +11484,7 @@ function renderSummaryHTML() {
 
   if (!dates.length) {
     return streakHTML() +
-      '<div class="sum-list"><div class="empty-state"><span class="big">无</span>还没有任何记录<br>回到记录模式，从一句佛号开始</div></div>';
+      '<div class="sum-list"><div class="empty-state"><span class="big">无</span>还没有任何记录<br>回到单日视图，从一句佛号开始</div></div>';
   }
 
   var html = streakHTML() +
@@ -13664,7 +13664,7 @@ function openMyDayEditor(id) {
 }
 
 /* ---------- 设置：一组开关做成一个弹窗 ---------- */
-/* 斋戒日与节期预告都是「几类各自独立的开关」，挤在设置页里太长，
+/* 斋戒日与节日预告都是「几类各自独立的开关」，挤在设置页里太长，
    统一放进弹窗：点一下即存，弹窗原地刷新，设置页的摘要也跟着变。 */
 var ZHAI_ROWS = [
   { k: 'showShuo', t: '朔望日', sn: '朔望日', d: '农历初一、十五' },
@@ -13733,7 +13733,7 @@ var REL_NOTES = [
       '功课参数新增「专修增量」（默认 1）',
       '详情页右上角新增「记录模式 / 专修模式」切换：切到专修模式后，+1、+10、+100、+1000、+ 五个记录按钮并成一个 +专修增量 的大按钮（长按可改专修增量）',
       '功课列表新增「目标功课置顶」（默认开启）：设了日目标、月目标、总目标的功课排在前面',
-      '斋戒日与节期预告收进设置页的一行 + 弹窗，已启用几类一眼可见；日期条只预告日历上开启显示的节期类型',
+      '斋戒日与节日预告收进设置页的一行 + 弹窗，已启用几类一眼可见；日期条只预告日历上开启显示的节期类型',
       '同一天撞上几个节期时按用户配置统一顺序全部列出',
       '删除功课只保留「彻底删除」，删前统一弹一次确认',
       '修正：跨过零点才点「确定」会写进前一天、日记失焦丢掉最后一段、长按连加被打断后一直加数'
@@ -13769,7 +13769,7 @@ var REL_NOTES = [
       '首页整月日历：公历与农历对照，佛教节日、公共节日、斋戒日、二十四节气、我的纪念日、当天有功课各用一色标记，下方带图例',
       '五个标签页记功课：念佛、诵经、持咒、行法、日记；点「＋」按默认增量累加，长按可以自定义增加、减少、设置计数值',
       '功课详情页：按日 / 按月 / 按年三种表统计，可设日目标与总目标，数量与目标对照着看',
-      '汇总视图：连续功课天数、自某日起、累计 N 天记录功课，按日期由近及远列出每天的功课与日记',
+      '总览视图：连续功课天数、自某日起、累计 N 天记录功课，按日期由近及远列出每天的功课与日记',
       '节日一览：佛教节日与公共节日合在一页，可按年翻看',
       '我的重要日：自定义农历 / 公历纪念日，列表按最近到来排序并显示还有多少天',
       '日记：按天记录，可插入时间、图片与拍照',
@@ -13842,6 +13842,9 @@ function renderSettings() {
   var zhaiOn = rowsOnNames(ZHAI_ROWS);
   var hintOnes = rowsOnNames(HINT_ROWS);
   html += '<div class="set-sec"><div class="set-title">日历</div><div class="set-card">' +
+    '<div class="set-row" data-actx="festset">' +
+      '<div class="lbl">节日管理<em>添加自定义佛教 / 公共节日，隐藏内置节日</em></div>' +
+      '<span class="val">' + (DB.fests || []).length + ' 个</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-toggle="showFest">' +
       '<div class="lbl">佛教节日<em>日历上以金色标记</em></div>' +
       '<span class="switch ' + (s.showFest ? 'on' : '') + '"></span></div>' +
@@ -13850,7 +13853,7 @@ function renderSettings() {
       '<span class="switch ' + (s.showTrad !== false ? 'on' : '') + '"></span></div>' +
     '<div class="set-row" data-swset="zhai">' +
       '<div class="lbl">斋戒日<em>' +
-        (zhaiOn.length ? esc(zhaiOn.join('、')) : '五类都关着，日历上不标蓝点') + '</em></div>' +
+        (zhaiOn.length ? esc(zhaiOn.join('、')) + '，日历上以蓝色标记' : '五类都关着，日历上不标蓝点') + '</em></div>' +
       '<span class="val">' + zhaiOn.length + ' / ' + ZHAI_ROWS.length + '</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-toggle="showJq">' +
       '<div class="lbl">二十四节气<em>日历上以绿色标记</em></div>' +
@@ -13858,13 +13861,10 @@ function renderSettings() {
     '<div class="set-row" data-actx="mydays">' +
       '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日</em></div>' +
       '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
-    '<div class="set-row" data-actx="festset">' +
-      '<div class="lbl">节日管理<em>添加自定义佛教 / 公共节日，隐藏内置节日</em></div>' +
-      '<span class="val">' + (DB.fests || []).length + ' 个</span><span class="chev">›</span></div>' +
-    /* 节期预告：非节期日的日期条第三行，预告最近的下一个节期。
+    /* 节日预告：非节日的日期条第三行，预告最近的下一个节期。
        只管「提不提」，日历上没显示的类型说了也是白说，所以两类门槛都要过 */
     '<div class="set-row" data-swset="hint">' +
-      '<div class="lbl">节期预告<em>非节期日预告最近的下一个节期</em></div>' +
+      '<div class="lbl">节日预告<em>非节日时预告最近的下一个节日</em></div>' +
       '<span class="val">' + hintOnes.length + ' / ' + HINT_ROWS.length + '</span><span class="chev">›</span></div>' +
     '</div></div>';
 
@@ -14072,7 +14072,7 @@ function bindEvents() {
       if (sw) sw.classList.toggle('on');
       return;
     }
-    /* 斋戒日 / 节期预告弹窗：拨一下就存，只重画弹窗（设置页等关窗时再重画） */
+    /* 斋戒日 / 节日预告弹窗：拨一下就存，只重画弹窗（设置页等关窗时再重画） */
     ms = e.target.closest('[data-msw]');
     if (ms) {
       var sk = ms.dataset.msw;
@@ -14205,7 +14205,7 @@ function bindEvents() {
     el = e.target.closest('[data-open]');
     if (el) { openDetail(el.dataset.open); return; }
 
-    /* 总览卡片 -> 切回单日模式（5 tab 模式）并跳到该日 */
+    /* 总览卡片 -> 切回单日视图（5 tab 模式）并跳到该日 */
     el = e.target.closest('[data-goto]');
     if (el) {
       var ds = el.dataset.goto;
@@ -14363,7 +14363,7 @@ function bindEvents() {
       return;
     }
 
-    /* 斋戒日 / 节期预告：几类开关太多，收进弹窗里 */
+    /* 斋戒日 / 节日预告：几类开关太多，收进弹窗里 */
     el = e.target.closest('[data-swset]');
     if (el) {
       if (el.dataset.swset === 'zhai') {
@@ -14374,7 +14374,7 @@ function bindEvents() {
         });
       } else {
         openSwitchModal({
-          title: '节期预告',
+          title: '节日预告',
           sub: '只预告日历上正在显示的类型；斋戒日还要在「斋戒日」里勾选才会提到',
           rows: HINT_ROWS
         });
@@ -14734,7 +14734,7 @@ function shiftMonth(n) {
   if (UI.mode === 'summary') scrollSummaryToMonth(y, m);
 }
 
-/* 汇总视图里翻月时，滚到该月最近的一条 */
+/* 总览视图里翻月时，滚到该月最近的一条 */
 function scrollSummaryToMonth(y, m) {
   var scroll = document.getElementById('home-scroll');
   if (!scroll) return;
@@ -14765,7 +14765,7 @@ function shiftDate(n) {
   if (UI.view === 'home' && UI.mode === 'summary') scrollSummaryToDate(UI.date);
 }
 
-/* 汇总视图里切日时，若该日有记录则滚到它的卡片 */
+/* 总览视图里切日时，若该日有记录则滚到它的卡片 */
 function scrollSummaryToDate(ds) {
   var scroll = document.getElementById('home-scroll');
   if (!scroll) return;
@@ -14875,20 +14875,20 @@ function setMode(m) {
   if (!btn) return;
   btn.innerHTML = m === 'summary' ? ICON_EDIT : ICON_LIST;
   btn.classList.toggle('active', m === 'summary');
-  btn.setAttribute('aria-label', m === 'summary' ? '切回记录模式' : '切换到汇总模式');
+  btn.setAttribute('aria-label', m === 'summary' ? '切回单日视图' : '切换到总览视图');
 }
 
 function toggleMode() {
   setMode(UI.mode === 'record' ? 'summary' : 'record');
   $('#home-scroll').scrollTop = 0;
   renderHome();
-  toast(UI.mode === 'summary' ? '汇总视图' : '记录视图');
+  toast(UI.mode === 'summary' ? '总览视图' : '单日视图');
 }
 
 function openMenu() {
   openSheet('更多功能', [
     {
-      k: 'tasks', t: '功课设置', s: '增删功课 · 调整默认增量',
+      k: 'tasks', t: '功课设置', s: '增删功课 · 调整增量',
       icon: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>',
       fn: function () { UI.taskCat = UI.tab === 'diary' ? 'nianfo' : UI.tab; showView('tasks'); }
     },
