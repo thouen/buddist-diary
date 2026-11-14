@@ -126,8 +126,8 @@
 
 ### 方式二：直接安装 APK
 
-- 文件：`学佛日记-2.8.apk`，约 385 KB，支持 **Android 7.0 及以上**
-- 内嵌页面是本仓库 2.8 时的 `index.html`（`versionCode 40`，打包时已校验逐字节一致，比对方法见「发布检查清单」）；**2.9 的 APK 尚未重打**，当前想用 2.9 请走方式一（放到 http(s) 上打开，或直接双击 `index.html`）
+- 文件：`学佛日记-2.9.apk`，约 397 KB，支持 **Android 7.0 及以上**
+- 内嵌页面即本仓库的 `index.html`（2.9），`versionCode 41`，打包时已校验逐字节一致（比对方法见「发布检查清单」）
 - 传到手机后点击安装，需允许「安装未知来源应用」；首次打开若提示风险，选择「仍要安装」即可
 - 内嵌页面由 WebView 以 `https://appassets.local` 提供，`localStorage` 能长期保存，重启应用数据不丢
 - 返回键：先关弹窗 / 菜单 / 日期层，再退二级页面（详情、设置等），回到首页再按一次才退出
@@ -137,7 +137,7 @@
 
 **关于权限（如实说明）**：2.2 起已从 `AndroidManifest.xml` 删掉 `INTERNET`、`ACCESS_FINE_LOCATION`、`ACCESS_COARSE_LOCATION`、`READ_MEDIA_IMAGES`、`READ_MEDIA_VISUAL_USER_SELECTED`、`READ_EXTERNAL_STORAGE`，`aapt2 dump permissions` 现在**一个权限都没有**。网页一侧也没有任何网络请求与定位调用，导出走系统「下载」、导入走系统文件选择器，都不需要权限。
 
-**关于签名**：2.0 / 2.2 / 2.3 / 2.4 / 2.5 / 2.6 / 2.7 / 2.8 使用同一张证书（SHA-256 `9ad2a321…1bcc14`），可直接覆盖安装到已装 2.0 的手机，数据保留。签名私钥 `xuefo.keystore` 不在本仓库，请另行备份；若哪天换了新签名，就无法覆盖安装，必须先导出备份 → 卸载旧版 → 装新版 → 导入备份。
+**关于签名**：2.0 / 2.2 / 2.3 / 2.4 / 2.5 / 2.6 / 2.7 / 2.8 / 2.9 使用同一张证书（SHA-256 `9ad2a321…1bcc14`），可直接覆盖安装到已装 2.0 的手机，数据保留。签名私钥 `xuefo.keystore` 不在本仓库，请另行备份；若哪天换了新签名，就无法覆盖安装，必须先导出备份 → 卸载旧版 → 装新版 → 导入备份。
 
 > 若要自己重新打包：当前 APK 是**手写 WebView 外壳**，与 [PWABuilder](https://www.pwabuilder.com/)、Bubblewrap、Capacitor 这类工具生成的容器不等价——那些工具只适用于纯浏览器 PWA 路线，做不出同样的文件保存、相机、返回键行为。仓库里也可以直接把 `index.html`、`manifest.webmanifest`、`icons/` 当静态资源自行打包。WebView 内 Service Worker 不生效属正常现象，不影响功能。
 
@@ -189,7 +189,7 @@ xuefo-diary/
 ├── manifest.webmanifest  # PWA 配置
 ├── sw.js                 # 离线缓存（版本号需随发布递增）
 ├── icons/                # 应用图标（192 / 512 / maskable）
-├── 学佛日记-2.8.apk       # 安卓安装包（内嵌 2.8 页面，无任何权限声明）
+├── 学佛日记-2.9.apk       # 安卓安装包（内嵌 2.9 页面，无任何权限声明）
 ├── CHANGELOG.md          # 历史版本改动
 └── README.md
 ```
