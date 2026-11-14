@@ -1298,34 +1298,24 @@ img{max-width:100%;display:block}
     <div class="scroll" id="fest-scroll"></div>
   </section>
 
-  <!-- ============ 节日管理：自定义节日 / 隐藏内置节日 ============ -->
+  <!-- ============ 节日管理：自定义节日 / 纪念日 / 隐藏内置节日 ============ -->
   <section id="view-festset" class="view hidden">
     <div class="page-head">
       <button class="back" data-back="1" aria-label="返回">
         <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
       <div class="page-title">节日管理</div>
+      <div class="right">
+        <button class="iconbtn" id="btn-fest-view" aria-label="节日一览" title="看今年各节日落在哪天">
+          <svg viewBox="0 0 24 24"><path d="M8 6.5h12.5"/><path d="M8 12h12.5"/><path d="M8 17.5h12.5"/><path d="M3.6 6.5h.01"/><path d="M3.6 12h.01"/><path d="M3.6 17.5h.01"/></svg>
+        </button>
+      </div>
     </div>
     <div class="seg" id="festset-seg"></div>
     <div class="scroll" id="festset-scroll"></div>
     <button class="addbtn" id="btn-add-fest">
       <svg viewBox="0 0 24 24" width="15" height="15" stroke="#fff" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      添加节日
-    </button>
-  </section>
-
-  <!-- ============ 我的纪念日 ============ -->
-  <section id="view-mydays" class="view hidden">
-    <div class="page-head">
-      <button class="back" data-back="1" aria-label="返回">
-        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
-      </button>
-      <div class="page-title">我的纪念日</div>
-    </div>
-    <div class="scroll" id="mydays-scroll"></div>
-    <button class="addbtn" id="btn-add-myday">
-      <svg viewBox="0 0 24 24" width="15" height="15" stroke="#fff" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      添加纪念日
+      <span id="btn-add-fest-lb">添加节日</span>
     </button>
   </section>
 
@@ -9921,6 +9911,8 @@ var CHINA=[["北京市",["东城区","西城区","朝阳区","丰台区","石景
 var STORE_KEY = 'xuefo.diary.v1';
 /* 当前版本：发版时只改这一处，界面「设置 → 关于」与更新提示都以它为准 */
 var APP_VERSION = '2.9';
+/* 开源地址：设置 → 关于里显示，点一下打开（打不开就把地址复制出来） */
+var OPEN_SOURCE_URL = 'https://github.com/thouen/buddist-diary';
 /* 上次打开过的版本，与数据分开存，导入备份不会把它带过来 */
 var SEENVER_KEY = 'xuefo.seenver';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
@@ -10001,6 +9993,7 @@ var BUILTIN_REV = 4;
    每条带一个稳定的 k（存「隐藏」状态用），cal 是它的历法：
      lunar 农历 m-d —— d 写 30 表示「该月最后一天」，遇到只有廿九的小月就按廿九
      solar 公历 m-d —— 2 月 29 日遇到平年按 2 月 28 日
+     week  某月第几个星期几 —— w 是第几个、wd 是星期几（0 = 周日），如母亲节 m:5 w:2 wd:0
      jq    按节气 —— jq 写节气名（清明节）
    内置节日只能隐藏，不能改也不能删；用户自己加的另存在 DB.fests 里 */
 var FEST_BUILTIN = {
@@ -10048,25 +10041,41 @@ var FEST_BUILTIN = {
     { k: 'l12-30', n: '除夕', cal: 'lunar', m: 12, d: 30 },
     /* 公历 */
     { k: 's1-1', n: '元旦节', cal: 'solar', m: 1, d: 1 },
+    { k: 's2-4', n: '世界抗癌日', cal: 'solar', m: 2, d: 4 },
+    { k: 's3-1', n: '国际民防日', cal: 'solar', m: 3, d: 1 },
     { k: 's3-8', n: '国际妇女节', cal: 'solar', m: 3, d: 8 },
+    { k: 's3-12', n: '植树节', cal: 'solar', m: 3, d: 12 },
     { k: 's3-21', n: '国际消除种族歧视日', cal: 'solar', m: 3, d: 21 },
     { k: 's3-22', n: '世界水日', cal: 'solar', m: 3, d: 22 },
     { k: 's4-22', n: '世界地球日', cal: 'solar', m: 4, d: 22 },
     { k: 's4-23', n: '世界读书日', cal: 'solar', m: 4, d: 23 },
     { k: 's5-1', n: '劳动节', cal: 'solar', m: 5, d: 1 },
     { k: 's5-4', n: '青年节', cal: 'solar', m: 5, d: 4 },
+    { k: 's5-2sun', n: '母亲节', cal: 'week', m: 5, w: 2, wd: 0 },
+    { k: 's5-3sun', n: '全国助残日', cal: 'week', m: 5, w: 3, wd: 0 },
     { k: 's6-1', n: '国际儿童节', cal: 'solar', m: 6, d: 1 },
     { k: 's6-5', n: '世界环境日', cal: 'solar', m: 6, d: 5 },
+    { k: 's6-3sun', n: '父亲节', cal: 'week', m: 6, w: 3, wd: 0 },
+    { k: 's6-17', n: '防治荒漠化和干旱日', cal: 'solar', m: 6, d: 17 },
+    { k: 's6-20', n: '世界难民日', cal: 'solar', m: 6, d: 20 },
     { k: 's6-26', n: '国际禁毒日', cal: 'solar', m: 6, d: 26 },
+    { k: 's7-1', n: '建党节', cal: 'solar', m: 7, d: 1 },
     { k: 's8-1', n: '建军节', cal: 'solar', m: 8, d: 1 },
+    { k: 's9-5a', n: '中华慈善日', cal: 'solar', m: 9, d: 5 },
+    { k: 's9-5b', n: '国际慈善日', cal: 'solar', m: 9, d: 5 },
     { k: 's9-10', n: '教师节', cal: 'solar', m: 9, d: 10 },
     { k: 's9-18', n: '九一八', cal: 'solar', m: 9, d: 18 },
+    { k: 's9-21', n: '国际和平日', cal: 'solar', m: 9, d: 21 },
+    { k: 's9-30', n: '烈士纪念日', cal: 'solar', m: 9, d: 30 },
     { k: 's10-1', n: '国庆节', cal: 'solar', m: 10, d: 1 },
     { k: 's10-1b', n: '国际老年人日', cal: 'solar', m: 10, d: 1 },
+    { k: 's10-15', n: '国际盲人节', cal: 'solar', m: 10, d: 15 },
     { k: 's10-16', n: '世界粮食日', cal: 'solar', m: 10, d: 16 },
+    { k: 's10-17', n: '世界消除贫困日', cal: 'solar', m: 10, d: 17 },
     { k: 's12-1', n: '世界艾滋病日', cal: 'solar', m: 12, d: 1 },
     { k: 's12-3', n: '国际残疾人日', cal: 'solar', m: 12, d: 3 },
     { k: 's12-10', n: '世界人权日', cal: 'solar', m: 12, d: 10 },
+    { k: 's12-13', n: '南京大屠杀死难者国家公祭日', cal: 'solar', m: 12, d: 13 },
     /* 按节气 */
     { k: 'jq-清明', n: '清明节', cal: 'jq', jq: '清明' }
   ]
@@ -10086,7 +10095,7 @@ function festsOf(kind) {
   var hid = (DB && DB.festHidden) || {};
   (FEST_BUILTIN[kind] || []).forEach(function (f) {
     out.push({
-      key: f.k, name: f.n, cal: f.cal, m: f.m, d: f.d, jq: f.jq,
+      key: f.k, name: f.n, cal: f.cal, m: f.m, d: f.d, w: f.w, wd: f.wd, jq: f.jq,
       builtin: true,
       hidden: !!hid[kind + ':' + f.k]
     });
@@ -10101,9 +10110,13 @@ function festsOf(kind) {
   if (DB) _festsCache[kind] = out;
   return out;
 }
-/* 某个节日是否落在这一天：农历三十遇小月按廿九，公历 2/29 遇平年按 2/28 */
+/* 某个节日是否落在这一天：农历三十遇小月按廿九，公历 2/29 遇平年按 2/28，
+   按星期的（母亲节 = 5 月第 2 个周日）看当天是不是该月第几个这个星期几 */
 function festMatch(f, info) {
   if (f.cal === 'jq') return !!f.jq && info.jq === f.jq;
+  if (f.cal === 'week') {
+    return f.m === info.shm && info.week === +f.wd && Math.ceil(info.shd / 7) === +f.w;
+  }
   if (f.cal === 'solar') {
     if (f.m !== info.shm) return false;
     if (f.d === info.shd) return true;
@@ -10135,8 +10148,17 @@ function jqSolarDate(y, name) {
   }
   return null;
 }
+/* 「某月第几个星期几」落在哪一天：母亲节 = 5 月第 2 个周日，父亲节 = 6 月第 3 个周日。
+   wd 与 JS 的 getDay() 一致：0 = 周日 … 6 = 周六 */
+function weekOfMonthDate(y, m, w, wd) {
+  var firstWd = new Date(y, m - 1, 1).getDay();
+  var day = 1 + ((wd - firstWd + 7) % 7) + (w - 1) * 7;
+  if (w < 1 || day > daysInMonth(y, m)) return null;
+  return y + '-' + pad2(m) + '-' + pad2(day);
+}
 function festSolarDate(y, f) {
   if (f.cal === 'jq') return jqSolarDate(y, f.jq);
+  if (f.cal === 'week') return weekOfMonthDate(y, f.m, +f.w, +f.wd);
   if (f.cal === 'solar') {
     /* 2/29、2/30 这类在当年不存在就落到该月最后一天（平年 2/29 → 2/28） */
     return y + '-' + pad2(f.m) + '-' + pad2(Math.min(f.d, daysInMonth(y, f.m)));
@@ -10146,6 +10168,7 @@ function festSolarDate(y, f) {
 /* 节日日期文字：列表与设置页共用 */
 function festDateText(f) {
   if (f.cal === 'jq') return '节气 · ' + f.jq;
+  if (f.cal === 'week') return '公历 ' + f.m + ' 月第 ' + f.w + ' 个周' + WEEK_CN[+f.wd];
   if (f.cal === 'solar') return '公历 ' + f.m + ' 月 ' + f.d + ' 日';
   return '农历' + LUNAR_MONTH_CN[f.m - 1] + lunarDayCN(f.d);
 }
@@ -10220,6 +10243,8 @@ function defaultDB() {
       showFest: true,
       showTrad: true,
       showJq: true,
+      /* 我的纪念日：日历上是否标记（条目本身在「节日管理 → 纪念日」里维护） */
+      showMyd: true,
       showYueZhai: false,
       showGuanyin: false,
       showTabTotal: false,
@@ -10777,9 +10802,14 @@ function zhaiKeysOf(info) {
 }
 
 /* ---------- 自定义纪念日 ---------- */
-function myDaysOn(ds) {
+/* 日历上要不要显示纪念日：设置里关掉后，日历标记、日期条标签与节日预告都不再提，
+   条目本身照旧留在数据里，随时能再打开 */
+function myDaysVisible() { return DB.settings.showMyd !== false; }
+/* all = true 时不管开关，管理页排序要用完整结果 */
+function myDaysOn(ds, all) {
   var list = DB.mydays || [];
   if (!list.length) return [];
+  if (!all && !myDaysVisible()) return [];
   var info = LunarCache[ds] || lunarOf(ds);
   var out = [];
   for (var i = 0; i < list.length; i++) {
@@ -10823,7 +10853,7 @@ function myDayText(m) {
 function myDayOnce(m) { return m.repeat === false; }
 
 /* 从 fromDs 起，为每个纪念日找最近一次出现的日期（每年重复的年年都能找到） */
-function nextOccurrences(fromDs, days) {
+function nextOccurrences(fromDs, days, all) {
   var map = {};
   var list = DB.mydays || [];
   if (!list.length) return map;
@@ -10831,7 +10861,7 @@ function nextOccurrences(fromDs, days) {
   var d = fromDs || TODAY;
   for (var i = 0; i < (days || 420) && remain > 0; i++) {
     var dd = d;
-    myDaysOn(dd).forEach(function (m) {
+    myDaysOn(dd, all).forEach(function (m) {
       if (!map[m.id]) { map[m.id] = dd; remain--; }
     });
     d = addDays(d, 1);
@@ -10976,7 +11006,7 @@ function syncTodayUI() {
 }
 
 function renderView() {
-  ['home', 'detail', 'tasks', 'fest', 'festset', 'mydays', 'places', 'settings'].forEach(function (v) {
+  ['home', 'detail', 'tasks', 'fest', 'festset', 'places', 'settings'].forEach(function (v) {
     var el = document.getElementById('view-' + v);
     if (el) el.classList.toggle('hidden', v !== UI.view);
   });
@@ -10987,7 +11017,6 @@ function renderView() {
   else if (UI.view === 'tasks') renderTaskSettings();
   else if (UI.view === 'fest') renderFestivals();
   else if (UI.view === 'festset') renderFestSettings();
-  else if (UI.view === 'mydays') renderMyDays();
   else if (UI.view === 'places') renderPlaces();
   else if (UI.view === 'settings') renderSettings();
 }
@@ -11068,7 +11097,7 @@ function renderCalHTML() {
     legs.push('<span><i class="zd"></i>斋戒日</span>');
   }
   if (DB.settings.showJq) legs.push('<span><i class="jq"></i>节气</span>');
-  if ((DB.mydays || []).length) legs.push('<span><i class="my"></i>纪念日</span>');
+  if (myDaysVisible() && (DB.mydays || []).length) legs.push('<span><i class="my"></i>纪念日</span>');
   legs.push('<span><i class="hw"></i>功课</span>');
   if (legs.length) legend = '<div class="cal-legend">' + legs.join('') + '</div>';
 
@@ -11243,7 +11272,7 @@ function specialEnabled() {
   if (hintOn('hintTrad') && DB.settings.showTrad !== false) return true;
   if (hintOn('hintJq') && DB.settings.showJq) return true;
   if (hintOn('hintZhai') && zhaiAnyOn()) return true;
-  return hintOn('hintMyd') && (DB.mydays || []).length > 0;
+  return hintOn('hintMyd') && myDaysVisible() && (DB.mydays || []).length > 0;
 }
 /* 这一天所有要预告的节期名，顺序固定为
    佛教节日 → 公共节日 → 斋戒日（朔望 → 观音 → 六斋 → 十斋 → 月斋）→ 节气 → 纪念日。
@@ -13454,7 +13483,7 @@ var FEST_KIND_LABEL = {
 };
 var FEST_KIND_NOTE = {
   buddha: '佛教节日按农历计算，闰月不计。诸佛菩萨圣诞、成道、出家等纪念日，汉传佛教各寺所用历法略有出入，此表依通行之说。',
-  pub: '公共节日按公历或农历计算，闰月不计；除夕取腊月最后一天，清明节按清明节气。农历三十遇小月按廿九、公历 2 月 29 日遇平年按 2 月 28 日。',
+  pub: '公共节日按公历或农历计算，闰月不计；除夕取腊月最后一天，清明节按清明节气，母亲节、父亲节、全国助残日按「某月第几个周日」推算。农历三十遇小月按廿九、公历 2 月 29 日遇平年按 2 月 28 日。',
   zhai: '只列设置里勾选、且日历上开着显示的斋戒类型；同一天命中多类时按 朔望 → 观音 → 六斋 → 十斋 → 月斋 的顺序并列。',
   jq: '二十四节气按太阳黄经推算，交节日期逐年略有浮动。',
   myd: '纪念日按设定的公历 / 农历月日出现；农历三十遇小月按廿九、公历 2 月 29 日遇平年按 2 月 28 日；关掉「每年重复」的只在设定那年出现。'
@@ -13466,7 +13495,7 @@ function festKindsOn() {
   var out = ['buddha', 'pub'];
   if (zhaiAnyOn()) out.push('zhai');
   if (st.showJq) out.push('jq');
-  if ((DB.mydays || []).length) out.push('myd');
+  if (myDaysVisible() && (DB.mydays || []).length) out.push('myd');
   return out;
 }
 
@@ -13574,14 +13603,24 @@ function renderFestivals() {
   }
 }
 
-/* ---------- 节日管理：自定义节日 / 隐藏内置节日 ---------- */
+/* ---------- 节日管理：自定义节日 / 纪念日 / 隐藏内置节日 ---------- */
 function renderFestSettings() {
-  var cat = UI.festSetCat === 'pub' ? 'pub' : 'buddha';
+  var cat = UI.festSetCat === 'myd' ? 'myd' : (UI.festSetCat === 'pub' ? 'pub' : 'buddha');
+  UI.festSetCat = cat;
   var seg = $('#festset-seg');
   if (seg) {
     seg.innerHTML =
-      '<button class="' + (cat === 'pub' ? '' : 'on') + '" data-fsetcat="buddha">佛教节日</button>' +
-      '<button class="' + (cat === 'pub' ? 'on' : '') + '" data-fsetcat="pub">公共节日</button>';
+      '<button class="' + (cat === 'buddha' ? 'on' : '') + '" data-fsetcat="buddha">佛教节日</button>' +
+      '<button class="' + (cat === 'pub' ? 'on' : '') + '" data-fsetcat="pub">公共节日</button>' +
+      '<button class="' + (cat === 'myd' ? 'on' : '') + '" data-fsetcat="myd">纪念日</button>';
+  }
+  /* 底部那颗按钮跟着分段换文案：纪念日走的是另一个编辑器 */
+  var lb = $('#btn-add-fest-lb');
+  if (lb) lb.textContent = cat === 'myd' ? '添加纪念日' : '添加节日';
+
+  if (cat === 'myd') {
+    $('#festset-scroll').innerHTML = myDaysListHTML();
+    return;
   }
 
   /* slice：下面要排序，别把缓存里的数组搅乱 */
@@ -13715,9 +13754,14 @@ function openFestEditor(cat, id) {
 
 /* ---------- 我的纪念日 ---------- */
 function renderMyDays() {
+  var box = $('#festset-scroll');
+  if (!box) return;
+  box.innerHTML = myDaysListHTML();
+}
+/* 纪念日的列表（节日管理页的「纪念日」分段直接用这段 HTML） */
+function myDaysListHTML() {
   var list = DB.mydays || [];
-  var scroll = $('#mydays-scroll');
-  var nx = nextOccurrences(TODAY, 800);
+  var nx = nextOccurrences(TODAY, 800, true);
   var html = '';
 
   if (!list.length) {
@@ -13755,9 +13799,10 @@ function renderMyDays() {
     '每年重复的纪念日按同一月日出现：农历的按农历月日、公历的按公历月日，闰月不另计。' +
     '年份和「是否每年重复」是两回事：年份可以留空，也可以记下是哪一年；' +
     '关闭「每年重复」时就只在设定年的日历上出现一次。纪念日可随备份一起导出。' +
+    '在「设置 → 日历 → 我的纪念日」把开关关掉后，日历与节日预告里就不再出现它们，条目照旧保留。' +
     '</div>';
 
-  $('#mydays-scroll').innerHTML = html;
+  return html;
 }
 
 /* ---------- 常用地点管理 ---------- */
@@ -13919,6 +13964,7 @@ function calShowOn(k) {
 function rowNote(r) {
   if (r.cal && !calShowOn(r.cal)) return '日历上已关闭，暂不预告';
   if (r.zhai && !zhaiAnyOn()) return '斋戒日五类都关着，暂不预告';
+  if (r.k === 'hintMyd' && !myDaysVisible()) return '日历上已关闭，暂不预告';
   return '';
 }
 function switchModalHTML(c) {
@@ -13957,9 +14003,13 @@ var REL_NOTES = [
     items: [
       '功课快捷增量分两套方案（+1/+3/+7/+21 与 +1/+10/+100/+1000），可在「编辑功课」里逐项切换；小「＋」改为单击弹出「调整数量」',
       '「仪轨」改名「行法」，并新增内置功课「禅修」（单位分钟）',
-      '「传统节日」改名「公共节日」并扩充到二十多个公历节日；节日可逐条隐藏，也能在「节日管理」里自己添加',
+      '「传统节日」改名「公共节日」并扩充到二十多个公历节日；节日可逐条隐藏，也能在「节日管理」里自行添加',
+      '公共节日再添母亲节、父亲节、全国助残日、烈士纪念日、国家公祭日、植树节等二十多项，其中母亲节、父亲节、全国助残日按「某月第几个周日」推算',
       '佛教节日、公共节日、纪念日统一日期规则：农历三十遇小月按廿九，公历 2 月 29 日遇平年按 2 月 28 日',
       '节日一览除佛教节日、公共节日外，还能左右划动翻看斋戒日、节气与纪念日',
+      '「我的纪念日」并入节日管理（佛教节日 / 公共节日 / 纪念日三段），节日一览与节日管理可互相跳转；设置里的「我的纪念日」改成一个开关',
+      '导出备份可直接调系统分享面板发到网盘、微信，也可以只存到下载目录，两种方式都会说明存到哪',
+      '设置 → 关于新增开源地址，点一下打开 GitHub，打不开就把链接复制出来',
       '详情页右上角「专」点亮即进入专修模式并开始计时；退出、返回、换日期前都先确认一次，并写明本次已专修多久',
       '功课新增「专修计时」开关（只有「行法」类默认开启）：关掉后不显示计时，退出专修模式也不用确认',
       '详情页的日信息钉在标题下方常驻，滚动的只剩计数卡与统计区',
@@ -14084,8 +14134,8 @@ function renderSettings() {
   var hintOnes = rowsOnNames(HINT_ROWS);
   html += '<div class="set-sec"><div class="set-title">日历</div><div class="set-card">' +
     '<div class="set-row" data-actx="festset">' +
-      '<div class="lbl">节日管理<em>添加自定义佛教 / 公共节日，隐藏内置节日</em></div>' +
-      '<span class="val">' + (DB.fests || []).length + ' 个</span><span class="chev">›</span></div>' +
+      '<div class="lbl">节日管理<em>添加自定义节日与纪念日，隐藏内置节日</em></div>' +
+      '<span class="val">' + ((DB.fests || []).length + (DB.mydays || []).length) + ' 项</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-toggle="showFest">' +
       '<div class="lbl">佛教节日<em>日历上以金色标记</em></div>' +
       '<span class="switch ' + (s.showFest ? 'on' : '') + '"></span></div>' +
@@ -14099,9 +14149,13 @@ function renderSettings() {
     '<div class="set-row" data-toggle="showJq">' +
       '<div class="lbl">二十四节气<em>日历上以绿色标记</em></div>' +
       '<span class="switch ' + (s.showJq ? 'on' : '') + '"></span></div>' +
-    '<div class="set-row" data-actx="mydays">' +
-      '<div class="lbl">我的纪念日<em>自定义农历 / 公历纪念日</em></div>' +
-      '<span class="val">' + (DB.mydays || []).length + ' 个</span><span class="chev">›</span></div>' +
+    '<div class="set-row" data-toggle="showMyd">' +
+      '<div class="lbl">我的纪念日<em>' +
+        ((DB.mydays || []).length
+          ? '共 ' + (DB.mydays || []).length + ' 项，日历上以青色标记'
+          : '还没有纪念日，可在「节日管理」里添加') +
+      '</em></div>' +
+      '<span class="switch ' + (s.showMyd !== false ? 'on' : '') + '"></span></div>' +
     /* 节日预告：非节日的日期条第三行，预告最近的下一个节期。
        只管「提不提」，日历上没显示的类型说了也是白说，所以两类门槛都要过 */
     '<div class="set-row" data-swset="hint">' +
@@ -14166,7 +14220,7 @@ function renderSettings() {
 
   html += '<div class="set-sec"><div class="set-title">数据</div><div class="set-card">' +
     '<div class="set-row" data-actx="stats"><div class="lbl">数据概况<em>记录天数与五类总数</em></div><span class="val" id="data-stat">查看</span><span class="chev">›</span></div>' +
-    '<div class="set-row" data-actx="export"><div class="lbl">导出备份<em>生成 JSON 文件，可保存到网盘</em></div><span class="chev">›</span></div>' +
+    '<div class="set-row" data-actx="export"><div class="lbl">导出备份<em>生成 JSON 文件，可分享到网盘或存到下载目录</em></div><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="import"><div class="lbl">导入备份<em>将覆盖当前全部数据</em></div><span class="chev">›</span></div>' +
     '</div></div>';
 
@@ -14175,6 +14229,11 @@ function renderSettings() {
     '<div class="set-row" data-actx="whatsnew">' +
       '<div class="lbl">学佛日记<em>版本 ' + esc(APP_VERSION) + ' · 数据保存在本机，不上传</em></div>' +
       '<span class="val">更新内容</span><span class="chev">›</span></div>' +
+    /* 开源地址：单文件应用的源码就在这个仓库里，欢迎自己改、自己打包 */
+    '<div class="set-row" data-opensrc="1">' +
+      '<div class="lbl">开源地址<em>' + esc(OPEN_SOURCE_URL.replace('https://', '')) +
+        ' · 源码、问题反馈与更新都在这</em></div>' +
+      '<span class="val">GitHub</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="wipe"><div class="lbl" style="color:#b8442f">清空全部数据<em>不可恢复，请先导出备份</em></div><span class="chev" style="color:#b8442f">›</span></div>' +
     '</div></div>';
 
@@ -14632,18 +14691,16 @@ function bindEvents() {
     }
 
 
-    /* 打开重要日管理 */
-    if (e.target.closest('[data-actx="mydays"]')) { showView('mydays'); return; }
-
-    /* 打开节日管理 */
-    if (e.target.closest('[data-actx="festset"]')) {
-      UI.festSetCat = UI.festKind === 'pub' ? 'pub' : 'buddha';
+    /* 打开节日管理（节日一览右上角、设置页「节日管理」都走这里） */
+    if (e.target.closest('[data-actx="festset"]') || e.target.closest('#btn-fest-manage')) {
+      UI.festSetCat = UI.festKind === 'pub' ? 'pub' : (UI.festKind === 'myd' ? 'myd' : 'buddha');
       showView('festset');
       return;
     }
-    if (e.target.closest('#btn-fest-manage')) {
-      UI.festSetCat = UI.festKind === 'pub' ? 'pub' : 'buddha';
-      showView('festset');
+    /* 节日管理 → 节日一览：回到对应的那一类 */
+    if (e.target.closest('#btn-fest-view')) {
+      if (UI.festSetCat === 'pub' || UI.festSetCat === 'buddha') UI.festKind = UI.festSetCat;
+      showView('fest');
       return;
     }
 
@@ -14683,6 +14740,9 @@ function bindEvents() {
       return;
     }
 
+    /* 关于 → 开源地址 */
+    if (e.target.closest('[data-opensrc]')) { openExternalURL(OPEN_SOURCE_URL); return; }
+
     /* 其它设置项 */
     el = e.target.closest('[data-actx]');
     if (el) {
@@ -14714,8 +14774,11 @@ function bindEvents() {
     if (e.target.closest('#btn-mode')) { toggleMode(); return; }
     if (e.target.closest('#btn-menu')) { openMenu(); return; }
     if (e.target.closest('#btn-add-task')) { openTaskEditor(null, UI.taskCat); return; }
-    if (e.target.closest('#btn-add-myday')) { openMyDayEditor(null); return; }
-    if (e.target.closest('#btn-add-fest')) { openFestEditor(UI.festSetCat, null); return; }
+    if (e.target.closest('#btn-add-fest')) {
+      if (UI.festSetCat === 'myd') openMyDayEditor(null);
+      else openFestEditor(UI.festSetCat, null);
+      return;
+    }
     if (e.target.closest('#btn-add-place')) { openPlaceForm({ mode: 'manage' }); return; }
   });
 
@@ -15239,6 +15302,45 @@ function nativeSaveText(name, text) {
   } catch (e) { return false; }
 }
 
+/* 外链：能开新标签就开；WebView 里开不了就把地址复制出来，总有一条路能用 */
+function openExternalURL(url) {
+  var w = null;
+  try { w = window.open(url, '_blank', 'noopener'); } catch (e) { }
+  if (w) return;
+  try {
+    navigator.clipboard.writeText(url);
+    toast('链接已复制：' + url.replace('https://', ''));
+  } catch (e2) {
+    toast(url);
+  }
+}
+
+/* 存到系统「下载」目录（网页版唯一能自己控制的目标） */
+function downloadBackupBlob(blob, fname) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  toast('已保存到下载目录');
+}
+
+/* 调系统分享面板：可以发到网盘 App、微信等；用户取消就什么都不做 */
+function shareBackupFile(file, blob, fname) {
+  try {
+    var p = navigator.share({ files: [file], title: fname });
+    if (p && p.catch) {
+      p.catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        downloadBackupBlob(blob, fname);
+      });
+    }
+  } catch (e) {
+    downloadBackupBlob(blob, fname);
+  }
+}
+
 function exportData() {
   try {
     var copy = JSON.parse(JSON.stringify(DB));
@@ -15250,15 +15352,21 @@ function exportData() {
     });
     var data = JSON.stringify(copy, null, 1);
     var fname = '学佛日记备份-' + TODAY + '.json';
-    if (nativeSaveText(fname, data)) { toast('已导出备份文件'); return; }
+    if (nativeSaveText(fname, data)) { toast('已导出到下载目录'); return; }
     var blob = new Blob([data], { type: 'application/json' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fname;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-    toast('已导出备份文件');
+    /* 浏览器能分享文件时给两个选择：分享（可存到网盘）或只存下载目录；
+       不支持分享（含 WebView）就直接下载，并在提示里写清文件在哪 */
+    var file = null;
+    try { file = new File([blob], fname, { type: 'application/json' }); } catch (e0) { file = null; }
+    var canShare = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+    if (canShare) {
+      openSheet('导出备份', [
+        { t: '分享文件', s: '发到网盘、微信等，交给系统分享面板', fn: function () { shareBackupFile(file, blob, fname); } },
+        { t: '保存到下载目录', s: '文件名 ' + fname, fn: function () { downloadBackupBlob(blob, fname); } }
+      ]);
+      return;
+    }
+    downloadBackupBlob(blob, fname);
   } catch (e) { toast('导出失败'); }
 }
 
