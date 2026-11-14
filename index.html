@@ -690,8 +690,6 @@ img{max-width:100%;display:block}
   content:'';position:absolute;left:2px;top:9px;
   width:4px;height:4px;border-radius:50%;background:#c9b9a4;
 }
-/* 内置功课的删除位：只留一句说明，不给删除按钮 */
-.tk-note{text-align:center;padding:8px 0 0;font-size:11.5px;color:var(--ink3);letter-spacing:.3px}
 .sign-seg{display:flex;gap:6px}
 .sign-seg button{
   flex:1;height:38px;border-radius:10px;font-size:13.5px;letter-spacing:1px;
@@ -9913,20 +9911,24 @@ var CHINA=[["北京市",["东城区","西城区","朝阳区","丰台区","石景
 var STORE_KEY = 'xuefo.diary.v1';
 /* 当前版本：发版时只改这一处，界面「设置 → 关于」与更新提示都以它为准 */
 var APP_VERSION = '2.9';
-/* 开源地址：设置 → 关于里显示，点一下打开（打不开就把地址复制出来） */
-var OPEN_SOURCE_URL = 'https://github.com/thouen/buddist-diary';
 /* 上次打开过的版本，与数据分开存，导入备份不会把它带过来 */
 var SEENVER_KEY = 'xuefo.seenver';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 
+/* fstep 是「专修增量」的分类默认值：念佛一声一声数太慢，默认 3；其余分类默认 1 */
 var CATS = [
-  { k: 'nianfo', n: '念佛', unit: '遍', step: 100, scheme: 'big' },
-  { k: 'jing',   n: '诵经', unit: '部', step: 1, scheme: 'small' },
-  { k: 'zhou',   n: '持咒', unit: '遍', step: 100, scheme: 'big' },
-  { k: 'yigui',  n: '行法', unit: '遍', step: 1, scheme: 'small' }
+  { k: 'nianfo', n: '念佛', unit: '遍', step: 100, scheme: 'big', fstep: 3 },
+  { k: 'jing',   n: '诵经', unit: '部', step: 1, scheme: 'small', fstep: 1 },
+  { k: 'zhou',   n: '持咒', unit: '遍', step: 100, scheme: 'big', fstep: 1 },
+  { k: 'yigui',  n: '行法', unit: '遍', step: 1, scheme: 'small', fstep: 1 }
 ];
 var CAT_MAP = {};
 CATS.forEach(function (c) { CAT_MAP[c.k] = c; });
+/* 某分类的专修增量默认值 */
+function catFocusStep(cat) {
+  var c = CAT_MAP[cat];
+  return (c && c.fstep) || 1;
+}
 /* 功课卡上那四个快捷增量按钮的两套方案：
    big 走千位（念佛、持咒动辄上万声），small 走 3 / 7 / 21 这样的短课（诵经、行法）
    功课可以各自指定，没指定的按所属分类的默认方案 */
@@ -10222,7 +10224,7 @@ function defaultDB() {
     BUILTIN[c.k].forEach(function (name) {
       tasks.push({
         id: uid('t'), cat: c.k, name: name,
-        unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: 1,
+        unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(c.k),
         goal: 0, builtin: true, hidden: false
       });
     });
@@ -10231,6 +10233,7 @@ function defaultDB() {
     v: 1,
     builtinRev: BUILTIN_REV,
     orderRev: 1,
+    fstepRev: 1,
     /* 节日预告那五个开关的默认值只在 HINT_DEFAULT 里写一次，这里合并进来，
        免得两处各写一遍、改一处忘另一处 */
     settings: Object.assign({
@@ -10441,7 +10444,7 @@ function migrateBuiltin(db) {
           var c = CAT_MAP[cat] || { unit: '遍', step: 1 };
           db.tasks.push({
             id: uid('t'), cat: cat, name: name,
-            unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: 1,
+            unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(cat),
             goal: 0, builtin: true, hidden: false
           });
         });
@@ -10461,6 +10464,16 @@ function migrateBuiltin(db) {
     moveTaskAfter(db, 'yigui', '禅修', '地藏菩萨占察忏');
     db.orderRev = 2;
     __dbMigrated = true;
+  }
+  /* 2.9：念佛类的专修增量默认值由 1 改成 3，还是旧默认值的跟着改一次 */
+  if ((+db.fstepRev || 0) < 1) {
+    db.tasks.forEach(function (t) {
+      if (t.cat === 'nianfo' && (+t.fstep || 0) === 1) {
+        t.fstep = catFocusStep('nianfo');
+        __dbMigrated = true;
+      }
+    });
+    db.fstepRev = 1;
   }
 }
 
@@ -10534,8 +10547,8 @@ function loadDB() {
     db.tasks.forEach(function (t) {
       t.goal = +t.goal > 0 ? Math.floor(+t.goal) : 0;
       t.mgoal = +t.mgoal > 0 ? Math.floor(+t.mgoal) : 0;
-      /* 2.8：专修增量，老存档没有这个字段就按 1 补上 */
-      t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? Math.floor(+t.fstep) : 1;
+      /* 2.8：专修增量，老存档没有这个字段就按分类默认值补上（念佛 3，其余 1） */
+      t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? Math.floor(+t.fstep) : catFocusStep(t.cat);
       /* 专修计时开关：没存过就交给 taskFocusTimer() 按分类默认值走，不用写回存档 */
       if (t.ftimer !== true && t.ftimer !== false) delete t.ftimer;
       /* 快捷增量方案：没存过就交给 taskScheme() 按分类默认值走，不用写回存档 */
@@ -10629,10 +10642,10 @@ function taskMonthGoal(t) {
   var g = t ? +t.mgoal : 0;
   return g > 0 && isFinite(g) ? Math.floor(g) : 0;
 }
-/* 专修增量：专修模式下一次「＋」加多少，默认 1 */
+/* 专修增量：专修模式下一次「＋」加多少，没设过就按分类默认值（念佛 3，其余 1） */
 function taskFocusStep(t) {
   var g = t ? +t.fstep : 0;
-  return g > 0 && isFinite(g) ? Math.floor(g) : 1;
+  return g > 0 && isFinite(g) ? Math.floor(g) : catFocusStep(t && t.cat);
 }
 /* 专修计时：只有「行法」类功课默认打开，其余分类默认关掉。
    关掉后仍可进专修模式，只是不显示计时、也不拦着确认退出 */
@@ -13294,15 +13307,15 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
-            ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
+          '<em>' + esc(t.unit) + ' · 快 ' + SCHEME_LBL[taskScheme(t)] +
+            ' · 默 ' + t.step + ' · 专 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
-                (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
+                (taskGoal(t) ? '日 ' + taskGoal(t) : '') +
                 (taskGoal(t) && (taskMonthGoal(t) || taskTarget(t)) ? ' · ' : '') +
-                (taskMonthGoal(t) ? '月目标 ' + taskMonthGoal(t) : '') +
+                (taskMonthGoal(t) ? '月 ' + taskMonthGoal(t) : '') +
                 (taskMonthGoal(t) && taskTarget(t) ? ' · ' : '') +
-                (taskTarget(t) ? '总目标 ' + taskTarget(t) : '') +
+                (taskTarget(t) ? '总 ' + taskTarget(t) : '') +
               '</em>'
             : '') +
         '</div>' +
@@ -13323,7 +13336,7 @@ function renderTaskSettings() {
 
   html += '<div class="set-sec" style="margin-top:14px">' +
     '<div class="set-card">' +
-      '<div class="set-row" data-restore="1"><div class="lbl">恢复内置功课<em>把旧版本删掉的经咒佛号补回来</em></div><span class="chev">›</span></div>' +
+      '<div class="set-row" data-restore="1"><div class="lbl">恢复内置功课<em>把删掉的经咒佛号一次补回来，已有的不动</em></div><span class="chev">›</span></div>' +
     '</div></div>';
   html += '<div style="height:90px"></div>';
 
@@ -13338,7 +13351,7 @@ function openTaskEditor(taskId, cat) {
   var unit = t ? t.unit : c.unit;
   var step = t ? t.step : c.step;
   var scheme = taskScheme(t || { cat: c.k });
-  var fstep = t ? taskFocusStep(t) : 1;
+  var fstep = t ? taskFocusStep(t) : catFocusStep(c.k);
   var ftimer = taskFocusTimer(t || { cat: c.k });
   var goal = t ? taskGoal(t) : 0;
   var mgoal = t ? taskMonthGoal(t) : 0;
@@ -13356,7 +13369,7 @@ function openTaskEditor(taskId, cat) {
           SCHEME_LBL.big + '</button>' +
       '</div></div>' +
     '<div class="field"><label>默认增量（「＋」弹窗里增 / 减的初始值）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
-    '<div class="field"><label>专修增量（专修模式下一次「＋」的增量，默认 1）</label><input id="f-fstep" type="number" inputmode="numeric" value="' + esc(fstep) + '"></div>' +
+    '<div class="field"><label>专修增量（专修模式下一次「＋」的增量，念佛默认 3、其余 1）</label><input id="f-fstep" type="number" inputmode="numeric" value="' + esc(fstep) + '"></div>' +
     '<div class="field-chk" data-mftimer="1">' +
       '<div class="lbl">专修计时<em>关掉后不显示计时，退出专修模式也不用确认</em></div>' +
       '<span class="switch' + (ftimer ? ' on' : '') + '"></span></div>' +
@@ -13366,9 +13379,8 @@ function openTaskEditor(taskId, cat) {
     '<div class="field-chk" data-mshow="1">' +
       '<div class="lbl">在功课列表中显示<em>关掉只是藏起来，计数与目标都保留</em></div>' +
       '<span class="switch' + (t && t.hidden ? '' : ' on') + '"></span></div>' +
-    (isNew ? '' : (t && t.builtin
-      ? '<div class="tk-note">内置功课只能隐藏，不能删除</div>'
-      : '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-tdel="' + esc(t.id) + '">删除这项功课</button></div>')) +
+    (isNew ? '' :
+      '<div style="text-align:center;padding:6px 0 0"><button style="color:#b8442f;font-size:12.5px" data-tdel="' + esc(t.id) + '">删除这项功课</button></div>') +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
       '<button class="primary" data-tsave="1">保存</button>' +
@@ -13419,6 +13431,7 @@ function askDeleteTask(t) {
   askConfirm(
     '彻底删除这项功课？',
     '「' + esc(t.name) + '」在各日期上已记的计数会一并删掉，不可恢复。<br>' +
+      (t.builtin ? '内置功课删掉后，可在「设置 → 恢复内置功课」里补回来。<br>' : '') +
       '只想暂时不显示，可以在编辑弹窗里关掉「在功课列表中显示」。',
     '彻底删除',
     function () { deleteTask(t.id); }
@@ -14011,7 +14024,9 @@ var REL_NOTES = [
       '节日一览除佛教节日、公共节日外，还能左右划动翻看斋戒日、节气与纪念日',
       '「我的纪念日」并入节日管理（佛教节日 / 公共节日 / 纪念日三段），节日一览与节日管理可互相跳转；设置里的「我的纪念日」改成一个开关',
       '导出备份可直接调系统分享面板发到网盘、微信，也可以只存到下载目录，两种方式都会说明存到哪',
-      '设置 → 关于新增开源地址，点一下打开 GitHub，打不开就把链接复制出来',
+      '设置 → 关于里的版本行可随时回看「更新内容」',
+      '内置功课现在也能彻底删除；删错了在「设置 → 恢复内置功课」里一次补回',
+      '念佛类功课的专修增量默认值改为 3（其余分类仍是 1），可在「编辑功课」里逐项改',
       '详情页右上角「专」点亮即进入专修模式并开始计时；退出、返回、换日期前都先确认一次，并写明本次已专修多久',
       '功课新增「专修计时」开关（只有「行法」类默认开启）：关掉后不显示计时，退出专修模式也不用确认',
       '详情页的日信息钉在标题下方常驻，滚动的只剩计数卡与统计区',
@@ -14231,11 +14246,6 @@ function renderSettings() {
     '<div class="set-row" data-actx="whatsnew">' +
       '<div class="lbl">学佛日记<em>版本 ' + esc(APP_VERSION) + ' · 数据保存在本机，不上传</em></div>' +
       '<span class="val">更新内容</span><span class="chev">›</span></div>' +
-    /* 开源地址：单文件应用的源码就在这个仓库里，欢迎自己改、自己打包 */
-    '<div class="set-row" data-opensrc="1">' +
-      '<div class="lbl">开源地址<em>' + esc(OPEN_SOURCE_URL.replace('https://', '')) +
-        ' · 源码、问题反馈与更新都在这</em></div>' +
-      '<span class="val">GitHub</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="wipe"><div class="lbl" style="color:#b8442f">清空全部数据<em>不可恢复，请先导出备份</em></div><span class="chev" style="color:#b8442f">›</span></div>' +
     '</div></div>';
 
@@ -14392,7 +14402,6 @@ function bindEvents() {
     if (del) {
       var dt = taskById(del.dataset.tdel);
       if (!dt) return;
-      if (dt.builtin) { toast('内置功课只能隐藏，不能删除'); return; }
       askDeleteTask(dt);
       return;
     }
@@ -14741,9 +14750,6 @@ function bindEvents() {
       ]);
       return;
     }
-
-    /* 关于 → 开源地址 */
-    if (e.target.closest('[data-opensrc]')) { openExternalURL(OPEN_SOURCE_URL); return; }
 
     /* 其它设置项 */
     el = e.target.closest('[data-actx]');
@@ -15269,13 +15275,19 @@ function moveTask(id, dir) {
   renderTaskSettings();
 }
 
+/* 恢复内置功课：内置条目现在可以彻底删除，这里就是「删错了」的后悔药。
+   只补库里没有的同名条目，用户改过的参数、隐藏状态、顺序一律不动 */
 function restoreBuiltin() {
   var added = 0;
   CATS.forEach(function (c) {
     BUILTIN[c.k].forEach(function (name) {
       var exists = DB.tasks.some(function (t) { return t.cat === c.k && t.name === name; });
       if (!exists) {
-        DB.tasks.push({ id: uid('t'), cat: c.k, name: name, unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: 1, goal: 0, builtin: true, hidden: false });
+        DB.tasks.push({
+          id: uid('t'), cat: c.k, name: name,
+          unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(c.k),
+          goal: 0, builtin: true, hidden: false
+        });
         added++;
       }
     });
@@ -15302,19 +15314,6 @@ function nativeSaveText(name, text) {
     window.AndroidBridge.endFile(id);
     return true;
   } catch (e) { return false; }
-}
-
-/* 外链：能开新标签就开；WebView 里开不了就把地址复制出来，总有一条路能用 */
-function openExternalURL(url) {
-  var w = null;
-  try { w = window.open(url, '_blank', 'noopener'); } catch (e) { }
-  if (w) return;
-  try {
-    navigator.clipboard.writeText(url);
-    toast('链接已复制：' + url.replace('https://', ''));
-  } catch (e2) {
-    toast(url);
-  }
 }
 
 /* 存到系统「下载」目录（网页版唯一能自己控制的目标） */
@@ -15405,7 +15404,7 @@ function sanitizeImport(src) {
       unit: (typeof t.unit === 'string' ? t.unit : '').slice(0, 8),
       step: Math.min(100000, Math.max(1, Math.floor(Number(t.step)) || 1)),
       scheme: (t.scheme === 'big' || t.scheme === 'small') ? t.scheme : '',
-      fstep: Math.min(100000, Math.max(1, Math.floor(Number(t.fstep)) || 1)),
+      fstep: Math.min(100000, Math.max(1, Math.floor(Number(t.fstep)) || catFocusStep(t.cat))),
       goal: Math.max(0, Math.floor(Number(t.goal)) || 0),
       mgoal: Math.max(0, Math.floor(Number(t.mgoal)) || 0),
       tgoal: Math.max(0, Math.floor(Number(t.tgoal)) || 0),
