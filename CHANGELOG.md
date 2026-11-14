@@ -6,7 +6,27 @@
 
 ## 2.9（2026-11-14）
 
-> `APP_VERSION` 2.9（未变）、`sw.js` 缓存 `v34` → `v35`、`versionCode 41`。仓库里的 `学佛日记-2.9.apk` 仍是早前那一版（内嵌页面为改动前的 `index.html`，SHA-256 `f4f733a8…`），要带上本节改动需重新打包；证书不变（`9ad2a321…1bcc14`），可直接覆盖安装。
+> `APP_VERSION` 2.9（未变）、`sw.js` 缓存 `v34` → `v36`、`versionCode 41`。仓库里的 `学佛日记-2.9.apk` 仍是早前那一版（内嵌页面为改动前的 `index.html`，SHA-256 `f4f733a8…`），要带上本节改动需重新打包；证书不变（`9ad2a321…1bcc14`），可直接覆盖安装。
+
+**修订：全量代码审查后的修复**
+
+- **数据兜底**：`lunarOf()` 包 `try/catch`，非法日期返回 `badLunarInfo()` 兜底对象（此前农历库对 `2026-13-01` 这类键直接 throw，一条脏键能让 `renderView()` 次次抛错、页面永久白屏且用户清不掉）；新增 `isYmdKey()`，`loadDB()` 摘掉非法记录键、`sanitizeImport()` 用「形状 + 回读」双校验、`selectDate()` 忽略非法日期
+- **计数入口**：新增 `parseQtyInput()`（只收纯数字，`1e3` / `12.9` / 空值不再被静默当成 1 或 0）、`clampCount()`（上限 1 亿）、`clampStep()`（1–100000）；「设为计数」弹窗空输入不再静默清零
+- **跨零点**：新增 `syncTodayIfNeeded()`，落账前自己校一次日期（弹窗开着跨 00:00 时 `checkDayChange` 会跳过），不再把「今日」的计数写进昨天
+- **空记录**：`openDeltaModal()` / 「设为」弹窗改成只读不建；`closeModal()` 收尾时 `pruneRec()`；新增 `recIsEmpty()`，只记了天气 / 地点的记录不再被误删
+- **内置功课身份**：新增 `bkey`（`分类:原名`）与 `findBuiltinTask()` / `addBuiltinTask()`，改名后恢复不再补出重复条目；`bkeyRev` 迁移给老存档补 `bkey`；编辑功课增加同分类重名校验
+- **恢复内置功课改为自选**：入口移到「功课设置」页右上角的图标（`#btn-restore-builtin`），弹窗按分类列出全部内置条目——缺的默认勾选、已有的置灰标「已有 / 已隐藏」，只补勾选的几项；`restoreBuiltin(picked)` 不再无差别全量补
+- **日记**：`setRecMeta()` 只重画 `.diary-meta`（改天气 / 地点不再整块重建，正在写的内容、光标、尾部空行都不丢）；`insertDiaryLine()` / `toggleBullet()` 先 `syncDiaryFromDOM()`；`ensureDiaryRec()` 建记录的当次补一次「默认地点」（新的一天首篇日记以前补不上）
+- **详情页**：`shiftDetailDate()` / `gotoDetailDate()` 一律同步 `UI.detail.year`（按日滑过跨年后切「按月」不再显示旧年份）；切「按月」时也对齐当前年；离开详情页清 `UI.detail`；`renderDetail()` 清掉上一次的统计重绘
+- **专修计时**：新增 `pauseFocusTick()` / `resumeFocusTick()`，切后台 / 锁屏停表并把后台时长从「已专修」里扣掉
+- **排序**：`moveTask()` / `topTask()` 的邻居只在可见项里找（设置页有隐藏项时，置顶 / 上移 / 下移在主页上看不出变化的 bug）
+- **纪念日**：「只此一年」+ 农历条目的年份口径统一（表单写「年份（农历年）」、新增默认取农历年、保存兜底也按历法走），腊月那类不再晚一年才出现；`normalizeMyDays()` 对 `4/31` 这类不存在的日期按当月最后一天收口
+- **节日**：`festHidden` 清洗正则放行非 ASCII（`pub:jq-清明` 之前会被丢掉，隐藏清明节重开就失效）；节日一览 / 节日管理重画时保住滚动位置
+- **设置页**：开关就地拨动（不再整页重画，动画 / 焦点不再丢），只有「记录日记」会改变行结构才重画
+- **数据概况**：按「分类 + 单位」归并（禅修的分钟、施食的次不再被当成「遍」累加）
+- **无障碍**：放开缩放（去掉 `maximum-scale=1,user-scalable=no`）、新增全局 `:focus-visible`、弹窗 / 底部菜单收起后 `visibility:hidden` 退出 Tab 顺序、`#toast` 加 `role="status" aria-live`、弹窗加 `role="dialog"`、Esc 关窗、恢复清单支持 Space / Enter；`--ink2` / `--ink3` 与零值数字整体压深一档；补 `prefers-reduced-motion`
+- **老内核兜底**：`86dvh` / `80dvh` / `48dvh` / `46dvh` 全部补 `vh` 双声明（老 WebView 不认 `dvh` 时编辑弹窗会顶出屏幕、按钮点不到）
+- **sw.js**：只缓存同源且 `res.ok` 的响应（不再把 404 缓存到下次改版本号）、离线兜底只对导航请求返回 `index.html`、`addAll` 改逐个 `add`（一个资源 404 不再让整个 install 失败）
 
 **功课：快捷增量两套方案**
 

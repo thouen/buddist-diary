@@ -2,7 +2,7 @@
    ⚠️ 发布须知：每次发布新的 index.html，必须把下面 CACHE 的版本号 +1
    （例如 v25 → v26），否则老用户会一直读到缓存里的旧页面。
    发布检查清单见 README 的「发布检查清单」一节。 */
-var CACHE = 'xuefo-diary-v35';
+var CACHE = 'xuefo-diary-v36';
 var ASSETS = [
   './',
   './index.html',
@@ -15,7 +15,11 @@ var ASSETS = [
 self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(CACHE).then(function (c) {
-      return c.addAll(ASSETS);
+      /* 逐个 add：某个资源 404 不该让整个 install 失败，
+         否则新版本永远装不上，用户就一直停在旧缓存里 */
+      return Promise.all(ASSETS.map(function (u) {
+        return c.add(u).catch(function () { });
+      }));
     }).then(function () { return self.skipWaiting(); })
   );
 });
@@ -32,17 +36,25 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
+  var req = e.request;
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(function (hit) {
+    caches.match(req, { ignoreSearch: true }).then(function (hit) {
       if (hit) return hit;
-      return fetch(e.request).then(function (res) {
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) {
-          c.put(e.request, copy).catch(function () { });
-        }).catch(function () { });
+      return fetch(req).then(function (res) {
+        /* 只缓存同源且成功的响应：以前不看状态码，一次 404 会被缓存到
+           下次改版本号为止，页面上就是「资源一直在坏」 */
+        if (res && res.ok && res.type === 'basic') {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) {
+            c.put(req, copy).catch(function () { });
+          }).catch(function () { });
+        }
         return res;
       }).catch(function () {
-        return caches.match('./index.html');
+        /* 离线：只有导航请求回首页兜底；图片等其它资源直接失败，
+           别拿一份 HTML 冒充图片（老写法对任何 GET 都返回 index.html） */
+        if (req.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
       });
     })
   );

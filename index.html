@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f5f0e6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -18,8 +18,10 @@
   --card:#fffdf8;
   --card2:#faf5ea;
   --ink:#332c24;
-  --ink2:#8a7f6d;
-  --ink3:#b5a992;
+  /* 2.9 修订：次要文字整体压深一档 —— 原来的 #8a7f6d / #b5a992 对白底只有
+     3.9:1 与 2.3:1，用户多是上了年纪的人，看日期条与图例很吃力 */
+  --ink2:#75695a;
+  --ink3:#8b7e69;
   --line:#e7ddc9;
   --line2:#f0e8d8;
   --accent:#9c2b1f;
@@ -56,6 +58,15 @@ button{font-family:inherit;border:0;background:none;color:inherit;padding:0;curs
 input,select{font-family:inherit}
 img{max-width:100%;display:block}
 ::-webkit-scrollbar{width:0;height:0}
+/* 键盘 / 读屏：可聚焦的东西一律要看见焦点（原先全站只有输入框有条淡边框） */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+/* 前庭敏感用户与低端机：把平移 / 缩放动画几乎关掉 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important;
+  }
+}
 
 #app{
   position:relative;
@@ -339,12 +350,12 @@ img{max-width:100%;display:block}
   padding:3px 6px;border-radius:8px;
 }
 .task-num:active{background:var(--accent-soft)}
-.task-num.zero{color:#cfc4b0;font-weight:400}
+.task-num.zero{color:var(--ink3);font-weight:400}
 .task-num i{font-style:normal;font-size:10px;color:var(--ink3);margin-left:1px;font-family:var(--sans)}
 .task-nums{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex:0 0 auto}
 .task-stats{
   display:flex;align-items:baseline;justify-content:space-between;gap:8px;
-  padding:0 4px 7px;font-size:9.5px;color:#a89b84;letter-spacing:.2px;
+  padding:0 4px 7px;font-size:9.5px;color:var(--ink3);letter-spacing:.2px;
   font-variant-numeric:tabular-nums;
 }
 .task-stats .st-a{color:var(--ink3);margin-left:auto}
@@ -566,11 +577,14 @@ img{max-width:100%;display:block}
   position:fixed;left:50%;bottom:0;transform:translate(-50%,101%);
   width:100%;max-width:460px;background:var(--card);z-index:81;
   border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-b));
-  transition:transform .26s cubic-bezier(.2,.9,.3,1);
+  /* visibility 与位移分开过渡：收起后才 hidden，打开时立刻可见，动画照旧 */
+  transition:transform .26s cubic-bezier(.2,.9,.3,1),visibility 0s linear .26s;
+  visibility:hidden;
   box-shadow:0 -10px 40px rgba(60,40,20,.18);
+  max-height:80vh;    /* 老 WebView 不认 dvh，先兜一层 */
   max-height:80dvh;overflow-y:auto;
 }
-.sheet.on{transform:translate(-50%,0)}
+.sheet.on{transform:translate(-50%,0);visibility:visible;transition-delay:0s}
 .sheet-bar{width:34px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 10px}
 .sheet h3{
   margin:0;padding:2px 20px 10px;font-family:var(--serif);font-size:14px;
@@ -594,12 +608,15 @@ img{max-width:100%;display:block}
 /* 模态输入 */
 .modal{
   position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;
-  background:rgba(40,30,20,.35);opacity:0;pointer-events:none;transition:opacity .18s ease;
+  background:rgba(40,30,20,.35);opacity:0;pointer-events:none;
+  /* 收起后退出无障碍树与 Tab 顺序，否则读屏 / 键盘会钻进看不见的输入框 */
+  visibility:hidden;transition:opacity .18s ease,visibility 0s linear .18s;
   padding:24px;
 }
-.modal.on{opacity:1;pointer-events:auto}
+.modal.on{opacity:1;pointer-events:auto;visibility:visible;transition-delay:0s}
 .modal-box{
   width:100%;max-width:330px;background:var(--card);border-radius:18px;padding:18px 16px 14px;
+  max-height:86vh;    /* 老 WebView 不认 dvh，先兜一层，否则弹窗会顶出屏幕、按钮点不到 */
   max-height:86dvh;overflow-y:auto;
   transform:scale(.94);transition:transform .2s cubic-bezier(.2,1.2,.4,1);
   box-shadow:0 20px 60px rgba(60,40,20,.25);
@@ -655,10 +672,31 @@ img{max-width:100%;display:block}
   border:1px solid #ecd0c8;border-radius:5px;padding:1px 5px;letter-spacing:.5px;
 }
 
+/* 恢复内置功课：按分类分组、可勾选的清单（点行即切换） */
+.rb-wrap{max-height:46vh;max-height:46dvh;overflow-y:auto;overscroll-behavior:contain;margin:0 -2px 0}
+.rb-sec{
+  display:flex;align-items:baseline;gap:6px;padding:9px 2px 4px;
+  font-family:var(--serif);font-size:12px;color:var(--ink2);letter-spacing:1px;
+  position:sticky;top:0;background:var(--card);z-index:1;
+}
+.rb-sec em{font-style:normal;font-family:var(--sans);font-size:10.5px;color:var(--ink3);letter-spacing:0}
+.rb-row{
+  display:flex;align-items:center;gap:8px;padding:6px 2px;
+  border-top:1px solid var(--line2);min-height:34px;
+}
+.rb-row .rb-nm{
+  flex:1;min-width:0;font-size:13px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.rb-row .rb-tag{font-size:10.5px;color:var(--ink3);flex:0 0 auto}
+.rb-row.has{opacity:.6}
+.rb-row.has .rb-nm{color:var(--ink2)}
+.rb-row .switch{flex:0 0 auto;transform:scale(.78);transform-origin:right center}
+
 /* 年 / 月选择面板 */
 .pick-grid{
   display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:2px 0 4px;
-  max-height:48dvh;overflow-y:auto;overscroll-behavior:contain;
+  max-height:48vh;max-height:48dvh;overflow-y:auto;overscroll-behavior:contain;
 }
 .pick-grid .pk{
   height:42px;border-radius:11px;border:1px solid var(--line);background:var(--card2);
@@ -753,7 +791,7 @@ img{max-width:100%;display:block}
 }
 .dcell.blank{border-color:transparent;background:transparent}
 .dcell .dd{font-size:10px;line-height:1;color:var(--ink3);font-variant-numeric:tabular-nums}
-.dcell .dn{font-family:var(--serif);font-size:11.5px;line-height:1.1;color:#cfc4b0;font-variant-numeric:tabular-nums}
+.dcell .dn{font-family:var(--serif);font-size:11.5px;line-height:1.1;color:var(--ink3);font-variant-numeric:tabular-nums}
 .dcell .dn.sm{font-size:9.5px}
 .dcell .dn.xs{font-size:9px;letter-spacing:-.2px}
 .dcell.has .dn{color:var(--accent);font-weight:600}
@@ -777,7 +815,7 @@ img{max-width:100%;display:block}
   padding:8px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;
 }
 .mcell .mm{font-size:10px;color:var(--ink3);letter-spacing:.3px}
-.mcell .mn{font-family:var(--serif);font-size:15.5px;line-height:1.15;color:#cfc4b0;font-variant-numeric:tabular-nums}
+.mcell .mn{font-family:var(--serif);font-size:15.5px;line-height:1.15;color:var(--ink3);font-variant-numeric:tabular-nums}
 .mcell .mn.sm,.ycell .yn.sm{font-size:13px}
 .mcell .mn.xs,.ycell .yn.xs{font-size:11px;letter-spacing:-.3px}
 .mcell.has .mn{color:var(--accent);font-weight:600}
@@ -788,7 +826,7 @@ img{max-width:100%;display:block}
   padding:9px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
 }
 .ycell .yy{font-size:10.5px;color:var(--ink3);letter-spacing:.5px;font-variant-numeric:tabular-nums}
-.ycell .yn{font-family:var(--serif);font-size:17px;line-height:1.15;color:#cfc4b0;font-variant-numeric:tabular-nums}
+.ycell .yn{font-family:var(--serif);font-size:17px;line-height:1.15;color:var(--ink3);font-variant-numeric:tabular-nums}
 .ycell.has .yn{color:var(--accent);font-weight:600}
 
 .mcell.lv1,.ycell.lv1{background:#fdf6ec;border-color:#f1e4cb}
@@ -955,7 +993,7 @@ img{max-width:100%;display:block}
 .streak .sk-r{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--ink2);min-width:0}
 .streak .sk-r b{color:#a9803a;font-weight:600}
 .streak .sk-sub{font-size:10px;color:var(--ink3)}
-.streak.off .sk-num b,.streak.off .sk-num em{color:#b5a992}
+.streak.off .sk-num b,.streak.off .sk-num em{color:var(--ink3)}
 .streak.off{background:linear-gradient(135deg,#faf7f0,#f7f1e6);border-color:var(--line)}
 
 /* 日记工具条四项均分 */
@@ -964,7 +1002,7 @@ img{max-width:100%;display:block}
 /* 未来的日期：工具条只留一句说明，按钮全部置灰 */
 .diary-bar.ro{gap:0;justify-content:center}
 .diary-bar.ro .bar-ro{margin-left:0}
-.diary-empty{padding:16px 2px 7px;font-size:12px;color:#b5a992;line-height:1.9;letter-spacing:.3px}
+.diary-empty{padding:16px 2px 7px;font-size:12px;color:var(--ink3);line-height:1.9;letter-spacing:.3px}
 .bar-ro{
   margin-left:10px;font-size:11px;color:var(--ink3);letter-spacing:.3px;
   display:flex;align-items:center;white-space:nowrap;
@@ -1028,7 +1066,7 @@ img{max-width:100%;display:block}
 .sheet.compact .sheet-item{padding:10px 20px;font-size:14.5px}
 .sheet.compact .sheet-item .s{font-size:10.5px}
 .wx-scroll{
-  max-height:min(46dvh,352px);overflow-y:auto;overscroll-behavior:contain;
+  max-height:min(46vh,352px);max-height:min(46dvh,352px);overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;padding:1px 0 2px;
 }
 .wx-grid{
@@ -1079,7 +1117,7 @@ img{max-width:100%;display:block}
 .cc-num{display:flex;align-items:baseline;justify-content:center;gap:3px;font-variant-numeric:tabular-nums}
 .cc-num b{
   font-family:var(--serif);font-size:38px;line-height:1.1;font-weight:600;
-  color:#cfc4b0;letter-spacing:-.5px;
+  color:var(--ink3);letter-spacing:-.5px;
 }
 .count-card.has .cc-num b{color:var(--accent)}
 .cc-num small{font-size:11px;color:var(--ink3)}
@@ -1272,6 +1310,12 @@ img{max-width:100%;display:block}
         <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
       <div class="page-title">功课设置</div>
+      <div class="right">
+        <!-- 恢复内置功课：点开列出全部内置经咒佛号，由用户勾选要补回哪些 -->
+        <button class="iconbtn" id="btn-restore-builtin" aria-label="恢复内置功课" title="恢复内置功课">
+          <svg viewBox="0 0 24 24"><path d="M4.6 9.4A8 8 0 1 1 4 14"/><path d="M4.2 4.6v5h5"/><path d="M12 8.2v4.3l2.9 1.7"/></svg>
+        </button>
+      </div>
     </div>
     <div class="seg" id="tasks-seg"></div>
     <div class="scroll" id="tasks-scroll"></div>
@@ -1349,14 +1393,16 @@ img{max-width:100%;display:block}
 
 <!-- 遮罩 + 底部菜单 -->
 <div class="mask" id="mask"></div>
-<div class="sheet" id="sheet">
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="菜单">
   <div class="sheet-bar"></div>
   <div id="sheet-body"></div>
 </div>
 
 <!-- 模态框 -->
-<div class="modal" id="modal"><div class="modal-box" id="modal-box"></div></div>
-<div class="toast" id="toast"></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="对话框">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 /*! lunar-javascript v1.7.8 */
@@ -10215,6 +10261,27 @@ function uid(p) { return (p || 'x') + '_' + Date.now().toString(36) + Math.rando
 
 var TODAY = fmtDate(new Date());
 
+/* 计数 / 增量上限：手误敲一串数字也不至于把统计打成 1e+21，或让累计越过安全整数 */
+var MAX_COUNT = 100000000;
+function clampCount(v) {
+  v = Math.floor(Number(v) || 0);
+  if (!isFinite(v) || v < 0) return 0;
+  return v > MAX_COUNT ? MAX_COUNT : v;
+}
+/* 增量（默认 / 专修）的上限与导入校验保持一致 */
+function clampStep(v) {
+  v = Math.floor(Number(v) || 0);
+  if (!isFinite(v) || v < 1) return 1;
+  return v > 100000 ? 100000 : v;
+}
+/* 记录键是否合法：形状对不算数，还要是真实存在的日期。
+   「2026-02-31」这种会被 parseYmd 悄悄进位到 3 月 3 日，回读一次就能发现。
+   非法键必须挡在入库之前——农历库对非法月份会直接 throw，一条坏键就能让首页白屏 */
+function isYmdKey(ds) {
+  if (typeof ds !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ds)) return false;
+  return fmtDate(parseYmd(ds)) === ds;
+}
+
 /* ---------- 数据存储 ---------- */
 var DB = null;
 
@@ -10223,7 +10290,7 @@ function defaultDB() {
   CATS.forEach(function (c) {
     BUILTIN[c.k].forEach(function (name) {
       tasks.push({
-        id: uid('t'), cat: c.k, name: name,
+        id: uid('t'), cat: c.k, name: name, bkey: builtinKey(c.k, name),
         unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(c.k),
         goal: 0, builtin: true, hidden: false
       });
@@ -10234,6 +10301,7 @@ function defaultDB() {
     builtinRev: BUILTIN_REV,
     orderRev: 1,
     fstepRev: 1,
+    bkeyRev: 1,
     /* 节日预告那五个开关的默认值只在 HINT_DEFAULT 里写一次，这里合并进来，
        免得两处各写一遍、改一处忘另一处 */
     settings: Object.assign({
@@ -10384,12 +10452,18 @@ function normalizeMyDays(list) {
     if (typeof rep !== 'boolean') rep = !y;
     /* 「只此一年」却又没年份的话永远显示不出来，兜底回退成年年重复 */
     if (!rep && !y) rep = true;
+    var kind = x.kind === 'lunar' ? 'lunar' : 'solar';
+    var mv = Math.floor(+x.m), dv = Math.floor(+x.d);
+    /* 「4 月 31 日」这种日期永远不会命中，按当月最后一天收口，
+       否则用户会看到一条既不在日历上、也点不出来的幽灵纪念日 */
+    var maxD = kind === 'lunar' ? 30 : daysInMonth(2024, mv);
+    if (dv > maxD) dv = maxD;
     return {
       id: x.id || uid('md'),
-      name: String(x.name).trim(),
-      kind: x.kind === 'lunar' ? 'lunar' : 'solar',
-      m: +x.m,
-      d: +x.d,
+      name: String(x.name).trim().slice(0, 40),
+      kind: kind,
+      m: mv,
+      d: dv,
       /* y：年份，可留空（0）；只作记录与「只此一年」时的定位 */
       y: y,
       /* repeat：true 每年同月日都出现（年份不限制），false 只在 y 年出现一次 */
@@ -10407,12 +10481,15 @@ function normalizeFests(list) {
     var nm = String(f.name || '').trim();
     if (!nm) return;
     var m = Math.floor(+f.m), d = Math.floor(+f.d);
+    var cal = f.cal === 'lunar' ? 'lunar' : 'solar';
     if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= 31)) return;
+    var maxD = cal === 'lunar' ? 30 : daysInMonth(2024, m);
+    if (d > maxD) d = maxD;
     out.push({
       id: typeof f.id === 'string' && f.id ? f.id.slice(0, 64) : uid('ft'),
       kind: f.kind === 'pub' ? 'pub' : 'buddha',
       name: nm.slice(0, 40),
-      cal: f.cal === 'lunar' ? 'lunar' : 'solar',
+      cal: cal,
       m: m,
       d: d
     });
@@ -10424,7 +10501,9 @@ function normalizeFestHidden(src) {
   var out = {};
   if (!src || typeof src !== 'object' || Array.isArray(src)) return out;
   Object.keys(src).slice(0, 600).forEach(function (k) {
-    if (/^(buddha|pub):[A-Za-z0-9-]+$/.test(k) && src[k]) out[k] = true;
+    /* 键有两段，冒号后是内置节日的 key。注意「清明节」的 key 是中文的 jq-清明，
+       原来只放行 ASCII 会把它的隐藏状态悄悄丢掉 */
+    if (/^(buddha|pub):[^:]{1,32}$/.test(k) && src[k]) out[k] = true;
   });
   return out;
 }
@@ -10443,7 +10522,7 @@ function migrateBuiltin(db) {
           __dbMigrated = true;
           var c = CAT_MAP[cat] || { unit: '遍', step: 1 };
           db.tasks.push({
-            id: uid('t'), cat: cat, name: name,
+            id: uid('t'), cat: cat, name: name, bkey: builtinKey(cat, name),
             unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(cat),
             goal: 0, builtin: true, hidden: false
           });
@@ -10474,6 +10553,15 @@ function migrateBuiltin(db) {
       }
     });
     db.fstepRev = 1;
+  }
+  /* 2.9：给内置功课补上稳定身份 bkey（只认名字还对得上的那些，改过名的不猜） */
+  if ((+db.bkeyRev || 0) < 1) {
+    db.tasks.forEach(function (t) {
+      if (!t.builtin || t.bkey) return;
+      var names = BUILTIN[t.cat] || [];
+      if (names.indexOf(t.name) >= 0) { t.bkey = builtinKey(t.cat, t.name); __dbMigrated = true; }
+    });
+    db.bkeyRev = 1;
   }
 }
 
@@ -10559,6 +10647,8 @@ function loadDB() {
     if (!db.records || typeof db.records !== 'object' || Array.isArray(db.records)) db.records = {};
     /* 计数一律收口为非负整数：手改或导入的数据里可能有字符串 */
     Object.keys(db.records).forEach(function (ds) {
+      /* 键不是真实日期就先摘掉：农历换算对 2026-13-01 会直接抛错，留着就是下次白屏 */
+      if (!isYmdKey(ds)) { delete db.records[ds]; __dbMigrated = true; return; }
       var rr = db.records[ds];
       if (!rr || typeof rr !== 'object' || Array.isArray(rr)) { delete db.records[ds]; return; }
       if (!rr.c || typeof rr.c !== 'object' || Array.isArray(rr.c)) rr.c = {};
@@ -10627,6 +10717,32 @@ function saveNow() {
 function taskById(id) {
   for (var i = 0; i < DB.tasks.length; i++) if (DB.tasks[i].id === id) return DB.tasks[i];
   return null;
+}
+
+/* 内置功课的稳定身份 = 分类 + 最初的名字。
+   只按名字匹配有个坑：用户把「南无阿弥陀佛」改个名，恢复时就会补出一条重复功课；
+   反过来自己建一条同名功课，真正的内置条目就永远补不回来。所以条目上记一个 bkey */
+function builtinKey(cat, name) { return cat + ':' + name; }
+function findBuiltinTask(cat, name) {
+  var key = builtinKey(cat, name);
+  for (var i = 0; i < DB.tasks.length; i++) {
+    var t = DB.tasks[i];
+    if (t.cat !== cat) continue;
+    if (t.bkey === key) return t;
+    /* 老存档没有 bkey：退回按名字认，和以前的行为一致 */
+    if (!t.bkey && t.name === name) return t;
+  }
+  return null;
+}
+function addBuiltinTask(cat, name, hidden) {
+  var c = CAT_MAP[cat] || { unit: '遍', step: 1 };
+  var t = {
+    id: uid('t'), cat: cat, name: name, bkey: builtinKey(cat, name),
+    unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(cat),
+    goal: 0, builtin: true, hidden: !!hidden
+  };
+  DB.tasks.push(t);
+  return t;
 }
 function taskGoal(t) {
   var g = t ? +t.goal : 0;
@@ -10754,18 +10870,49 @@ function goalPair(n, g, bold) {
   return num + '<span class="g-sep"> / </span><span class="g-goal">' + g + '</span>';
 }
 
+/* 真正空白的记录才删：只记了天气 / 地点（还没写一个字）的记录也是用户填进来的东西，
+   不能因为「没有计数也没有日记」就被清掉 */
+function recIsEmpty(r) {
+  if (!r) return true;
+  if (recHasContent(r)) return false;
+  if (r.w) return false;
+  if (r.place) return false;
+  if (r.locOff) return false;
+  return true;
+}
 function pruneRec(ds) {
   var r = DB.records[ds];
-  if (r && !recHasContent(r)) delete DB.records[ds];
+  if (r && recIsEmpty(r)) delete DB.records[ds];
 }
 
 /* ---------- 农历 / 佛历 ---------- */
 var LunarCache = {};
+/* 非法日期的兜底对象：字段形状与正常结果一致，各处调用不用再判空 */
+function badLunarInfo(p) {
+  var y = +p[0] || 0, m = +p[1] || 0, d = +p[2] || 0;
+  return {
+    solar: null, lunar: null, y: y, m: 0, d: 0,
+    monthCn: '', dayCn: '', jq: '', week: 0,
+    shy: y, shm: m, shd: d, lunarDays: 30,
+    fests: [], pubs: [], fest: '', trad: '',
+    isShuo: false, isWang: false, isLiuZhai: false, isShiZhai: false, isGuanyin: false,
+    bad: true
+  };
+}
 function lunarOf(ds) {
   if (LunarCache[ds]) return LunarCache[ds];
-  var p = ds.split('-');
-  var solar = Solar.fromYmd(+p[0], +p[1], +p[2]);
-  var l = solar.getLunar();
+  var p = String(ds == null ? '' : ds).split('-');
+  var solar, l;
+  try {
+    solar = Solar.fromYmd(+p[0], +p[1], +p[2]);
+    l = solar.getLunar();
+  } catch (e) {
+    /* 农历库对非法月份直接 throw。一条坏日期键就能让 renderView 次次抛错、
+       页面永远白屏且用户自己修不回来，所以这里必须兜住 */
+    var bad = badLunarInfo(p);
+    LunarCache[ds] = bad;
+    return bad;
+  }
   var info = {
     solar: solar,
     lunar: l,
@@ -10951,11 +11098,15 @@ function openModal(html, onOk) {
 function closeModal() {
   $('#modal').classList.remove('on');
   modalOnOk = null;
+  _confirmOpen = false;
   /* 斋戒日 / 节日预告弹窗：拨动时只重画弹窗本身，关窗时才重画设置页——
      每次拨动都重画会把设置页的滚动位置清回顶部 */
   var wasSwitch = !!_swCfg;
   _swCfg = null;
   if (wasSwitch) renderSettings();
+  /* 关窗后清掉只剩空壳的记录：计数 / 天气 / 地点弹窗都会先 getRec(create)，
+     点「取消」就留下一条 {}，长期下来记录表会白白长胖 */
+  if (DB && DB.records && isYmdKey(UI.date)) pruneRec(UI.date);
 }
 /* 应用内确认框：原生 confirm 在 APK 里会多出一行「网址为 https://appassets.local 的网页显示」，
    所以二次确认一律走这里。sub 允许传已经转义好的 HTML。
@@ -10963,6 +11114,9 @@ function closeModal() {
    就把那个弹窗原样放回去。这里挪的是**真实节点**而不是 innerHTML 字符串，
    所以刚输入的内容、勾选状态、以及绑在省市联动上的监听都还在。 */
 var _ackBack = null;
+/* 确认框是否开着：以前用 _ackBack 兼任这个判断，但底下没有弹窗时它是 null，
+   连点两下就会叠出第二个确认框 —— 单独记一个布尔量 */
+var _confirmOpen = false;
 /* 把当前弹窗的内容整块「搬」下来暂存（挪真实节点，监听与输入都还在），供「取消」时放回 */
 function stashModal() {
   var box = $('#modal-box');
@@ -10975,7 +11129,8 @@ function stashModal() {
 }
 function askConfirm(title, sub, okText, onOk) {
   /* 已经有一个确认框开着（连点两下）：直接忽略，别把暂存的编辑弹窗覆盖掉 */
-  if (_ackBack) return;
+  if (_confirmOpen) return;
+  _confirmOpen = true;
   _ackBack = stashModal();
   openModal(
     '<h4>' + esc(title) + '</h4>' +
@@ -10985,6 +11140,7 @@ function askConfirm(title, sub, okText, onOk) {
       '<button class="primary" data-mok="1">' + esc(okText || '确定') + '</button>' +
     '</div>',
     function () {
+      _confirmOpen = false;
       _ackBack = null;
       closeModal();
       if (typeof onOk === 'function') onOk();
@@ -10993,6 +11149,7 @@ function askConfirm(title, sub, okText, onOk) {
 }
 function cancelConfirm() {
   var back = _ackBack;
+  _confirmOpen = false;
   _ackBack = null;
   if (!back) { closeModal(); return; }
   var box = $('#modal-box');
@@ -11025,8 +11182,9 @@ function renderView() {
     var el = document.getElementById('view-' + v);
     if (el) el.classList.toggle('hidden', v !== UI.view);
   });
-  /* 离开详情页就别再空转专修计时 */
-  if (UI.view !== 'detail') stopFocusTick();
+  /* 离开详情页就别再空转专修计时，顺手把详情状态清掉：
+     留着它以后新增「回到详情」入口时，会复活一个跨小时的幽灵计时 */
+  if (UI.view !== 'detail') { stopFocusTick(); UI.detail = null; }
   if (UI.view === 'home') renderHome();
   else if (UI.view === 'detail') renderDetail();
   else if (UI.view === 'tasks') renderTaskSettings();
@@ -11229,7 +11387,7 @@ function cellHTML(ds, dayNum, out) {
     : '';
   var hwHTML = hasWorkRec(DB.records[ds]) ? '<i class="hwd"></i>' : '';
 
-  return '<div class="' + cls.join(' ') + '" data-ds="' + ds + '">' +
+  return '<div class="' + cls.join(' ') + '" data-ds="' + esc(ds) + '">' +
     '<div class="d"><span class="dn">' + dayNum + hwHTML + '</span></div>' +
     '<div class="l">' + esc(sub) + '</div>' + botHTML +
     '</div>';
@@ -11462,6 +11620,7 @@ function renderTaskListInto(box, cat) {
 
 /* 只重绘一个日历格（计完数即时反馈） */
 function refreshCalCell(ds) {
+  if (!isYmdKey(ds)) return;
   var cell = document.querySelector('.cell[data-ds="' + ds + '"]');
   if (!cell || !cell.parentNode) return;
   var dEl = cell.querySelector('.d');
@@ -11618,7 +11777,7 @@ function renderSummaryHTML() {
     var meta = [];
     if (DB.settings.showSumPlace !== false && rec.loc) meta.push(esc(rec.loc));
     if (DB.settings.showSumWeather !== false && rec.w) meta.push('<i class="wdot ' + weatherClass(rec.w) + '"></i>' + esc(rec.w));
-    html += '<div class="sum-day" data-goto="' + ds + '" data-ds="' + ds + '">' +
+    html += '<div class="sum-day" data-goto="' + esc(ds) + '" data-ds="' + esc(ds) + '">' +
       '<div class="sum-head">' +
         '<span class="gd' + (isToday ? ' today' : '') + '">' + gd + '</span>' +
         '<span class="ln">星期' + WEEK_CN[info.week] + ' · 农历' + info.monthCn + info.dayCn + '</span>' +
@@ -12018,10 +12177,14 @@ function updateDiaryMetaCount() {
 }
 
 function ensureDiaryRec() {
+  var created = !getRec(UI.date, false);
   var rec = getRec(UI.date, true);
   var t = recDiaryText(rec);
   /* 同一天内不要把正在编辑的内容盖回旧值 */
   if (diaryDate !== UI.date) { diaryText = t; diaryDate = UI.date; }
+  /* 记录刚在这一刻建出来：补一次「默认地点」。渲染日记页时刻意不落库，
+     那一步补不上，所以只能等真的有内容时补。放到下一个 tick，避免打断输入 */
+  if (created) setTimeout(maybeAutoPlace, 0);
   return rec;
 }
 
@@ -12059,8 +12222,11 @@ function insertTimeStamp() {
 /* 在光标所在行的上方（dir=-1）/ 下方（dir=1）插入一个空行 */
 function insertDiaryLine(dir) {
   if (diaryRO) { toast('未来的日期还不能写日记'); return; }
-  var rec = ensureDiaryRec();
   var off = currentCaret();
+  /* 先把 DOM 里的文字读回模型（输入法刚上屏的那几个字不在模型里），再夹一次光标 */
+  syncDiaryFromDOM();
+  var rec = ensureDiaryRec();
+  off = Math.min(off, diaryText.length);
   pendingCaret = null;
   if (!diaryText.trim()) {
     /* 空文档没有「当前行」可分，直接把光标放进去即可 */
@@ -12081,8 +12247,11 @@ function insertDiaryLine(dir) {
 /* 无序列表：在光标所在行的行首加 / 去「• 」 */
 function toggleBullet() {
   if (diaryRO) { toast('未来的日期还不能写日记'); return; }
-  var rec = ensureDiaryRec();
   var off = currentCaret();
+  /* 同上：先同步，否则模型覆盖 textarea 时会把刚打的字冲掉 */
+  syncDiaryFromDOM();
+  var rec = ensureDiaryRec();
+  off = Math.min(off, diaryText.length);
   pendingCaret = null;
   var b = lineBoundsAt(off);
   var line = diaryText.slice(b.s, b.e);
@@ -12159,7 +12328,12 @@ function setRecMeta(patch) {
   if (patch.loc === '') { rec.locOff = 1; delete rec.place; }
   else if (patch.loc) delete rec.locOff;
   saveNow();
-  refreshDiary();
+  /* 只重画元信息那一行：整块 renderDiaryInto 会把正在写的内容、光标与滚动位置一起冲掉，
+     而且 rec.dt 去掉了末尾空行，结尾留的空行会当场消失 */
+  var box = $('#diary-box');
+  var meta = box && box.querySelector('.diary-meta');
+  if (meta) meta.outerHTML = diaryMetaHTML(getRec(UI.date, true));
+  else refreshDiary();
 }
 
 function chooseWeather() {
@@ -12512,13 +12686,39 @@ function isFutureDate(ds) {
 function blockFuture() {
   toast('未来的日期还不能记录功课');
 }
+/* 弹窗开着跨过 00:00 时 checkDayChange 会跳过（怕打断输入），落账前自己校一次日期，
+   别把界面上写着「今日」的计数写进昨天 */
+function syncTodayIfNeeded() {
+  var t = fmtDate(new Date());
+  if (t === TODAY) return false;
+  var old = TODAY;
+  TODAY = t;
+  if (UI.date === old) {
+    UI.date = t;
+    var pd = parseYmd(t);
+    UI.calY = pd.getFullYear();
+    UI.calM = pd.getMonth() + 1;
+    if (UI.detail) { UI.detail.y = pd.getFullYear(); UI.detail.m = pd.getMonth() + 1; }
+    toast('已进入新的一天');
+  }
+  return true;
+}
+/* 数量输入只收纯数字：1e3 / 12.9 / 12abc 这类以前会被 parseInt 悄悄截成 1 或 12 */
+function parseQtyInput(raw) {
+  var s = String(raw == null ? '' : raw).replace(/\s+/g, '');
+  if (!/^\d{1,12}$/.test(s)) return -1;
+  var v = parseInt(s, 10);
+  return v > MAX_COUNT ? MAX_COUNT : v;
+}
+
 function addCount(taskId, delta) {
+  syncTodayIfNeeded();
   if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
   var rec = getRec(UI.date, true);
-  var cur = rec.c[taskId] || 0;
-  var nv = Math.max(0, cur + delta);
+  var cur = clampCount(rec.c[taskId]);
+  var nv = clampCount(cur + Math.floor(+delta || 0));
   if (nv === 0) delete rec.c[taskId];
   else rec.c[taskId] = nv;
   invalidateTotals();
@@ -12530,11 +12730,12 @@ function addCount(taskId, delta) {
 
 /* 直接把某功课当天的数量设为指定值（长按「+」「−」→「设为」） */
 function setTaskCount(taskId, v) {
+  syncTodayIfNeeded();
   if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
   var rec = getRec(UI.date, true);
-  v = Math.max(0, Math.floor(v || 0));
+  v = clampCount(v);
   if (v === 0) delete rec.c[taskId];
   else rec.c[taskId] = v;
   invalidateTotals();
@@ -12544,6 +12745,7 @@ function setTaskCount(taskId, v) {
 }
 
 function openCountEditor(taskId) {
+  syncTodayIfNeeded();
   if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
@@ -12553,16 +12755,17 @@ function openCountEditor(taskId) {
   openModal(
     '<h4>' + esc(t.name) + '</h4>' +
     '<div class="field"><label>' + (UI.date === TODAY ? '今日计数（' : '此日计数（') + esc(t.unit) + '）</label>' +
-    '<input type="number" id="m-count" inputmode="numeric" value="' + cur + '"></div>' +
+    '<input type="text" id="m-count" inputmode="numeric" autocomplete="off" value="' + cur + '"></div>' +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
       '<button class="primary" data-mok="1">确定</button>' +
     '</div>',
     function () {
-      var v = parseInt($('#m-count').value, 10);
-      if (isNaN(v) || v < 0) v = 0;
-      /* 弹窗可能开着跨过 00:00（checkDayChange 会跳过弹窗，但时钟也可能从别处更新），
-         这里按当前日期重新取一次，别写进开窗时那一天的记录 */
+      /* 空输入 / 非法输入以前会被当成 0，一点确定就把当天计数静默清零；现在直接拦住 */
+      var v = parseQtyInput($('#m-count').value);
+      if (v < 0) { toast('请输入 0 或更大的整数'); return; }
+      /* 弹窗可能开着跨过 00:00：先校日期，再按当前日期取记录 */
+      syncTodayIfNeeded();
       var r0 = getRec(UI.date, true);
       if (v === 0) delete r0.c[taskId]; else r0.c[taskId] = v;
       invalidateTotals();
@@ -12585,11 +12788,13 @@ function openCountEditor(taskId) {
    预填值改动不影响当前计数，点确定才落账。 */
 var deltaSign = 1;   /* 1 增加 / -1 减少 / 0 设为 */
 function openDeltaModal(taskId, defSign) {
+  syncTodayIfNeeded();
   if (isFutureDate()) { blockFuture(); return; }
   var t = taskById(taskId);
   if (!t) return;
-  var rec = getRec(UI.date, true);
-  var cur = rec.c[taskId] || 0;
+  /* 只读不建：点「+」又点「取消」不该凭空留下一条空记录 */
+  var openRec = getRec(UI.date, false);
+  var cur = (openRec && openRec.c[taskId]) || 0;
   deltaSign = defSign < 0 ? -1 : 1;
   var defStep = +t.step > 0 ? Math.floor(+t.step) : 1;
 
@@ -12614,10 +12819,10 @@ function openDeltaModal(taskId, defSign) {
       '<button class="primary" data-mok="1" id="m-dok">' + okText() + '</button>' +
     '</div>',
     function () {
-      var raw = ($('#m-delta').value || '').replace(/\s+/g, '');
-      var v = parseInt(raw, 10);
-      if (raw === '' || isNaN(v) || v < 0) { toast('请输入 0 或更大的数量'); return; }
+      var v = parseQtyInput($('#m-delta').value);
+      if (v < 0) { toast('请输入 0 或更大的整数'); return; }
       if (deltaSign !== 0 && v <= 0) { toast('请输入大于 0 的数量'); return; }
+      syncTodayIfNeeded();
       var before = (getRec(UI.date, false) || { c: {} }).c[taskId] || 0;
       if (deltaSign === 0) setTaskCount(taskId, v);
       else addCount(taskId, deltaSign * v);
@@ -13013,6 +13218,8 @@ function renderDetailStats() {
 
 function renderDetail() {
   syncTodayUI();
+  /* 上一个功课留下的统计重绘要掐掉，否则 340ms 后会在新页面上白跑一遍 */
+  if (detailStatTimer) { clearTimeout(detailStatTimer); detailStatTimer = null; }
   var d = UI.detail;
   if (!d) { UI.view = 'home'; renderView(); return; }
   var t = taskById(d.taskId);
@@ -13085,6 +13292,7 @@ function setFocusMode(on) {
   if (on && UI.date !== TODAY) { toast('只有当天才能进入专修模式'); return; }
   d.focus = on;
   d.focusStart = on ? Date.now() : 0;
+  d.focusPausedAt = 0;
   syncDetailMode();
   var t = taskById(d.taskId);
   if (t) redrawDetailCount(t);
@@ -13097,6 +13305,22 @@ function setFocusMode(on) {
 var focusTick = null;
 function stopFocusTick() {
   if (focusTick) { clearInterval(focusTick); focusTick = null; }
+}
+/* 切后台 / 锁屏：停表并记下暂停点，回前台再把这段墙钟从「已专修」里扣掉，
+   否则锁屏几小时会全算成专修时间 */
+function pauseFocusTick() {
+  var d = UI.detail;
+  stopFocusTick();
+  if (d && d.focus && !d.focusPausedAt) d.focusPausedAt = Date.now();
+}
+function resumeFocusTick() {
+  var d = UI.detail;
+  if (!d || !d.focus) return;
+  if (d.focusPausedAt) {
+    d.focusStart += Date.now() - d.focusPausedAt;
+    d.focusPausedAt = 0;
+  }
+  renderFocusPanel();
 }
 function focusElapsedText(ms) {
   var s = Math.max(0, Math.floor(ms / 1000));
@@ -13193,7 +13417,10 @@ function shiftDetailDate(n) {
   UI.calM = d.getMonth() + 1;
   UI.detail.y = d.getFullYear();
   UI.detail.m = d.getMonth() + 1;
-  if (UI.detail.range !== 'day') UI.detail.year = d.getFullYear();
+  /* 日期走到哪一年，「按月」那张表就跟着哪一年。
+     原来只在 range !== 'day' 时同步，于是按日视图左右滑跨年之后，
+     再切「按月」看到的是旧年份的十二个月 */
+  UI.detail.year = d.getFullYear();
   if (d.getFullYear() > (UI.detail.yEnd || 0)) UI.detail.yEnd = d.getFullYear();
   renderDetail();
   var host = $('#detail-scroll');
@@ -13260,7 +13487,7 @@ function gotoDetailDate(ds) {
   UI.calM = pd.getMonth() + 1;
   UI.detail.y = pd.getFullYear();
   UI.detail.m = pd.getMonth() + 1;
-  if (UI.detail.range === 'year') UI.detail.year = pd.getFullYear();
+  UI.detail.year = pd.getFullYear();
   renderDetail();
   var host = $('#detail-scroll');
   if (host) {
@@ -13334,10 +13561,6 @@ function renderTaskSettings() {
   }
   html += '</div>';
 
-  html += '<div class="set-sec" style="margin-top:14px">' +
-    '<div class="set-card">' +
-      '<div class="set-row" data-restore="1"><div class="lbl">恢复内置功课<em>把删掉的经咒佛号一次补回来，已有的不动</em></div><span class="chev">›</span></div>' +
-    '</div></div>';
   html += '<div style="height:90px"></div>';
 
   scroll.innerHTML = html;
@@ -13398,15 +13621,23 @@ function openTaskEditor(taskId, cat) {
       var scEl = document.querySelector('#f-scheme button.on');
       var sch = scEl && SCHEMES[scEl.dataset.scheme] ? scEl.dataset.scheme : scheme;
       if (!nm) { toast('请填写名称'); return; }
-      if (isNaN(st) || st <= 0) st = 1;
-      if (isNaN(fst) || fst <= 0) fst = 1;
-      if (isNaN(gl) || gl <= 0) gl = 0;
-      if (isNaN(mgl) || mgl <= 0) mgl = 0;
-      if (isNaN(tgl) || tgl <= 0) tgl = 0;
+      /* 同分类里重名会让「哪条是哪条」说不清：恢复内置靠名字兜底、汇总也按名字认 */
+      var clash = DB.tasks.some(function (x) { return x !== t && x.cat === c.k && x.name === nm; });
+      if (clash) { toast('这个分类里已经有同名功课了'); return; }
+      /* 数值统一收口：空 / 0 / 非数字都回落成默认，上限与导入校验一致，别造出「编辑能存、导入会拒」的值 */
+      st = clampStep(st);
+      fst = clampStep(fst);
+      gl = clampCount(gl);
+      mgl = clampCount(mgl);
+      tgl = clampCount(tgl);
       if (isNew) {
         DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, scheme: sch, fstep: fst,
           ftimer: ftimerOn, goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
+        /* 老存档的内置条目没有 bkey：改名之前先把它钉在原名字上，否则以后「恢复内置」会补出重复条目 */
+        if (!t.bkey && t.builtin && (BUILTIN[t.cat] || []).indexOf(t.name) >= 0) {
+          t.bkey = builtinKey(t.cat, t.name);
+        }
         t.name = nm; t.unit = un; t.step = st; t.scheme = sch; t.fstep = fst;
         t.ftimer = ftimerOn;
         t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
@@ -13431,7 +13662,7 @@ function askDeleteTask(t) {
   askConfirm(
     '彻底删除这项功课？',
     '「' + esc(t.name) + '」在各日期上已记的计数会一并删掉，不可恢复。<br>' +
-      (t.builtin ? '内置功课删掉后，可在「设置 → 恢复内置功课」里补回来。<br>' : '') +
+      (t.builtin ? '内置功课删掉后，可用「功课设置」右上角的恢复图标补回来。<br>' : '') +
       '只想暂时不显示，可以在编辑弹窗里关掉「在功课列表中显示」。',
     '彻底删除',
     function () { deleteTask(t.id); }
@@ -13550,6 +13781,8 @@ function festRowsOf(kind, y) {
   return rows;
 }
 
+/* 上一次画的「分类|年份」：同一年、同一类重画时把滚动位置留住（隐藏/删除节日也会重画） */
+var festScrollKey = '';
 function renderFestivals() {
   var y = UI.festY;
   var kinds = festKindsOn();
@@ -13600,13 +13833,18 @@ function renderFestivals() {
   if (curMonth) html += '</div>';
   html += '</div>';
 
-  html += '<div style="padding:0 18px calc(30px + var(--safe-b));font-size:11px;color:#b5a992;line-height:1.9">' +
+  html += '<div style="padding:0 18px calc(30px + var(--safe-b));font-size:11px;color:var(--ink3);line-height:1.9">' +
     (FEST_KIND_NOTE[kind] || '') +
     '</div>';
 
   $('#fest-title').textContent = '节日一览';
-  $('#fest-scroll').innerHTML = html;
-  $('#fest-scroll').scrollTop = 0;
+  var fsc = $('#fest-scroll');
+  var fkey = kind + '|' + y;
+  /* 换了分类或年份才回到顶部；同一年内隐藏 / 删除一条节日不该把人弹回开头 */
+  var fkeep = festScrollKey === fkey ? fsc.scrollTop : 0;
+  fsc.innerHTML = html;
+  fsc.scrollTop = fkeep;
+  festScrollKey = fkey;
   seg && seg.setAttribute('data-kind', kind);
   /* 切换后轻微淡入，让「划动换了一页」有反馈 */
   if (festSwiped) {
@@ -13619,9 +13857,14 @@ function renderFestivals() {
 }
 
 /* ---------- 节日管理：自定义节日 / 纪念日 / 隐藏内置节日 ---------- */
+var festSetScrollKey = '';
 function renderFestSettings() {
   var cat = UI.festSetCat === 'myd' ? 'myd' : (UI.festSetCat === 'pub' ? 'pub' : 'buddha');
   UI.festSetCat = cat;
+  /* 换分段才回到顶部；隐藏 / 删除一条后重画时保住滚动位置 */
+  var fsc = $('#festset-scroll');
+  var keepScroll = fsc && festSetScrollKey === cat ? fsc.scrollTop : 0;
+  festSetScrollKey = cat;
   var seg = $('#festset-seg');
   if (seg) {
     seg.innerHTML =
@@ -13634,7 +13877,8 @@ function renderFestSettings() {
   if (lb) lb.textContent = cat === 'myd' ? '添加纪念日' : '添加节日';
 
   if (cat === 'myd') {
-    $('#festset-scroll').innerHTML = myDaysListHTML();
+    fsc.innerHTML = myDaysListHTML();
+    fsc.scrollTop = keepScroll;
     return;
   }
 
@@ -13677,12 +13921,13 @@ function renderFestSettings() {
   });
   html += '</div>';
 
-  html += '<div style="padding:14px 20px calc(100px + var(--safe-b));font-size:11px;color:#b5a992;line-height:1.9">' +
+  html += '<div style="padding:14px 20px calc(100px + var(--safe-b));font-size:11px;color:var(--ink3);line-height:1.9">' +
     '内置节日只能隐藏，不能修改，也不能删除；自己添加的节日可以改、可以删。' +
     '日期规则：农历三十遇小月按廿九，公历 2 月 29 日遇平年按 2 月 28 日。' +
     '</div>';
 
-  $('#festset-scroll').innerHTML = html;
+  fsc.innerHTML = html;
+  fsc.scrollTop = keepScroll;
 }
 
 /* 隐藏 / 显示一个内置节日 */
@@ -13883,9 +14128,11 @@ function openMyDayEditor(id) {
   var rep = m ? m.repeat !== false : true;   /* 默认每年重复 */
 
   /* 年份就是一个可滚动的下拉框：1900 – 2100 全区间都能选，新条目默认落在实际当年；
-     旧存档里没记年份（y = 0）的仍停在「不指定年份」，不会被悄悄改写 */
+     旧存档里没记年份（y = 0）的仍停在「不指定年份」，不会被悄悄改写。
+     注意「当年」随历法走：农历条目比的是农历年，公历条目比的是公历年，
+     否则农历腊月的条目会晚一年才出现（表单里写了「农历年」就是为了说清这一点） */
   function yearOpts() {
-    var cy = new Date().getFullYear();
+    var cy = kind === 'lunar' ? lunarOf(TODAY).y : new Date().getFullYear();
     var cur = yy || (isNew ? cy : 0);
     var a = ['<option value="0"' + (cur ? '' : ' selected') + '>不指定年份</option>'];
     for (var y = 1900; y <= 2100; y++) {
@@ -13902,12 +14149,13 @@ function openMyDayEditor(id) {
       '<button data-mdkind="solar" class="' + (kind === 'solar' ? 'on' : '') + '">公历</button>' +
       '<button data-mdkind="lunar" class="' + (kind === 'lunar' ? 'on' : '') + '">农历</button>' +
     '</div></div>' +
-    '<div class="field"><label>年份</label><select id="f-mdy">' + yearOpts() + '</select></div>' +
+    '<div class="field"><label id="f-mdlab">年份' + (kind === 'lunar' ? '（农历年）' : '（公历年）') +
+      '</label><select id="f-mdy">' + yearOpts() + '</select></div>' +
     '<div class="field-row">' +
       '<div class="field"><label>月</label><select id="f-mdm">' + myDayMonthOpts(kind, mm) + '</select></div>' +
       '<div class="field"><label>日</label><select id="f-mdd">' + myDayDayOpts(kind, dd) + '</select></div>' +
     '</div>' +
-    '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十：该月只有廿九时，按当月最后一天算</div>' +
+    '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十：该月只有廿九时，按当月最后一天算；「只此一年」按所选历法的年份算</div>' +
     '<div class="field-chk" data-mtog="1">' +
       '<div class="lbl">每年重复</div>' +
       '<span class="switch' + (rep ? ' on' : '') + '"></span></div>' +
@@ -13928,9 +14176,10 @@ function openMyDayEditor(id) {
       if (!nm) { toast('请填写名称'); return; }
       var maxDay = kdVal === 'lunar' ? 30 : daysInMonth(2024, mv);
       if (dv > maxDay) dv = maxDay;
-      /* 「只此一年」却没选年份：按当年记下，免得这条纪念日永远显示不出来 */
+      /* 「只此一年」却没选年份：按当年记下，免得这条纪念日永远显示不出来。
+         农历条目要按农历年记，否则腊月那类会晚一年才命中 */
       if (!repVal && !yv) {
-        yv = new Date().getFullYear();
+        yv = kdVal === 'lunar' ? lunarOf(TODAY).y : new Date().getFullYear();
         toast('已按 ' + yv + ' 年记为一次性纪念日');
       }
       if (isNew) {
@@ -14025,7 +14274,7 @@ var REL_NOTES = [
       '「我的纪念日」并入节日管理（佛教节日 / 公共节日 / 纪念日三段），节日一览与节日管理可互相跳转；设置里的「我的纪念日」改成一个开关',
       '导出备份可直接调系统分享面板发到网盘、微信，也可以只存到下载目录，两种方式都会说明存到哪',
       '设置 → 关于里的版本行可随时回看「更新内容」',
-      '内置功课现在也能彻底删除；删错了在「设置 → 恢复内置功课」里一次补回',
+      '内置功课现在也能彻底删除；删错了点「功课设置」右上角的恢复图标，勾选着补回',
       '念佛类功课的专修增量默认值改为 3（其余分类仍是 1），可在「编辑功课」里逐项改',
       '详情页右上角「专」点亮即进入专修模式并开始计时；退出、返回、换日期前都先确认一次，并写明本次已专修多久',
       '功课新增「专修计时」开关（只有「行法」类默认开启）：关掉后不显示计时，退出专修模式也不用确认',
@@ -14249,7 +14498,7 @@ function renderSettings() {
     '<div class="set-row" data-actx="wipe"><div class="lbl" style="color:#b8442f">清空全部数据<em>不可恢复，请先导出备份</em></div><span class="chev" style="color:#b8442f">›</span></div>' +
     '</div></div>';
 
-  html += '<div style="padding:0 18px calc(30px + var(--safe-b));font-size:11px;color:#b5a992;line-height:2;text-align:center">' +
+  html += '<div style="padding:0 18px calc(30px + var(--safe-b));font-size:11px;color:var(--ink3);line-height:2;text-align:center">' +
     '学佛功德殊胜行，无边胜福皆回向<br>' +
     '普愿沉溺诸众生，速往无量光佛刹</div>';
 
@@ -14274,11 +14523,14 @@ function bindEvents() {
       Array.prototype.forEach.call(document.querySelectorAll('#f-mdkind button'), function (b) {
         b.classList.toggle('on', b.dataset.mdkind === kd);
       });
-      /* 换历法时月名（正月…腊月 / 1 月）与日名（初一…三十 / 1 日）都要重排 */
+      /* 换历法时月名（正月…腊月 / 1 月）与日名（初一…三十 / 1 日）都要重排，
+         年份标签也要跟着说清是农历年还是公历年 */
       var msel = document.getElementById('f-mdm');
       if (msel) msel.innerHTML = myDayMonthOpts(kd, parseInt(msel.value, 10) || 1);
       var dsel = document.getElementById('f-mdd');
       if (dsel) dsel.innerHTML = myDayDayOpts(kd, parseInt(dsel.value, 10) || 1);
+      var ylab = document.getElementById('f-mdlab');
+      if (ylab) ylab.textContent = '年份' + (kd === 'lunar' ? '（农历年）' : '（公历年）');
       return;
     }
     /* 节日编辑弹窗：佛教 / 公共 二选一 */
@@ -14382,6 +14634,16 @@ function bindEvents() {
     if (ms) {
       var sw = ms.querySelector('.switch');
       if (sw) sw.classList.toggle('on');
+      return;
+    }
+    /* 恢复内置功课：整行都是开关，点哪都算，顺便同步 aria-checked */
+    ms = e.target.closest('[data-rpick]');
+    if (ms) {
+      var rsw = ms.querySelector('.switch');
+      if (rsw) {
+        rsw.classList.toggle('on');
+        ms.setAttribute('aria-checked', rsw.classList.contains('on') ? 'true' : 'false');
+      }
       return;
     }
     /* 斋戒日 / 节日预告弹窗：拨一下就存，只重画弹窗（设置页等关窗时再重画） */
@@ -14548,6 +14810,8 @@ function bindEvents() {
     el = e.target.closest('[data-range]');
     if (el) {
       UI.detail.range = el.dataset.range;
+      /* 切到「按月」时把年份对齐到当前查看的日期，别用上一次留下的 year */
+      if (UI.detail.range === 'month') UI.detail.year = UI.detail.y;
       if (UI.detail.range === 'year' && !UI.detail.yEnd) UI.detail.yEnd = new Date().getFullYear();
       renderDetailStats();
       return;
@@ -14666,19 +14930,22 @@ function bindEvents() {
     el = e.target.closest('[data-tedit]');
     if (el) { openTaskEditor(el.dataset.tedit); return; }
 
-    /* 恢复内置 */
-    if (e.target.closest('[data-restore]')) {
-      restoreBuiltin();
+    /* 功课设置右上角：恢复内置功课（弹窗里自己勾选要补哪几项） */
+    if (e.target.closest('#btn-restore-builtin')) {
+      openRestoreBuiltin();
       return;
     }
 
-    /* 设置开关 */
+    /* 设置开关：就地拨动，不整页重画——重画会把开关的过渡动画、键盘焦点一起丢掉，
+       部分内核连滚动位置也一起清回顶部。只有「记录日记」会增删下面的行，才重画 */
     el = e.target.closest('[data-toggle]');
     if (el) {
       var key = el.dataset.toggle;
       DB.settings[key] = !DB.settings[key];
       saveNow();
-      renderSettings();
+      if (key === 'showDiary') { renderSettings(); return; }
+      var sw = el.querySelector('.switch');
+      if (sw) sw.classList.toggle('on', !!DB.settings[key]);
       return;
     }
 
@@ -14938,7 +15205,8 @@ function bindEvents() {
      连加定时器会一直跑下去，所以失焦与切后台时也清一次 */
   window.addEventListener('blur', function () { clearHold(); });
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) clearHold();
+    if (document.hidden) { clearHold(); pauseFocusTick(); }
+    else resumeFocusTick();
   });
 
   /* 手势 */
@@ -15021,6 +15289,27 @@ function bindEvents() {
     if (UI.view === 'detail') shiftDetailDate(kd);
     else shiftDate(kd);
   });
+
+  /* 弹窗里的键盘操作：Space / Enter 切换「恢复内置功课」清单里的开关，Esc 关窗
+     （Esc 走 cancelConfirm，才能把底下被暂存的编辑弹窗放回去） */
+  window.addEventListener('keydown', function (e) {
+    if (!document.getElementById('modal').classList.contains('on')) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (_confirmOpen) cancelConfirm(); else closeModal();
+      return;
+    }
+    var row = e.target.closest && e.target.closest('[data-rpick]');
+    if (!row) return;
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar') {
+      e.preventDefault();
+      var sw = row.querySelector('.switch');
+      if (sw) {
+        sw.classList.toggle('on');
+        row.setAttribute('aria-checked', sw.classList.contains('on') ? 'true' : 'false');
+      }
+    }
+  });
 }
 
 function clearHold() {
@@ -15033,6 +15322,9 @@ function clearHold() {
 
 /* ---------- 日期切换 ---------- */
 function selectDate(ds) {
+  /* 入口有日期条、日历格、总览卡片、系统日期选择器：形状不对就直接忽略，
+     否则一个脏值会一路带到农历换算与「今天」判断里 */
+  if (!isYmdKey(ds)) return;
   saveNow();
   UI.date = ds;
   var d = parseYmd(ds);
@@ -15087,6 +15379,7 @@ function shiftDate(n) {
 
 /* 总览视图里切日时，若该日有记录则滚到它的卡片 */
 function scrollSummaryToDate(ds) {
+  if (!isYmdKey(ds)) return;
   var scroll = document.getElementById('home-scroll');
   if (!scroll) return;
   var el = document.querySelector('.sum-day[data-ds="' + ds + '"]');
@@ -15250,11 +15543,15 @@ function topTask(id) {
   var t = DB.tasks[idx];
   var firstIdx = -1;
   for (var i = 0; i < DB.tasks.length; i++) {
-    if (DB.tasks[i].cat === t.cat) { firstIdx = i; break; }
+    var x = DB.tasks[i];
+    if (x.cat !== t.cat) continue;
+    /* 隐藏项不参与可见顺序：置顶要停在「第一位看得见的功课」之前，
+       否则主页上看不出任何变化，用户会以为按钮坏了 */
+    if (t.hidden || !x.hidden) { firstIdx = i; break; }
   }
   if (firstIdx < 0 || firstIdx === idx) return;
   DB.tasks.splice(idx, 1);
-  DB.tasks.splice(firstIdx, 0, t);
+  DB.tasks.splice(firstIdx > idx ? firstIdx - 1 : firstIdx, 0, t);
   saveNow();
   renderTaskSettings();
 }
@@ -15263,8 +15560,14 @@ function moveTask(id, dir) {
   var idx = DB.tasks.findIndex(function (t) { return t.id === id; });
   if (idx < 0) return;
   var t = DB.tasks[idx];
+  /* 上移 / 下移的「邻居」只在可见项里找：设置页里隐藏项照列，但主页不显示它们，
+     按原来的全量相邻交换会出现「点了没反应」 */
   var sib = [];
-  DB.tasks.forEach(function (x, i) { if (x.cat === t.cat) sib.push(i); });
+  DB.tasks.forEach(function (x, i) {
+    if (x.cat !== t.cat) return;
+    if (!t.hidden && x.hidden && x.id !== t.id) return;
+    sib.push(i);
+  });
   var pos = sib.indexOf(idx);
   var targetPos = pos + dir;
   if (targetPos < 0 || targetPos >= sib.length) return;
@@ -15276,27 +15579,69 @@ function moveTask(id, dir) {
 }
 
 /* 恢复内置功课：内置条目现在可以彻底删除，这里就是「删错了」的后悔药。
-   只补库里没有的同名条目，用户改过的参数、隐藏状态、顺序一律不动 */
-function restoreBuiltin() {
-  var added = 0;
+   入口是「功课设置」右上角的图标，弹窗按分类铺开全部内置条目：
+   缺的默认勾上、已有的置灰，补哪些由用户自己定 */
+function openRestoreBuiltin() {
+  var html = '', missing = 0;
   CATS.forEach(function (c) {
-    BUILTIN[c.k].forEach(function (name) {
-      var exists = DB.tasks.some(function (t) { return t.cat === c.k && t.name === name; });
-      if (!exists) {
-        DB.tasks.push({
-          id: uid('t'), cat: c.k, name: name,
-          unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(c.k),
-          goal: 0, builtin: true, hidden: false
-        });
-        added++;
-      }
+    var names = BUILTIN[c.k] || [];
+    if (!names.length) return;
+    var miss = 0, rows = '';
+    names.forEach(function (name) {
+      var t = findBuiltinTask(c.k, name);
+      if (!t) miss++;
+      rows += '<div class="rb-row' + (t ? ' has' : '') + '"' +
+        (t
+          ? ''
+          : ' data-rpick="' + c.k + '|' + esc(name) + '" role="switch" aria-checked="true" tabindex="0"') + '>' +
+        '<span class="rb-nm">' + esc(name) + '</span>' +
+        (t
+          ? '<span class="rb-tag">' + (t.hidden ? '已隐藏' : '已有') + '</span>'
+          : '<span class="switch on"></span>') +
+        '</div>';
     });
+    missing += miss;
+    html += '<div class="rb-sec">' + c.n + '<em>' + (miss ? '缺 ' + miss + ' 项' : '齐全') + '</em></div>' + rows;
   });
+
+  openModal(
+    '<h4>恢复内置功课</h4>' +
+    '<div class="dlg-sub">' + (missing
+      ? '缺的都默认勾上了，取消勾选就不补；已有的不会重复添加，也不会动你改过的参数'
+      : '内置功课一项不缺，没有需要补回的') + '</div>' +
+    '<div class="rb-wrap">' + html + '</div>' +
+    '<div class="modal-actions">' +
+      '<button data-mclose="1">取消</button>' +
+      (missing ? '<button class="primary" data-mok="1">恢复所选</button>' : '') +
+    '</div>',
+    function () {
+      var picked = [];
+      Array.prototype.forEach.call(document.querySelectorAll('#modal .rb-row[data-rpick]'), function (row) {
+        var sw = row.querySelector('.switch');
+        if (!sw || !sw.classList.contains('on')) return;
+        var v = String(row.dataset.rpick || '').split('|');
+        if (v.length === 2 && CAT_MAP[v[0]]) picked.push({ cat: v[0], name: v[1] });
+      });
+      restoreBuiltin(picked);
+    }
+  );
+}
+
+/* 把勾选的内置功课补回来：只补真的没有的，参数一律用分类默认值 */
+function restoreBuiltin(picked) {
+  var added = 0;
+  (picked || []).forEach(function (x) {
+    if (findBuiltinTask(x.cat, x.name)) return;
+    addBuiltinTask(x.cat, x.name);
+    added++;
+  });
+  if (!added) { toast('选中的功课都已经有了'); return; }
   /* 补回来的「禅修」也要排到「地藏菩萨占察忏」后面 */
-  moveTaskAfter(DB, 'yigui', '禅修', '地藏菩萨占察忏');
+  if (findBuiltinTask('yigui', '禅修')) moveTaskAfter(DB, 'yigui', '禅修', '地藏菩萨占察忏');
+  invalidateTotals();
   saveNow();
   renderTaskSettings();
-  toast(added ? '已补回 ' + added + ' 项内置功课' : '内置功课齐全，无需补回');
+  toast('已补回 ' + added + ' 项内置功课');
 }
 
 /* ---------- 数据 ---------- */
@@ -15554,35 +15899,45 @@ function intFmt(n) {
 
 function showStats() {
   var days = 0, diaryN = 0;
-  var byCat = { nianfo: 0, jing: 0, zhou: 0, yigui: 0 };
-  /* 功课可以删改，计数按当前条目所属分类归并 */
+  /* 按「分类 + 单位」归并：行法里既有「遍」，也有禅修的「分钟」、施食的「次」，
+     混在一起加会把分钟当成遍数报给用户 */
+  var groups = {};
+  var catOrder = {};
+  CATS.forEach(function (c, i) { catOrder[c.k] = i; });
+  /* 功课可以删改，计数按当前条目所属分类与单位归并 */
   var catOf = {};
-  DB.tasks.forEach(function (t) { catOf[t.id] = t.cat; });
+  DB.tasks.forEach(function (t) {
+    catOf[t.id] = { cat: t.cat, unit: t.unit || (CAT_MAP[t.cat] || {}).unit || '遍' };
+  });
   Object.keys(DB.records).forEach(function (ds) {
     var r = DB.records[ds];
     if (!recHasContent(r)) return;
     days++;
     if (r.c) Object.keys(r.c).forEach(function (k) {
-      var c = catOf[k];
-      if (c && byCat[c] != null) byCat[c] += (r.c[k] || 0);
+      var meta = catOf[k];
+      if (!meta) return;
+      var gk = meta.cat + '|' + meta.unit;
+      groups[gk] = (groups[gk] || 0) + (r.c[k] || 0);
     });
     if (recDiaryText(r).trim()) diaryN++;
   });
 
-  var cells = [
-    { n: '念佛', v: byCat.nianfo, u: '遍' },
-    { n: '诵经', v: byCat.jing, u: '部' },
-    { n: '持咒', v: byCat.zhou, u: '遍' },
-    { n: '行法', v: byCat.yigui, u: '遍' }
-  ].map(function (c) {
-    return '<div class="st-cell"><span class="st-k">' + c.n + '</span>' +
-      '<span class="st-v">' + intFmt(c.v) + '<i>' + c.u + '</i></span></div>';
+  var cells = Object.keys(groups).sort(function (a, b) {
+    var pa = a.split('|'), pb = b.split('|');
+    var d = (catOrder[pa[0]] || 0) - (catOrder[pb[0]] || 0);
+    if (d) return d;
+    return pa[1] < pb[1] ? -1 : pa[1] > pb[1] ? 1 : 0;
+  }).map(function (gk) {
+    var p = gk.split('|');
+    var cn = CAT_MAP[p[0]] ? CAT_MAP[p[0]].n : p[0];
+    return '<div class="st-cell"><span class="st-k">' + esc(cn) + '</span>' +
+      '<span class="st-v">' + intFmt(groups[gk]) + '<i>' + esc(p[1]) + '</i></span></div>';
   }).join('');
 
   openModal(
     '<h4>数据概况</h4>' +
     '<div class="st-wrap">' +
-      '记录天数：<b>' + days + '</b> 天' +
+      '记录天数：<b>' + days + '</b> 天（只写日记的日子也算）' +
       '<div class="st-sec">功课总计数</div>' +
       '<div class="st-grid">' + cells +
         '<div class="st-cell wide"><span class="st-k">日记</span>' +
@@ -15681,7 +16036,13 @@ function init() {
   /* 跨天刷新：定时检查 + 回到前台时检查 */
   setInterval(checkDayChange, 20000);
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) checkDayChange();
+    if (document.hidden) {
+      /* 挂起前把待写的改动落盘：saveSoon 有 260ms 防抖，直接关掉 App 会丢最后一次计数 */
+      if (saveTimer) saveNow();
+      return;
+    }
+    resumeFocusTick();
+    checkDayChange();
   });
   window.addEventListener('focus', checkDayChange);
 
