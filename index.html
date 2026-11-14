@@ -193,9 +193,9 @@ img{max-width:100%;display:block}
 .cal-legend i.zd{background:#3f6fa8}
 .cal-legend .r{color:var(--accent);opacity:.8}
 
-/* 节日一览：横向划动切换（纵向照常滚动） */
-#fest-scroll{touch-action:pan-y;overscroll-behavior-x:contain}
-#fest-scroll.sw-in{animation:swIn .2s ease}
+/* 横向划动切换分段：节日一览与功课设置共用（纵向照常滚动） */
+#fest-scroll,#tasks-scroll{touch-action:pan-y;overscroll-behavior-x:contain}
+#fest-scroll.sw-in,#tasks-scroll.sw-in{animation:swIn .2s ease}
 @keyframes swIn{from{opacity:.3;transform:translateX(12px)}to{opacity:1;transform:none}}
 
 /* ---------- 日期信息条 ---------- */
@@ -13578,6 +13578,14 @@ function renderTaskSettings() {
   html += '<div style="height:90px"></div>';
 
   scroll.innerHTML = html;
+  /* 分类是划过来的：回到顶部并轻微淡入，和节日一览同一套反馈 */
+  if (taskSwiped) {
+    taskSwiped = false;
+    scroll.scrollTop = 0;
+    scroll.classList.remove('sw-in');
+    void scroll.offsetWidth;
+    scroll.classList.add('sw-in');
+  }
 }
 
 function openTaskEditor(taskId, cat) {
@@ -13719,9 +13727,9 @@ function festivalSolarDate(y, m, d) {
 }
 
 /* 左右划动切换：在开启的几类之间前后翻 */
-var festSwipe = null;
 var festSwiped = false;
-var festSwipeAt = 0;
+/* 划动结束的时间戳：节日一览与功课设置共用（同一时刻只会在一个页面上划） */
+var swipeAt = 0;
 
 function festSwitchTo(kind) {
   if (UI.festKind === kind) return;
@@ -13735,6 +13743,18 @@ function festStep(n) {
   var i = kinds.indexOf(UI.festKind);
   if (i < 0) i = 0;
   festSwitchTo(kinds[(i + n + kinds.length) % kinds.length]);
+}
+
+/* 功课设置：左右划动在四个分类之间翻（首尾相接，和顶部四个按钮同一套顺序） */
+var taskSwiped = false;
+function taskStep(n) {
+  var i = CATS.map(function (c) { return c.k; }).indexOf(UI.taskCat);
+  if (i < 0) i = 0;
+  var k = CATS[(i + n + CATS.length) % CATS.length].k;
+  if (k === UI.taskCat) return;
+  UI.taskCat = k;
+  taskSwiped = true;
+  renderTaskSettings();
 }
 
 var FEST_KIND_LABEL = {
@@ -14289,7 +14309,7 @@ var REL_NOTES = [
       '导出备份可直接调系统分享面板发到网盘、微信，也可以只存到下载目录，两种方式都会说明存到哪',
       '设置 → 关于里的版本行可随时回看「更新内容」',
       '内置功课现在也能彻底删除；删错了点「功课设置」右上角的恢复图标，勾选着补回',
-      '功课设置每行只留「编辑」与「⋯ 更多」，排序 / 隐藏 / 删除都收进菜单；恢复内置改成勾选框',
+      '功课设置每行只留「编辑」与「⋯ 更多」，排序 / 隐藏 / 删除收进菜单；分类可左右划动切换；恢复内置改成勾选框',
       '念佛类功课的专修增量默认值改为 3（其余分类仍是 1），可在「编辑功课」里逐项改',
       '详情页右上角「专」点亮即进入专修模式并开始计时；退出、返回、换日期前都先确认一次，并写明本次已专修多久',
       '功课新增「专修计时」开关（只有「行法」类默认开启）：关掉后不显示计时，退出专修模式也不用确认',
@@ -15041,34 +15061,40 @@ function bindEvents() {
     if (e.target.closest('#blocks')) maybeAutoPlace();
   });
 
-  /* 节日一览：左右划动切换佛教 / 传统 */
-  app.addEventListener('pointerdown', function (e) {
-    if (!e.target.closest('#fest-scroll')) { festSwipe = null; return; }
-    festSwipe = { x: e.clientX, y: e.clientY, moved: false };
-  }, true);
-  app.addEventListener('pointermove', function (e) {
-    if (!festSwipe) return;
-    var dx = e.clientX - festSwipe.x, dy = e.clientY - festSwipe.y;
-    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) festSwipe.moved = true;
-  }, true);
-  app.addEventListener('pointerup', function (e) {
-    var st = festSwipe;
-    festSwipe = null;
-    if (!st || !st.moved) return;
-    var dx = e.clientX - st.x, dy = e.clientY - st.y;
-    if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-    festSwipeAt = Date.now();
-    /* 左划到下一类、右划到上一类（只有两类时就是来回换） */
-    festStep(dx < 0 ? 1 : -1);
-  }, true);
-
-  /* 刚划动过就别再把这一次当成点击（避免误跳日期） */
-  app.addEventListener('click', function (e) {
-    if (Date.now() - festSwipeAt < 420 && e.target.closest('#fest-scroll')) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-  }, true);
+  /* 横向划动切换分段：节日一览（佛教 / 公共 / 斋戒 / 节气 / 纪念日）
+     与功课设置（念佛 / 诵经 / 持咒 / 行法）共用一套手势判断。
+     左划 = 下一类，右划 = 上一类；纵向滚动照旧交给 .scroll 自己处理 */
+  function bindHSwipe(sel, step) {
+    var st = null;
+    app.addEventListener('pointerdown', function (e) {
+      if (!e.target.closest(sel)) { st = null; return; }
+      st = { x: e.clientX, y: e.clientY, moved: false };
+    }, true);
+    app.addEventListener('pointermove', function (e) {
+      if (!st) return;
+      var dx = e.clientX - st.x, dy = e.clientY - st.y;
+      /* 横向位移明显大于纵向才算「划页」，否则是在上下滚列表 */
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) st.moved = true;
+    }, true);
+    app.addEventListener('pointerup', function (e) {
+      var s = st;
+      st = null;
+      if (!s || !s.moved) return;
+      var dx = e.clientX - s.x, dy = e.clientY - s.y;
+      if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      swipeAt = Date.now();
+      step(dx < 0 ? 1 : -1);
+    }, true);
+    /* 刚划动过就别再把这一次当成点击（避免顺手把某一行当成被点了） */
+    app.addEventListener('click', function (e) {
+      if (Date.now() - swipeAt < 420 && e.target.closest(sel)) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, true);
+  }
+  bindHSwipe('#fest-scroll', festStep);
+  bindHSwipe('#tasks-scroll', taskStep);
 
   /* 日记正文：一整篇纯文本，换行 / 粘贴 / 复制都由 textarea 原生处理 */
   app.addEventListener('input', function (e) {
@@ -15601,10 +15627,11 @@ function openRestoreBuiltin() {
         return;
       }
       miss++;
-      /* 整行是 label：点名字、点方框都能勾上，键盘 Space 也照常生效 */
+      /* 整行是 label：点名字、点方框都能勾上，键盘 Space 也照常生效。
+         勾选框放右边，和已有条目的「已有 / 已隐藏」对齐在同一列 */
       rows += '<label class="rb-row">' +
-        '<input type="checkbox" class="rb-ck" data-rpick="' + c.k + '|' + esc(name) + '" checked>' +
         '<span class="rb-nm">' + esc(name) + '</span>' +
+        '<input type="checkbox" class="rb-ck" data-rpick="' + c.k + '|' + esc(name) + '" checked>' +
         '</label>';
     });
     missing += miss;
