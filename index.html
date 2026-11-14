@@ -687,6 +687,9 @@ img{max-width:100%;display:block}
 }
 .sign-seg button.on{background:#8a7f6d;border-color:#8a7f6d;color:#fff;font-weight:500}
 .sign-seg button[data-sign="1"].on{background:var(--accent);border-color:var(--accent)}
+/* 功课编辑弹窗里的「快捷增量方案」：标签较长，字号收小一些 */
+#f-scheme button{font-size:12px;letter-spacing:0;height:34px}
+#f-scheme button.on{background:var(--accent);border-color:var(--accent)}
 #m-delta{font-family:var(--serif);font-size:19px;letter-spacing:1px;text-align:center;height:46px}
 
 /* toast */
@@ -9869,13 +9872,33 @@ var SEENVER_KEY = 'xuefo.seenver';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 
 var CATS = [
-  { k: 'nianfo', n: '念佛', unit: '遍', step: 100 },
-  { k: 'jing',   n: '诵经', unit: '部', step: 1 },
-  { k: 'zhou',   n: '持咒', unit: '遍', step: 100 },
-  { k: 'yigui',  n: '仪轨', unit: '遍', step: 1 }
+  { k: 'nianfo', n: '念佛', unit: '遍', step: 100, scheme: 'big' },
+  { k: 'jing',   n: '诵经', unit: '部', step: 1, scheme: 'small' },
+  { k: 'zhou',   n: '持咒', unit: '遍', step: 100, scheme: 'big' },
+  { k: 'yigui',  n: '行法', unit: '遍', step: 1, scheme: 'small' }
 ];
 var CAT_MAP = {};
 CATS.forEach(function (c) { CAT_MAP[c.k] = c; });
+/* 功课卡上那四个快捷增量按钮的两套方案：
+   big 走千位（念佛、持咒动辄上万声），small 走 3 / 7 / 21 这样的短课（诵经、行法）
+   功课可以各自指定，没指定的按所属分类的默认方案 */
+var SCHEMES = {
+  big: [1, 10, 100, 1000],
+  small: [1, 3, 7, 21]
+};
+var SCHEME_LBL = {
+  big: '1/10/100/1000',
+  small: '1/3/7/21'
+};
+function taskScheme(t) {
+  var s = t && t.scheme;
+  if (s && SCHEMES[s]) return s;
+  var c = t ? CAT_MAP[t.cat] : null;
+  return (c && c.scheme) || 'big';
+}
+function taskSchemeList(t) {
+  return SCHEMES[taskScheme(t)];
+}
 var TABS = CATS.concat([{ k: 'diary', n: '日记', unit: '', step: 0 }]);
 /* 设置里关掉日记功能后，标签栏只剩四类功课；日记数据仍留在库里 */
 function activeTabs() {
@@ -10268,6 +10291,8 @@ function loadDB() {
       t.mgoal = +t.mgoal > 0 ? Math.floor(+t.mgoal) : 0;
       /* 2.8：专修增量，老存档没有这个字段就按 1 补上 */
       t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? Math.floor(+t.fstep) : 1;
+      /* 快捷增量方案：没存过就交给 taskScheme() 按分类默认值走，不用写回存档 */
+      if (t.scheme !== 'big' && t.scheme !== 'small') delete t.scheme;
       if (t.name === '南无药师琉璃光如来') { t.name = '南无消灾延寿药师佛'; __dbMigrated = true; }
       if (t.name === '文殊师利菩萨心咒') { t.name = '文殊菩萨心咒'; __dbMigrated = true; }
     });
@@ -11144,11 +11169,10 @@ function renderTaskListInto(box, cat) {
         goalHTML +
         statsHTML +
         '<div class="btns">' +
-          '<button class="btn mid" data-act="add" data-n="1"' + dis + '>+1</button>' +
-          '<button class="btn mid" data-act="add" data-n="10"' + dis + '>+10</button>' +
-          '<button class="btn mid" data-act="add" data-n="100"' + dis + '>+100</button>' +
-          '<button class="btn mid" data-act="add" data-n="1000"' + dis + '>+1000</button>' +
-          '<button class="btn step" data-act="step" data-dir="1"' + dis + '>+</button>' +
+          taskSchemeList(t).map(function (sn) {
+            return '<button class="btn mid" data-act="add" data-n="' + sn + '"' + dis + '>+' + sn + '</button>';
+          }).join('') +
+          '<button class="btn step" data-act="step" data-dir="1"' + dis + ' title="调整数量">+</button>' +
         '</div>' +
       '</div>';
   }).join('');
@@ -12274,7 +12298,9 @@ function openCountEditor(taskId) {
   setTimeout(function () { var el = $('#m-count'); if (el) { el.focus(); el.select(); } }, 120);
 }
 
-/* 长按「+」「−」：可直接增减，也可把当天数量设为指定值 */
+/* 单击功课卡上的「+」：弹窗里可直接增减，也可把当天数量设为指定值。
+   增减的初始值是该功课的默认增量，只有「设为」才预填当天当前计数；
+   预填值改动不影响当前计数，点确定才落账。 */
 var deltaSign = 1;   /* 1 增加 / -1 减少 / 0 设为 */
 function openDeltaModal(taskId, defSign) {
   if (isFutureDate()) { blockFuture(); return; }
@@ -12283,6 +12309,7 @@ function openDeltaModal(taskId, defSign) {
   var rec = getRec(UI.date, true);
   var cur = rec.c[taskId] || 0;
   deltaSign = defSign < 0 ? -1 : 1;
+  var defStep = +t.step > 0 ? Math.floor(+t.step) : 1;
 
   function okText() {
     return deltaSign > 0 ? '确定增加' : (deltaSign < 0 ? '确定减少' : '确定设为');
@@ -12292,7 +12319,8 @@ function openDeltaModal(taskId, defSign) {
   openModal(
     '<h4>调整' + (isToday ? '今日' : '此日') + '数量</h4>' +
     '<div class="dlg-sub">' + esc(t.name) + ' · ' + (isToday ? '今日 ' : '此日 ') + cur + ' ' + esc(t.unit) + '</div>' +
-    '<div class="sign-seg" id="m-sign" data-unit="' + esc(t.unit) + '" data-cur="' + cur + '">' +
+    '<div class="sign-seg" id="m-sign" data-unit="' + esc(t.unit) + '" data-cur="' + cur +
+      '" data-step="' + defStep + '">' +
       '<button data-sign="-1" class="' + (deltaSign < 0 ? 'on' : '') + '">减少</button>' +
       '<button data-sign="1" class="' + (deltaSign > 0 ? 'on' : '') + '">增加</button>' +
       '<button data-sign="0"' + (deltaSign === 0 ? ' class="on"' : '') + '>设为</button>' +
@@ -12324,7 +12352,11 @@ function openDeltaModal(taskId, defSign) {
   );
   setTimeout(function () {
     var el = $('#m-delta');
-    if (el) { el.focus(); el.value = deltaSign === 0 ? String(cur) : ''; }
+    if (el) {
+      el.value = deltaSign === 0 ? String(cur) : String(defStep);
+      el.focus();
+      el.select();
+    }
   }, 120);
 }
 
@@ -12538,13 +12570,14 @@ function detailCountHTML(t) {
         '<span class="solo-num">+' + fst + '</span>' +
       '</button>';
   } else {
+    var sch = taskSchemeList(t);
     addHTML =
-      '<button class="bigadd" data-dct="1"' + futDis + '>+1</button>' +
+      '<button class="bigadd" data-dct="n" data-n="' + sch[0] + '"' + futDis + '>+' + sch[0] + '</button>' +
       '<div class="cc-row">' +
-        '<button class="cbtn" data-dct="n" data-n="10"' + futDis + '>+10</button>' +
-        '<button class="cbtn" data-dct="n" data-n="100"' + futDis + '>+100</button>' +
-        '<button class="cbtn" data-dct="n" data-n="1000"' + futDis + '>+1000</button>' +
-        '<button class="cbtn step" data-dct="step" data-dir="1"' + futDis + '>+</button>' +
+        sch.slice(1).map(function (sn) {
+          return '<button class="cbtn" data-dct="n" data-n="' + sn + '"' + futDis + '>+' + sn + '</button>';
+        }).join('') +
+        '<button class="cbtn step" data-dct="step" data-dir="1"' + futDis + ' title="调整数量">+</button>' +
       '</div>';
   }
 
@@ -12720,7 +12753,7 @@ function syncDetailMode() {
   if (!btn) return;
   var on = !!(UI.detail && UI.detail.focus);
   btn.classList.toggle('on', on);
-  btn.textContent = on ? '专修模式' : '记录模式';
+  btn.textContent = on ? '专' : '记';
 }
 function toggleDetailMode() {
   if (!UI.detail) return;
@@ -12904,8 +12937,8 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 默认增量 ' + t.step +
-            ' · 专修增量 ' + taskFocusStep(t) + '</em>' +
+          '<em>' + esc(t.unit) + ' · 快捷 +' + SCHEME_LBL[taskScheme(t)] +
+            ' · 默认 +' + t.step + ' · 专修 +' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
                 (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
@@ -12947,6 +12980,7 @@ function openTaskEditor(taskId, cat) {
   var name = t ? t.name : '';
   var unit = t ? t.unit : c.unit;
   var step = t ? t.step : c.step;
+  var scheme = taskScheme(t || { cat: c.k });
   var fstep = t ? taskFocusStep(t) : 1;
   var goal = t ? taskGoal(t) : 0;
   var mgoal = t ? taskMonthGoal(t) : 0;
@@ -12956,7 +12990,14 @@ function openTaskEditor(taskId, cat) {
     '<h4>' + (isNew ? '添加功课' : '编辑功课') + '</h4>' +
     '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '" placeholder="如：南无阿弥陀佛"></div>' +
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
-    '<div class="field"><label>默认增量（＋ 按钮每点击一次的增量）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
+    '<div class="field"><label>快捷增量方案（功课卡上四个 ＋ 按钮）</label>' +
+      '<div class="sign-seg" id="f-scheme">' +
+        '<button type="button" data-scheme="small" class="' + (scheme === 'small' ? 'on' : '') + '">' +
+          SCHEME_LBL.small + '</button>' +
+        '<button type="button" data-scheme="big" class="' + (scheme === 'big' ? 'on' : '') + '">' +
+          SCHEME_LBL.big + '</button>' +
+      '</div></div>' +
+    '<div class="field"><label>默认增量（「＋」弹窗里增 / 减的初始值）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>专修增量（专修模式下一次「＋」的增量，默认 1）</label><input id="f-fstep" type="number" inputmode="numeric" value="' + esc(fstep) + '"></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
     '<div class="field"><label>月目标（可选，留空则不设）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
@@ -12980,6 +13021,8 @@ function openTaskEditor(taskId, cat) {
       var mgl = parseInt($('#f-mgoal').value, 10);
       var tgl = parseInt($('#f-tgoal').value, 10);
       var showIt = !!(document.querySelector('#modal [data-mshow] .switch.on'));
+      var scEl = document.querySelector('#f-scheme button.on');
+      var sch = scEl && SCHEMES[scEl.dataset.scheme] ? scEl.dataset.scheme : scheme;
       if (!nm) { toast('请填写名称'); return; }
       if (isNaN(st) || st <= 0) st = 1;
       if (isNaN(fst) || fst <= 0) fst = 1;
@@ -12987,10 +13030,10 @@ function openTaskEditor(taskId, cat) {
       if (isNaN(mgl) || mgl <= 0) mgl = 0;
       if (isNaN(tgl) || tgl <= 0) tgl = 0;
       if (isNew) {
-        DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, fstep: fst,
+        DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, scheme: sch, fstep: fst,
           goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
-        t.name = nm; t.unit = un; t.step = st; t.fstep = fst;
+        t.name = nm; t.unit = un; t.step = st; t.scheme = sch; t.fstep = fst;
         t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
         t.hidden = !showIt;
       }
@@ -13414,14 +13457,14 @@ var REL_NOTES = [
     items: [
       '首个正式发布版本的功能总览，后面每一版都是在这套底子上加的',
       '首页整月日历：公历与农历对照，佛教节日、斋日、传统节日、二十四节气、我的重要日、当天有功课各用一色标记，下方带图例',
-      '五个标签页记功课：念佛、诵经、持咒、仪轨、日记；点「＋」按默认增量累加，长按可以自定义增加、减少、设置计数值',
+      '五个标签页记功课：念佛、诵经、持咒、行法、日记；点「＋」按默认增量累加，长按可以自定义增加、减少、设置计数值',
       '功课详情页：按日 / 按月 / 按年三种表统计，可设日目标与总目标，数量与目标对照着看',
       '汇总视图：连续功课天数、自某日起、累计 N 天记录功课，按日期由近及远列出每天的功课与日记',
       '节日一览：佛教节日与传统节日合在一页，可按年翻看',
       '我的重要日：自定义农历 / 公历纪念日，列表按最近到来排序并显示还有多少天',
       '日记：按天记录，可插入时间、图片与拍照',
       '功课设置：增删改、上下移动、恢复内置功课；佛历基准（+543 / +544）、斋日显示、二十四节气都可调',
-      '数据概况按念佛 / 诵经 / 持咒 / 仪轨 / 日记五类分项统计；导出、导入 JSON 备份；清空全部数据',
+      '数据概况按念佛 / 诵经 / 持咒 / 行法 / 日记五类分项统计；导出、导入 JSON 备份；清空全部数据',
       // '单文件网页应用：离线可用，可「添加到主屏幕」当 App 用，也有安卓安装包'
     ]
   }
@@ -13649,6 +13692,12 @@ function bindEvents() {
     }
     var sg = e.target.closest('[data-sign]');
     if (sg) {
+      var sgBox = document.getElementById('m-sign');
+      var sgStep = +sgBox.dataset.step || 1;
+      var sgCur = +sgBox.dataset.cur || 0;
+      /* 换档时只在输入框还是上一档的初始值（或空着）时才换成新档的初始值，
+         用户自己敲进去的数不覆盖 */
+      var prevInit = String(deltaSign === 0 ? sgCur : sgStep);
       deltaSign = +sg.dataset.sign;
       Array.prototype.forEach.call(document.querySelectorAll('#m-sign button'), function (b) {
         b.classList.toggle('on', +b.dataset.sign === deltaSign);
@@ -13657,12 +13706,21 @@ function bindEvents() {
       if (okb) okb.textContent = deltaSign > 0 ? '确定增加' : (deltaSign < 0 ? '确定减少' : '确定设为');
       var lb = document.getElementById('m-lbl');
       if (lb) lb.textContent = (deltaSign === 0 ? (UI.date === TODAY ? '今日总量（' : '此日总量（') : '数量（') +
-      (document.getElementById('m-sign').dataset.unit || '') + '）';
+      (sgBox.dataset.unit || '') + '）';
       var inp = document.getElementById('m-delta');
-      if (inp && deltaSign === 0 && !inp.value.trim()) {
-        inp.value = String(+document.getElementById('m-sign').dataset.cur || 0);
+      var inpNow = inp ? (inp.value || '').trim() : '';
+      if (inp && (inpNow === '' || inpNow === prevInit)) {
+        inp.value = String(deltaSign === 0 ? sgCur : sgStep);
         inp.select();
       }
+      return;
+    }
+    /* 功课编辑弹窗：快捷增量方案二选一 */
+    var psc = e.target.closest('#f-scheme [data-scheme]');
+    if (psc) {
+      Array.prototype.forEach.call(document.querySelectorAll('#f-scheme button'), function (b) {
+        b.classList.toggle('on', b === psc);
+      });
       return;
     }
     /* 弹窗里的开关：功课的「在功课列表中显示」与纪念日的「每年重复」 */
@@ -14114,7 +14172,8 @@ function bindEvents() {
     var ddir = +dbtn.dataset.dir || 1;
     var dn = +dbtn.dataset.n || 1;
     var runD = function () {
-      if (dk === 'step') detailAdd(ddir * tt.step);
+      /* 「+」不再按默认增量加一次，抬手就弹窗，数量自己在弹窗里定 */
+      if (dk === 'step') openDeltaModal(tt.id, ddir);
       else detailAdd(dn);
       if (navigator.vibrate) navigator.vibrate(6);
     };
@@ -14131,15 +14190,8 @@ function bindEvents() {
       }, 420);
       return;
     }
-    if (dk === 'step') {
-      /* 长按「+」「−」：弹窗输入自定义数量增减 */
-      holdState.timer = setTimeout(function () {
-        if (!holdState) return;
-        holdState.fired = true;
-        if (navigator.vibrate) navigator.vibrate(12);
-        openDeltaModal(tt.id, ddir);
-      }, 420);
-    } else {
+    /* 只有快捷增量按钮才长按连加；「+」单击即弹窗，不设长按 */
+    if (dk !== 'step') {
       holdState.timer = setTimeout(function () {
         if (!holdState) return;
         holdState.fired = true;
@@ -14162,25 +14214,16 @@ function bindEvents() {
     var n = +btn.dataset.n || 1;
 
     var run = function () {
-      var t = taskById(id);
-      if (!t) return;
       if (act === 'add') addCount(id, n);
-      else if (act === 'step') addCount(id, dir * t.step);
+      /* 「+」单击（抬手）就弹出调整数量；不再按默认增量直接加 */
+      else if (act === 'step') openDeltaModal(id, dir);
       if (navigator.vibrate) navigator.vibrate(6);
     };
 
     clearHold();
     holdState = { run: run, timer: null, rep: null, fired: false };
-    if (act === 'step') {
-      /* 长按「+」「−」：弹窗输入自定义数量增减 */
-      holdState.timer = setTimeout(function () {
-        if (!holdState) return;
-        holdState.fired = true;
-        if (navigator.vibrate) navigator.vibrate(12);
-        openDeltaModal(id, dir);
-      }, 420);
-    } else {
-      // 非步进按钮支持长按连加
+    /* 快捷增量按钮支持长按连加；「+」单击即弹窗，不设长按 */
+    if (act !== 'step') {
       holdState.timer = setTimeout(function () {
         if (!holdState) return;
         holdState.fired = true;
@@ -14629,6 +14672,7 @@ function sanitizeImport(src) {
       name: t.name.slice(0, 60),
       unit: (typeof t.unit === 'string' ? t.unit : '').slice(0, 8),
       step: Math.min(100000, Math.max(1, Math.floor(Number(t.step)) || 1)),
+      scheme: (t.scheme === 'big' || t.scheme === 'small') ? t.scheme : '',
       fstep: Math.min(100000, Math.max(1, Math.floor(Number(t.fstep)) || 1)),
       goal: Math.max(0, Math.floor(Number(t.goal)) || 0),
       mgoal: Math.max(0, Math.floor(Number(t.mgoal)) || 0),
@@ -14796,7 +14840,7 @@ function showStats() {
     { n: '念佛', v: byCat.nianfo, u: '遍' },
     { n: '诵经', v: byCat.jing, u: '部' },
     { n: '持咒', v: byCat.zhou, u: '遍' },
-    { n: '仪轨', v: byCat.yigui, u: '遍' }
+    { n: '行法', v: byCat.yigui, u: '遍' }
   ].map(function (c) {
     return '<div class="st-cell"><span class="st-k">' + c.n + '</span>' +
       '<span class="st-v">' + intFmt(c.v) + '<i>' + c.u + '</i></span></div>';
