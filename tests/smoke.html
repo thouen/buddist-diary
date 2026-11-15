@@ -173,6 +173,56 @@
                 check('日记工具条位于位置天气与正文之间',
                   kids[0] === 'diary-meta' && kids[1] === 'diary-bar' && kids[2] === 'blocks',
                   kids.join(','));
+
+                /* 专修计时：暂停 / 继续 + 分段 */
+                var ft = t.db().tasks.filter(function (x) { return t.taskFocusTimer(x); })[0];
+                if (!ft && t.db().tasks.length) {
+                  ft = t.db().tasks[0];
+                  ft.ftimer = true;
+                }
+                check('找到开了「专修计时」的功课', !!ft);
+                if (ft) {
+                  var ds = t.today();
+                  t.openDetail(ft.id);
+                  t.setFocusMode(true);
+                  var segs = t.focusSegs(ds, ft.id, false);
+                  check('进入专修模式就开第 1 段',
+                    !!segs && segs.length === 1 && !segs[0].e,
+                    'len=' + (segs ? segs.length : 'null'));
+                  check('计时卡只有一个「今日累计」大数',
+                    !!doc.querySelector('#focus-total') && !doc.querySelector('#focus-time'));
+                  check('计时卡有「暂停计时」按钮',
+                    (doc.querySelector('#btn-focus-pause') || {}).textContent === '暂停计时');
+
+                  t.toggleFocusPause();
+                  check('暂停后这一段当场收尾（e 已写）', segs[0].e > 0);
+                  check('暂停后按钮变成「继续计时」',
+                    (doc.querySelector('#btn-focus-pause') || {}).textContent === '继续计时');
+
+                  /* 不真等 65 秒：直接把这一段的起止拉开 */
+                  segs[0].e = segs[0].s + 65000;
+                  t.toggleFocusPause();
+                  check('继续计时另起一段', segs.length === 2 && !segs[1].e,
+                    'len=' + segs.length);
+                  segs[1].s = Date.now() - 30000;
+                  t.renderFocusPanel();
+
+                  check('段列表按段列出两行',
+                    doc.querySelectorAll('#detail-focus .fc-seg').length === 2,
+                    'rows=' + doc.querySelectorAll('#detail-focus .fc-seg').length);
+                  check('段数统计为 2', t.focusSegCount(ds, ft.id) === 2,
+                    'got=' + t.focusSegCount(ds, ft.id));
+                  check('今日累计＝两段之和（约 95 秒）',
+                    t.focusDayMs(ds, ft.id) >= 94000,
+                    'got=' + t.focusDayMs(ds, ft.id));
+                  check('今日累计写在卡上（01:35 上下）',
+                    /^01:3[3-9]$/.test((doc.querySelector('#focus-total') || {}).textContent || ''),
+                    'got=' + (doc.querySelector('#focus-total') || {}).textContent);
+
+                  t.setFocusMode(false);
+                  check('退出专修模式后最后一段也收尾', segs[1].e > 0);
+                  check('退出后计时卡收起', !doc.querySelector('#detail-focus .focus-card'));
+                }
               } catch (e2) {
                 failed++;
                 lines.push('FAIL 运行异常：' + (e2 && e2.stack ? e2.stack : e2));

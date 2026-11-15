@@ -1252,16 +1252,51 @@ label.rb-row{cursor:pointer}
   box-shadow:0 1px 2px rgba(90,70,40,.04);
 }
 .focus-card .fc-lbl{font-size:11px;letter-spacing:2px;color:var(--gold)}
-.focus-card .fc-time{
-  font-family:var(--serif);font-size:32px;line-height:1.25;font-weight:600;
-  color:var(--accent);letter-spacing:1px;font-variant-numeric:tabular-nums;
+/* 今日累计（这项功课当天所有时段之和） */
+.focus-card .fc-times{display:flex;gap:8px;margin:2px 0 3px}
+.focus-card .fc-t{flex:1 1 0;min-width:0}
+.focus-card .fc-t b{
+  display:block;font-family:var(--serif);font-size:32px;line-height:1.22;font-weight:600;
+  color:var(--ink);letter-spacing:1px;font-variant-numeric:tabular-nums;
 }
-.focus-card .fc-sub{font-size:11px;color:var(--ink3);padding-top:1px}
+.focus-card .fc-t span{font-size:11px;color:var(--ink3);letter-spacing:1px}
+/* 状态行：两颗按钮下面单独一行，靠一颗小圆点带节奏（暂停后圆点变灰定住） */
+.focus-card .fc-state{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  margin:10px 0 0;font-size:11px;line-height:1.5;color:var(--ink3);letter-spacing:.6px;
+}
+.focus-card .fc-state i{
+  flex:0 0 auto;width:5px;height:5px;border-radius:50%;background:var(--accent);
+  animation:focusPulse 1.8s ease-in-out infinite;
+}
+.focus-card .fc-state.paused i{background:var(--ink3);animation:none}
+@keyframes focusPulse{0%,100%{opacity:.25}50%{opacity:1}}
+/* 每一段的起止与计时 */
+.focus-card .fc-segs{
+  margin:12px 0 0;padding-top:9px;border-top:1px dashed var(--line);text-align:left;
+  max-height:126px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+}
+.focus-card .fc-seg{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:12px;color:var(--ink2)}
+.focus-card .fc-seg .n{flex:0 0 auto;font-size:11px;color:var(--ink3)}
+.focus-card .fc-seg .t{
+  flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums;
+}
+.focus-card .fc-seg b{
+  flex:0 0 auto;font-family:var(--serif);font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.focus-card .fc-seg.live,.focus-card .fc-seg.live b{color:var(--accent)}
+.focus-card .fc-btns{display:flex;gap:8px;margin-top:10px}
+.focus-card .fc-pause{
+  flex:1 1 0;height:38px;border-radius:10px;font-size:13px;
+  background:var(--accent-soft);border:1px solid #ecd0c8;color:var(--accent);
+}
 .focus-card .fc-exit{
-  margin-top:10px;width:100%;height:38px;border-radius:10px;
-  background:var(--card2);border:1px solid var(--line);color:var(--ink2);font-size:13px;
+  flex:1 1 0;height:38px;border-radius:10px;font-size:13px;
+  background:var(--card2);border:1px solid var(--line);color:var(--ink2);
 }
-.focus-card .fc-exit:active{background:var(--accent-soft);border-color:#ecd0c8;color:var(--accent)}
+.focus-card .fc-pause:active,.focus-card .fc-exit:active{filter:brightness(.97)}
 /* 非当天：专修按钮不可点 */
 .modebtn:disabled{opacity:.38;color:var(--ink3);background:var(--card2);border-color:var(--line)}
 
@@ -10032,6 +10067,8 @@ var CHINA=[["北京市",["东城区","西城区","朝阳区","丰台区","石景
 var STORE_KEY = 'xuefo.diary.v1';
 /* 当前版本：发版时只改这一处，界面「设置 → 关于」与更新提示都以它为准 */
 var APP_VERSION = '2.10';
+/* 专修时段：每天每项功课最多留这么多段（反复暂停也不会把存档撑大） */
+var FOCUS_SEG_MAX = 60;
 /* 上次打开过的版本，与数据分开存，导入备份不会把它带过来 */
 var SEENVER_KEY = 'xuefo.seenver';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
@@ -10805,6 +10842,31 @@ function loadDB() {
         if (v > 0) rr.c[k] = v;
         else delete rr.c[k];
       });
+      /* 专修时段：rr.f[功课id] = [{s,e,p}]（s 本段开始、e 本段结束、p 切后台被扣掉的毫秒）。
+         形状、数值与日期归属都要收口：上一次进程被杀时留下的 e=0（还在走）按「已结束」收尾，
+         不到 1 秒的段直接丢掉，跨天没来得及收尾的老数据不搬到这里 */
+      if (rr.f && typeof rr.f === 'object' && !Array.isArray(rr.f)) {
+        Object.keys(rr.f).forEach(function (fk) {
+          if (!Array.isArray(rr.f[fk])) { delete rr.f[fk]; return; }
+          var keep = [];
+          rr.f[fk].forEach(function (sg) {
+            if (!sg || typeof sg !== 'object' || Array.isArray(sg)) return;
+            var s = +sg.s, e = +sg.e, p = +sg.p;
+            if (!isFinite(s) || s <= 0) return;
+            if (!isFinite(e) || e < 0) e = 0;
+            if (!isFinite(p) || p < 0) p = 0;
+            if (fmtDate(new Date(s)) !== ds) { __dbMigrated = true; return; }
+            if (!e) e = s;
+            if (e - s - p < 1000) { __dbMigrated = true; return; }
+            keep.push(p ? { s: s, e: e, p: p } : { s: s, e: e });
+          });
+          if (keep.length > FOCUS_SEG_MAX) keep = keep.slice(keep.length - FOCUS_SEG_MAX);
+          if (keep.length) rr.f[fk] = keep; else delete rr.f[fk];
+        });
+        if (!Object.keys(rr.f).length) delete rr.f;
+      } else if (rr.f !== undefined) {
+        delete rr.f;
+      }
       /* 2.5：日记由块数组改成一整篇纯文本，只在有旧数据时迁一次。
          折完之后一定要把 rec.d 删掉——recDiaryText() 见到 dt 会直接早退，
          留着 d 会让「已迁移」每次启动都为真，等于每次开机全库重写一遍。
@@ -11043,6 +11105,8 @@ function recIsEmpty(r) {
   /* loc 是「手输的临时地点」，只填地点、还没记数也没写日记的那一天也是用户填进来的东西 */
   if (r.loc) return false;
   if (r.locOff) return false;
+  /* 专修时段也是用户坐出来的东西：只进了专修模式、一次没按「+」的那天也不能被当空壳清掉 */
+  if (r.f && typeof r.f === 'object' && Object.keys(r.f).length) return false;
   return true;
 }
 function pruneRec(ds) {
@@ -11356,8 +11420,9 @@ function renderView() {
     if (el) el.classList.toggle('hidden', v !== UI.view);
   });
   /* 离开详情页就别再空转专修计时，顺手把详情状态清掉：
-     留着它以后新增「回到详情」入口时，会复活一个跨小时的幽灵计时 */
-  if (UI.view !== 'detail') { stopFocusTick(); UI.detail = null; }
+     留着它以后新增「回到详情」入口时，会复活一个跨小时的幽灵计时。
+     还在走的那一段就地收尾，记录里不会留下 e=0（永远在走）的段 */
+  if (UI.view !== 'detail') { stopFocusTick(); focusEndSeg(UI.detail); UI.detail = null; }
   if (UI.view === 'home') renderHome();
   else if (UI.view === 'detail') renderDetail();
   else if (UI.view === 'diaryedit') renderDiaryEdit();
@@ -13152,9 +13217,11 @@ function openDetail(taskId) {
   var d = parseYmd(UI.date);
   UI.detail = {
     taskId: taskId,
-    /* 每次进详情页都从「记录模式」开始，专修模式与计时都不记忆 */
+    /* 每次进详情页都从「记录模式」开始（要不要进专修由用户自己点），
+       但已经坐过的专修时段存在当天记录里（rec.f），再进来照样看得见 */
     focus: false,
-    focusStart: 0,
+    paused: false,
+    segDs: UI.date,        /* 时段存在哪一天：进专修那一刻的日期，跨天不会写串 */
     range: 'day',
     y: d.getFullYear(),
     m: d.getMonth() + 1,
@@ -13551,8 +13618,13 @@ function renderDetail() {
 
   $('#detail-title').textContent = t.name;
 
-  /* 专修模式只在当天可用；翻到别的日子还留着状态就强制退掉 */
-  if (d.focus && UI.date !== TODAY) { d.focus = false; d.focusStart = 0; }
+  /* 专修模式只在当天可用；翻到别的日子（或过了零点）还留着状态就强制退掉，
+     已经坐出来的时段留在原来那天，不会跟着日期搬 */
+  if (d.focus && (UI.date !== TODAY || d.segDs !== UI.date)) {
+    focusEndSeg(d);
+    d.focus = false;
+    d.paused = false;
+  }
 
   /* 日信息放在滚动区外，翻下面内容时它一直贴在标题下面 */
   var slot = $('#detail-dayslot');
@@ -13588,7 +13660,7 @@ function toggleDetailMode() {
   else setFocusMode(true);
 }
 
-/* 退出专修模式（或离开详情页）前先确认一次，弹窗里写清这一次已经坐了多久。
+/* 退出专修模式（或离开详情页）前先确认一次，弹窗里写清今天一共坐了多少、几段。
    没开「专修计时」的功课不用问，直接退 */
 function confirmExitFocus(afterOk) {
   var d = UI.detail;
@@ -13598,9 +13670,12 @@ function confirmExitFocus(afterOk) {
     if (afterOk) afterOk();
     return;
   }
-  var used = focusElapsedText(Date.now() - d.focusStart);
+  var now = Date.now();
+  var used = focusElapsedText(focusDayMs(d.segDs, d.taskId, now));
+  var segs = focusSegCount(d.segDs, d.taskId);
   askConfirm('退出专修模式？',
-    '本次已专修 <b>' + used + '</b>，退出后计时结束',
+    '今日已专修 <b>' + used + '</b>' + (segs > 1 ? '（' + segs + ' 段）' : '') +
+      '，退出后计时结束',
     '退出',
     function () {
       setFocusMode(false);
@@ -13608,15 +13683,23 @@ function confirmExitFocus(afterOk) {
     });
 }
 
-/* 进入 / 退出专修模式：进入时就地开始计时，退出即结束 */
+/* 进入 / 退出专修模式：进入时就地开第 1 段计时，退出即收尾 */
 function setFocusMode(on) {
   var d = UI.detail;
   if (!d) return;
   on = !!on;
   if (on && UI.date !== TODAY) { toast('只有当天才能进入专修模式'); return; }
-  d.focus = on;
-  d.focusStart = on ? Date.now() : 0;
-  d.focusPausedAt = 0;
+  if (on) {
+    d.focus = true;
+    d.paused = false;
+    d.hiddenSeg = null;
+    d.segDs = UI.date;
+    focusStartSeg(d);
+  } else {
+    focusEndSeg(d);
+    d.focus = false;
+    d.paused = false;
+  }
   syncDetailMode();
   var t = taskById(d.taskId);
   if (t) redrawDetailCount(t);
@@ -13625,37 +13708,170 @@ function setFocusMode(on) {
   toast(on ? '进入专修模式' : '退出专修模式');
 }
 
-/* ---------- 专修计时：只在专修模式下出现在计数卡与统计区之间 ---------- */
+/* ---------- 专修计时与分段 ----------
+   每一段都落在当天记录里（rec.f[功课id] = [{s,e,p}]），退出详情页、重开 App 都还在：
+     s 本段开始、e 本段结束（0＝还在走）、p 切后台 / 息屏被扣掉的毫秒。
+   锁屏那段墙钟不算专修（与 2.9 的口径一致），但它不切段；手动「暂停 / 继续」才切段。 */
 var focusTick = null;
 function stopFocusTick() {
   if (focusTick) { clearInterval(focusTick); focusTick = null; }
 }
-/* 切后台 / 锁屏：停表并记下暂停点，回前台再把这段墙钟从「已专修」里扣掉，
-   否则锁屏几小时会全算成专修时间 */
+function focusSegs(ds, taskId, create) {
+  if (!DB || !DB.records) return null;
+  var rec = create ? getRec(ds, true) : DB.records[ds];
+  if (!rec) return null;
+  if (!rec.f || typeof rec.f !== 'object' || Array.isArray(rec.f)) {
+    if (!create) return null;
+    rec.f = {};
+  }
+  var arr = rec.f[taskId];
+  if (!Array.isArray(arr)) {
+    if (!create) return null;
+    arr = rec.f[taskId] = [];
+  }
+  return arr;
+}
+/* 一段的计时（走了多久）：还在走的按「此刻」算，p 是息屏 / 切后台被扣掉的那截 */
+function focusSegMs(seg, now) {
+  if (!seg) return 0;
+  var end = +seg.e || (now || Date.now());
+  var s = +seg.s || end;
+  return Math.max(0, end - s - (+seg.p || 0));
+}
+function focusOpenSeg(ds, taskId) {
+  var arr = focusSegs(ds, taskId, false);
+  if (!arr) return null;
+  for (var i = arr.length - 1; i >= 0; i--) if (arr[i] && !arr[i].e) return arr[i];
+  return null;
+}
+function focusLastSeg(ds, taskId) {
+  var arr = focusSegs(ds, taskId, false);
+  if (!arr || !arr.length) return null;
+  return arr[arr.length - 1] || null;
+}
+function focusDayMs(ds, taskId, now) {
+  var arr = focusSegs(ds, taskId, false);
+  if (!arr) return 0;
+  var sum = 0;
+  for (var i = 0; i < arr.length; i++) sum += focusSegMs(arr[i], now);
+  return sum;
+}
+/* 只数「坐得住」的段：不到 1 秒的误触不算一段 */
+function focusSegCount(ds, taskId) {
+  var arr = focusSegs(ds, taskId, false);
+  if (!arr) return 0;
+  var n = 0;
+  for (var i = 0; i < arr.length; i++) {
+    if (!arr[i]) continue;
+    if (!arr[i].e || focusSegMs(arr[i]) >= 1000) n++;
+  }
+  return n;
+}
+/* 另起一段：暂停中 / 没在专修 / 这项功课没开「专修计时」时都不动 */
+function focusStartSeg(d) {
+  if (!d || !d.focus || d.paused) return null;
+  if (!taskFocusTimer(taskById(d.taskId))) return null;
+  var open = focusOpenSeg(d.segDs, d.taskId);
+  if (open) return open;
+  var arr = focusSegs(d.segDs, d.taskId, true);
+  if (!arr) return null;
+  while (arr.length >= FOCUS_SEG_MAX) arr.shift();
+  var seg = { s: Date.now(), e: 0 };
+  arr.push(seg);
+  saveSoon();
+  return seg;
+}
+/* 收尾：把还在走的那一段就地定住（重复调用无副作用） */
+function focusEndSeg(d) {
+  if (!d) return;
+  d.hiddenSeg = null;
+  var seg = focusOpenSeg(d.segDs, d.taskId);
+  if (!seg) return;
+  seg.e = Math.max(+seg.s || 0, Date.now());
+  saveSoon();
+}
+/* 切后台 / 锁屏：先把这一段落成「已结束」——进程这时被杀也不会在存档里留一段永远在走的时间；
+   回到前台再把它接上，锁屏那截墙钟记进 p，既不算专修，也不切出新的一段 */
 function pauseFocusTick() {
   var d = UI.detail;
   stopFocusTick();
-  if (d && d.focus && !d.focusPausedAt) d.focusPausedAt = Date.now();
+  if (!d || !d.focus || d.paused || d.hiddenSeg) return;
+  var seg = focusOpenSeg(d.segDs, d.taskId);
+  if (!seg) return;
+  seg.e = Math.max(+seg.s || 0, Date.now());
+  d.hiddenSeg = seg;
+  saveSoon();
 }
 function resumeFocusTick() {
   var d = UI.detail;
   if (!d || !d.focus) return;
-  if (d.focusPausedAt) {
-    d.focusStart += Date.now() - d.focusPausedAt;
-    d.focusPausedAt = 0;
+  if (d.hiddenSeg) {
+    var seg = d.hiddenSeg;
+    d.hiddenSeg = null;
+    seg.p = (+seg.p || 0) + Math.max(0, Date.now() - (+seg.e || 0));
+    seg.e = 0;
+    saveSoon();
+  } else if (!d.paused) {
+    /* 段被 pagehide 之类收过尾：回前台另起一段接着走 */
+    focusStartSeg(d);
   }
   renderFocusPanel();
+}
+/* 手动暂停 / 继续：暂停＝把这一段收尾（起止与计时都留下），继续＝另起一段 */
+function toggleFocusPause() {
+  var d = UI.detail;
+  if (!d || !d.focus) return;
+  if (d.paused) {
+    d.paused = false;
+    focusStartSeg(d);
+    toast('继续计时');
+  } else {
+    focusEndSeg(d);
+    d.paused = true;
+    toast('已暂停计时');
+  }
+  renderFocusPanel();
+  if (navigator.vibrate) navigator.vibrate(8);
 }
 function focusElapsedText(ms) {
   var s = Math.max(0, Math.floor(ms / 1000));
   var h = Math.floor(s / 3600), mi = Math.floor((s % 3600) / 60), se = s % 60;
   return h > 0 ? (h + ':' + pad2(mi) + ':' + pad2(se)) : (pad2(mi) + ':' + pad2(se));
 }
+/* 段的起止写成「时:分」，秒数差看右边那列计时 */
+function clockText(ts) {
+  var dt = new Date(+ts || 0);
+  return pad2(dt.getHours()) + ':' + pad2(dt.getMinutes());
+}
+function focusSegsHTML(d) {
+  var arr = focusSegs(d.segDs, d.taskId, false);
+  if (!arr || !arr.length) return '';
+  var html = '', idx = 0;
+  arr.forEach(function (seg) {
+    if (!seg) return;
+    var open = !seg.e;
+    var ms = focusSegMs(seg);
+    /* 秒级误触（刚进来就暂停 / 退出）不占一行 */
+    if (!open && ms < 1000) return;
+    idx++;
+    html += '<div class="fc-seg' + (open ? ' live' : '') + '">' +
+      '<span class="n">第' + idx + '段</span>' +
+      '<span class="t">' + clockText(seg.s) + ' – ' + (open ? '计时中' : clockText(seg.e)) + '</span>' +
+      '<b' + (open ? ' id="focus-seg-live"' : '') + '>' + focusElapsedText(ms) + '</b>' +
+    '</div>';
+  });
+  return html ? '<div class="fc-segs">' + html + '</div>' : '';
+}
 function updateFocusTime() {
-  var el = document.getElementById('focus-time');
-  if (!el) { stopFocusTick(); return; }
+  var tot = document.getElementById('focus-total');
+  if (!tot) { stopFocusTick(); return; }
   var d = UI.detail;
-  el.textContent = focusElapsedText(d && d.focusStart ? Date.now() - d.focusStart : 0);
+  if (!d || !d.focus) return;
+  var now = Date.now();
+  tot.textContent = focusElapsedText(focusDayMs(d.segDs, d.taskId, now));
+  /* 正在走的那一段（段列表里带「计时中」的那行）跟着一起走字 */
+  var live = document.getElementById('focus-seg-live');
+  if (live) live.textContent = focusElapsedText(focusSegMs(focusLastSeg(d.segDs, d.taskId), now));
 }
 function renderFocusPanel() {
   var box = document.getElementById('detail-focus');
@@ -13668,12 +13884,21 @@ function renderFocusPanel() {
   box.innerHTML =
     '<div class="focus-card">' +
       '<div class="fc-lbl">专修计时</div>' +
-      '<div class="fc-time" id="focus-time">00:00</div>' +
-      '<div class="fc-sub">已进入专修模式 · 上方按钮按专修增量记数</div>' +
-      '<button class="fc-exit" id="btn-exit-focus">退出专修模式</button>' +
+      '<div class="fc-times">' +
+        '<div class="fc-t"><b id="focus-total">00:00</b><span>今日累计</span></div>' +
+      '</div>' +
+      '<div class="fc-btns">' +
+        '<button class="fc-pause" id="btn-focus-pause">' + (d.paused ? '继续计时' : '暂停计时') + '</button>' +
+        '<button class="fc-exit" id="btn-exit-focus">退出专修模式</button>' +
+      '</div>' +
+      '<div class="fc-state' + (d.paused ? ' paused' : '') + '"><i></i><span>' +
+        (d.paused ? '已暂停 · 点「继续计时」接着坐' : '计时中……') +
+      '</span></div>' +
+      focusSegsHTML(d) +
     '</div>';
   updateFocusTime();
-  focusTick = setInterval(updateFocusTime, 1000);
+  /* 暂停时不再空转：停表就是停表 */
+  if (!d.paused && !d.hiddenSeg) focusTick = setInterval(updateFocusTime, 1000);
 }
 /* 只换计数卡这一块：统计区不重算，详情页的滚动位置也不动 */
 function redrawDetailCount(t) {
@@ -14030,12 +14255,14 @@ function askDeleteTask(t) {
 }
 function deleteTask(id) {
   DB.tasks = DB.tasks.filter(function (x) { return x.id !== id; });
-  /* 逐个日期摘掉这项计数；某天因此空了就连这条记录一起清掉 */
+  /* 逐个日期摘掉这项计数与专修时段；某天因此空了就连这条记录一起清掉 */
   Object.keys(DB.records || {}).forEach(function (ds) {
     var r = DB.records[ds];
-    if (!r || !r.c || r.c[id] == null) return;
-    delete r.c[id];
-    pruneRec(ds);
+    if (!r) return;
+    var hit = false;
+    if (r.c && r.c[id] != null) { delete r.c[id]; hit = true; }
+    if (r.f && r.f[id]) { delete r.f[id]; hit = true; }
+    if (hit) pruneRec(ds);
   });
   invalidateTotals();
   saveNow();
@@ -14626,6 +14853,8 @@ var REL_NOTES = [
   {
     v: '2.10', date: '2026-11-15',
     items: [
+      '专修模式里可以「暂停计时 / 继续计时」了：暂停时那一段就此收尾（起止与时长都留下），继续时另起一段，不再只能一次坐到底',
+      '专修计时卡上大字写着「今日累计」，下面按段列出每一段的起止时间与计时（正在走的那段跟着走字）；退出详情页、重开 App 都还在',
       '功课设置里「单位 · 快捷 · 默认 · 专修」那一行的末尾常驻一只小闹钟：开了「专修计时」是功课红，关掉就置灰，参数再长也不挤掉它',
       '功课名称创建后不能再改：编辑弹窗里名称一栏是只读的，要改名请删除后重新添加；新增功课时同分类重名会提示',
       '写日记时翻日历、切菜单、跨天检查都不会再重建编辑框，光标、输入法正在拼的字与正文滚动位置都留在原处',
@@ -15131,6 +15360,8 @@ function bindEvents() {
 
     /* 详情页右上角：专修模式切换 / 编辑这项功课 */
     if (e.target.closest('#btn-detail-mode')) { toggleDetailMode(); return; }
+    /* 专修计时卡里的「暂停计时 / 继续计时」 */
+    if (e.target.closest('#btn-focus-pause')) { toggleFocusPause(); return; }
     /* 专修计时卡里的「退出专修模式」 */
     if (e.target.closest('#btn-exit-focus')) { confirmExitFocus(); return; }
     if (e.target.closest('#btn-detail-edit')) {
@@ -15610,6 +15841,16 @@ function bindEvents() {
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) { clearHold(); pauseFocusTick(); }
     else resumeFocusTick();
+  });
+  /* 关掉页面 / 被系统回收：把正在走的那一段就地收尾再落盘，
+     否则下次进来会看到一段 e=0 的「还在走」的段 */
+  window.addEventListener('pagehide', function () {
+    focusEndSeg(UI.detail);
+    if (saveTimer) saveNow();
+  });
+  /* 从 bfcache 回来：上面那一手已经把段收尾了，这里另起一段接着走 */
+  window.addEventListener('pageshow', function (e) {
+    if (e && e.persisted) resumeFocusTick();
   });
 
   /* 手势 */
@@ -16288,6 +16529,26 @@ function sanitizeImport(src) {
       dtext = dtext.slice(0, 40000);
     }
     if (dtext) rec.dt = dtext;
+    /* 专修时段：只收现存功课、确实落在这一天、时长 ≥1 秒的段（备份里 e=0 的残段丢掉） */
+    if (r.f && typeof r.f === 'object' && !Array.isArray(r.f)) {
+      var fout = {};
+      Object.keys(r.f).forEach(function (fk) {
+        if (!idSet[fk] || !Array.isArray(r.f[fk])) return;
+        var keep = [];
+        r.f[fk].slice(0, FOCUS_SEG_MAX).forEach(function (sg) {
+          if (!sg || typeof sg !== 'object' || Array.isArray(sg)) return;
+          var s = +sg.s, e = +sg.e, p = +sg.p;
+          if (!isFinite(s) || s <= 0) return;
+          if (!isFinite(e) || e < s) return;
+          if (!isFinite(p) || p < 0) p = 0;
+          if (fmtDate(new Date(s)) !== ds) return;
+          if (e - s - p < 1000) return;
+          keep.push(p ? { s: s, e: e, p: p } : { s: s, e: e });
+        });
+        if (keep.length) fout[fk] = keep;
+      });
+      if (Object.keys(fout).length) rec.f = fout;
+    }
     if (typeof r.loc === 'string' && r.loc.trim()) rec.loc = r.loc.slice(0, 40);
     if (typeof r.w === 'string' && r.w.trim()) rec.w = r.w.slice(0, 20);
     if (typeof r.place === 'string') rec.place = r.place.slice(0, 64);
@@ -16749,7 +17010,16 @@ if (/[?&]test=1(?:&|$)/.test(location.search)) {
     BUILTIN_REV: BUILTIN_REV,
     MAX_COUNT: MAX_COUNT,
     lastImportReport: function () { return lastImportReport; },
-    db: function () { return DB; }
+    db: function () { return DB; },
+    today: function () { return TODAY; },
+    openDetail: openDetail,
+    setFocusMode: setFocusMode,
+    toggleFocusPause: toggleFocusPause,
+    renderFocusPanel: renderFocusPanel,
+    focusSegs: focusSegs,
+    focusDayMs: focusDayMs,
+    focusSegCount: focusSegCount,
+    taskFocusTimer: taskFocusTimer
   };
 }
 
