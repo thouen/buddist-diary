@@ -1063,17 +1063,18 @@ label.rb-row{cursor:pointer}
 }
 .chip:disabled{opacity:.5}
 
-/* 日记正文撑满剩余高度 */
-.diary #blocks{flex:1 1 auto;min-height:0}
+/* 日记正文撑满剩余高度。
+   首页日记 tab 与独立的日记编辑页各有一份编辑区，所以用类名而不是 id */
+.diary .blocks{flex:1 1 auto;min-height:0}
 /* 一整篇纯文本：正文就是一个 textarea，换行就是文本里的 \n */
-#blocks{display:flex;flex-direction:column;min-height:0}
-#blocks .ed{
+.blocks{display:flex;flex-direction:column;min-height:0}
+.blocks .ed{
   flex:1 1 auto;width:100%;min-height:220px;box-sizing:border-box;
   border:0;outline:none;background:transparent;resize:none;margin:0;
   padding:3px 0;font-family:inherit;font-size:15px;line-height:1.75;color:var(--ink);
   overflow-y:auto;-webkit-appearance:none;appearance:none;
 }
-#blocks .ed[readonly]{cursor:default}
+.blocks .ed[readonly]{cursor:default}
 
 /* ---------- 重要日（自定义） ---------- */
 /* 纪念日：青碧色，与功课红、斋戒日蓝、节气绿都区分开 */
@@ -1361,6 +1362,19 @@ label.rb-row{cursor:pointer}
     <!-- 日信息钉在标题下面，滚动的只有下面那张计数卡与统计区 -->
     <div id="detail-dayslot"></div>
     <div class="scroll" id="detail-scroll"></div>
+  </section>
+
+  <!-- ============ 日记编辑页（从日记页元信息行的「编辑」进） ============ -->
+  <section id="view-diaryedit" class="view hidden">
+    <div class="page-head">
+      <button class="back" data-back="1" aria-label="返回">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="page-title">日记</div>
+    </div>
+    <!-- 与功课详情页同一套布局：日信息贴在标题下面，正文在下面的滚动区里 -->
+    <div id="dedit-dayslot"></div>
+    <div class="scroll" id="dedit-scroll"><div class="diary" id="dedit-box"></div></div>
   </section>
 
   <!-- ============ 功课设置 ============ -->
@@ -11337,7 +11351,7 @@ function syncTodayUI() {
 }
 
 function renderView() {
-  ['home', 'detail', 'tasks', 'fest', 'festset', 'places', 'settings'].forEach(function (v) {
+  ['home', 'detail', 'diaryedit', 'tasks', 'fest', 'festset', 'places', 'settings'].forEach(function (v) {
     var el = document.getElementById('view-' + v);
     if (el) el.classList.toggle('hidden', v !== UI.view);
   });
@@ -11346,6 +11360,7 @@ function renderView() {
   if (UI.view !== 'detail') { stopFocusTick(); UI.detail = null; }
   if (UI.view === 'home') renderHome();
   else if (UI.view === 'detail') renderDetail();
+  else if (UI.view === 'diaryedit') renderDiaryEdit();
   else if (UI.view === 'tasks') renderTaskSettings();
   else if (UI.view === 'fest') renderFestivals();
   else if (UI.view === 'festset') renderFestSettings();
@@ -11393,9 +11408,11 @@ function renderHomeBody(body) {
   if (UI.tab === 'diary') {
     var dbox = $('#diary-box');
     /* 只读态也要一起比：跨过 00:00 后 UI.date 没变、但「今天」变了，
-       只比正文会把只读的编辑框原样留住，用户当天反而写不了日记 */
-    var keep = !!(dbox && diaryDate === UI.date && diaryRO === isFutureDate() &&
-      $('#blocks .ed') &&
+       只比正文会把只读的编辑框原样留住，用户当天反而写不了日记。
+       diaryDomBox 也要比：刚从独立的编辑页回来时，这份编辑框是旧的（文字留在
+       上一次渲染的样子），不能当「内容没变」原样留住 */
+    var keep = !!(diaryDomBox === 'diary-box' && dbox && diaryDate === UI.date &&
+      diaryRO === isFutureDate() && dbox.querySelector('.ed') &&
       cleanDiaryText(diaryText) === cleanDiaryText(recDiaryText(getRec(UI.date, false))));
     if (!keep) {
       body.innerHTML = '<div class="diary" id="diary-box"></div>';
@@ -12123,6 +12140,14 @@ function diaryChars(s) {
   return String(s || '').replace(/\s/g, '').length;
 }
 
+/* 日记编辑区当前挂在哪儿：首页日记 tab（#diary-box）还是独立的日记编辑页（#dedit-box）。
+   两份 DOM 会同时存在（另一份只是被隐藏），所以查询一律先锁定当前可见的那一份，
+   否则 querySelector 会命中先出现的那份——看不到的编辑框被写入，看得见的却不动 */
+var diaryDomBox = '';     /* 最近一次画出来的是哪一个盒子 */
+function diaryBoxEl() {
+  return document.querySelector(UI.view === 'diaryedit' ? '#dedit-box' : '#diary-box');
+}
+
 function renderDiaryInto(box) {
   diaryRO = isFutureDate();
   /* 一次都不落库：只是翻到日记页、什么都没写，不该凭空多出一条空记录。
@@ -12131,16 +12156,19 @@ function renderDiaryInto(box) {
   if (!rec) rec = { c: {} };              /* 还没有记录时，只用于渲染 */
   var txt = recDiaryText(rec);
   var dateChanged = diaryDate !== UI.date;
+  var onEditPage = box.id === 'dedit-box';
   diaryText = txt;
   diaryDate = UI.date;
-  box.innerHTML = diaryMetaHTML(rec) + diaryBarHTML() + diaryEditorHTML();
+  diaryDomBox = box.id;
+  /* 专门的编辑页里不用再给一个「展开编辑」的入口 */
+  box.innerHTML = diaryMetaHTML(rec, onEditPage) + diaryBarHTML() + diaryEditorHTML();
   paintDiary();
   if (dateChanged) resetHistory();
   if (diaryRO) {
     /* 未来的日期不撑满屏，没内容就只留一句说明 */
     box.style.minHeight = '';
     if (!txt.trim()) {
-      var host = document.getElementById('blocks');
+      var host = box.querySelector('.blocks');
       if (host) host.innerHTML = '<div class="diary-empty">这一天还没有记录，到了那天就能写了</div>';
     }
   } else {
@@ -12151,16 +12179,18 @@ function renderDiaryInto(box) {
 /* 一整篇就是一个 textarea：它本身就是纯文本，光标、粘贴、整篇复制都由浏览器保证正确 */
 function diaryEditorHTML() {
   /* 不放 placeholder：写日记这件事没有一句话能替用户开口，空框就是空框 */
-  return '<div id="blocks"><textarea class="ed" spellcheck="false" aria-label="日记正文"' +
+  return '<div class="blocks"><textarea class="ed" spellcheck="false" aria-label="日记正文"' +
     (diaryRO ? ' readonly' : '') +
     '></textarea></div>';
 }
 
 function diaryEditor() {
-  return document.querySelector('#blocks .ed');
+  var box = diaryBoxEl();
+  return box ? box.querySelector('.ed') : null;
 }
 
-function diaryMetaHTML(rec) {
+/* noEdit：在独立的日记编辑页里，元信息行不再放「展开编辑」那颗按钮 */
+function diaryMetaHTML(rec, noEdit) {
   var w = rec.w || '';
   var loc = rec.loc || '';
   var n = diaryChars(recDiaryText(rec));
@@ -12178,6 +12208,10 @@ function diaryMetaHTML(rec) {
     '<button class="meta-copy" data-copyall="1" aria-label="复制全文" title="复制全文">' +
       '<svg viewBox="0 0 24 24"><rect x="8.6" y="8.6" width="11" height="11" rx="2.2"/><path d="M15.4 5.2H6.6A1.4 1.4 0 0 0 5.2 6.6v8.8"/></svg>' +
     '</button>' +
+    (noEdit ? '' :
+      '<button class="meta-copy" data-dedit="1" aria-label="展开编辑" title="展开编辑">' +
+        '<svg viewBox="0 0 24 24"><path d="M4 20h3.4L18 9.4a2.4 2.4 0 0 0-3.4-3.4L4 16.6V20z"/><path d="M13.6 6.4 17.6 10.4"/></svg>' +
+      '</button>') +
   '</div>';
 }
 
@@ -12287,8 +12321,10 @@ function redoDiary() {
 }
 
 function updateHistoryButtons() {
-  var u = document.querySelector('[data-undo]');
-  var r = document.querySelector('[data-redo]');
+  var box = diaryBoxEl();
+  if (!box) return;
+  var u = box.querySelector('[data-undo]');
+  var r = box.querySelector('[data-redo]');
   if (u) u.disabled = diaryRO || histIdx <= 0;
   if (r) r.disabled = diaryRO || histIdx >= histStack.length - 1;
 }
@@ -12363,7 +12399,8 @@ function paintDiary() {
 }
 
 function updateDiaryMetaCount() {
-  var el = document.querySelector('.diary-meta .meta-n');
+  var box = diaryBoxEl();
+  var el = box && box.querySelector('.diary-meta .meta-n');
   if (!el) return;
   var n = diaryChars(diaryText);
   el.textContent = n ? n + ' 字' : '';
@@ -12509,9 +12546,60 @@ function fitDiaryHeight(box) {
   } catch (e) { }
 }
 
+/* ---------- 日记编辑页 ----------
+   日记页元信息行右边的铅笔进到这里：日信息钉在标题下面，下面是整片编辑区，
+   排法与功课详情页一致。编辑器、撤回栈、地点天气都与首页日记 tab 共用同一套，
+   只是换了个更宽敞的地方显示 */
+function openDiaryEditor() {
+  if (UI.mode !== 'record') setMode('record');
+  UI.tab = 'diary';
+  saveNow();
+  showView('diaryedit');
+}
+
+function renderDiaryEdit() {
+  syncTodayUI();
+  var slot = $('#dedit-dayslot');
+  if (slot) slot.innerHTML = dayNavHTML('dedit-date');
+  var box = $('#dedit-box');
+  if (box) renderDiaryInto(box);
+}
+
+/* 编辑页里翻前后一天：只换日期，留在本页 */
+function shiftDiaryEditDate(n) {
+  saveNow();
+  UI.date = addDays(UI.date, n);
+  var d = parseYmd(UI.date);
+  UI.calY = d.getFullYear();
+  UI.calM = d.getMonth() + 1;
+  renderView();
+  var host = $('#dedit-scroll');
+  if (host) {
+    host.classList.remove('swipe-l', 'swipe-r');
+    void host.offsetWidth;
+    host.classList.add(n < 0 ? 'swipe-r' : 'swipe-l');
+    host.scrollTop = 0;
+  }
+}
+
+/* 编辑页里选日期（含系统日期选择器） */
+function gotoDiaryEditDate(ds) {
+  if (!isYmdKey(ds)) return;
+  saveNow();
+  UI.date = ds;
+  var d = parseYmd(ds);
+  UI.calY = d.getFullYear();
+  UI.calM = d.getMonth() + 1;
+  renderView();
+}
+
 function refreshDiary() {
-  var box = $('#diary-box');
-  if (!box || UI.tab !== 'diary' || UI.mode !== 'record') return;
+  /* 首页要在日记 tab 上，编辑页则本身就是日记 */
+  if (UI.mode !== 'record') return;
+  if (UI.view === 'home' && UI.tab !== 'diary') return;
+  if (UI.view !== 'home' && UI.view !== 'diaryedit') return;
+  var box = diaryBoxEl();
+  if (!box) return;
   renderDiaryInto(box);
 }
 
@@ -12527,9 +12615,9 @@ function setRecMeta(patch) {
   saveNow();
   /* 只重画元信息那一行：整块 renderDiaryInto 会把正在写的内容、光标与滚动位置一起冲掉，
      而且 rec.dt 去掉了末尾空行，结尾留的空行会当场消失 */
-  var box = $('#diary-box');
+  var box = diaryBoxEl();
   var meta = box && box.querySelector('.diary-meta');
-  if (meta) meta.outerHTML = diaryMetaHTML(getRec(UI.date, true));
+  if (meta) meta.outerHTML = diaryMetaHTML(getRec(UI.date, true), box.id === 'dedit-box');
   else refreshDiary();
 }
 
@@ -12643,7 +12731,9 @@ function applyPlaceToRec(p, ds) {
 /* 自动补地点：只在「当天」且用户真的点进日记正文之后才做。
    只翻到日记页不会凭空填地点，也不会污染「最近一次地点」 */
 function maybeAutoPlace() {
-  if (UI.view !== 'home' || UI.tab !== 'diary' || UI.mode !== 'record') return;
+  var onDiary = UI.view === 'diaryedit' ||
+    (UI.view === 'home' && UI.tab === 'diary' && UI.mode === 'record');
+  if (!onDiary) return;
   if (UI.date !== TODAY) return;
   var rec = getRec(UI.date, false);
   if (!rec || rec.loc || rec.locOff) return;
@@ -12653,8 +12743,9 @@ function maybeAutoPlace() {
   rec.place = p.id;
   notePlaceUsed(p.id);
   saveNow();
-  var meta = document.querySelector('.diary-meta');
-  if (meta) meta.outerHTML = diaryMetaHTML(getRec(UI.date, true));
+  var box = diaryBoxEl();
+  var meta = box && box.querySelector('.diary-meta');
+  if (meta) meta.outerHTML = diaryMetaHTML(getRec(UI.date, true), box.id === 'dedit-box');
 }
 
 function provOptions(cur) {
@@ -13216,11 +13307,12 @@ function yearTableHTML(items) {
   }).join('') + '</div>';
 }
 
-/* 第一段：日信息（与首页同一套三行格式） */
-function detailDayHTML() {
+/* 第一段：日信息（与首页同一套三行格式）。
+   功课详情页与日记编辑页各画一份，id 由调用方给，不能重名 */
+function dayNavHTML(idName) {
   var info = lunarOf(UI.date);
   return '<div class="detail-day' + (UI.date === TODAY ? ' today' : '') +
-    '" id="detail-date" role="button" aria-label="选择日期">' +
+    '" id="' + idName + '" role="button" aria-label="选择日期">' +
     '<button class="dl-nav prev" data-day="-1" aria-label="前一天"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
     '<div class="dd-main">' + dateRowsHTML(info, UI.date) + '</div>' +
     '<button class="dl-nav next" data-day="1" aria-label="后一天"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
@@ -13440,7 +13532,7 @@ function renderDetail() {
 
   /* 日信息放在滚动区外，翻下面内容时它一直贴在标题下面 */
   var slot = $('#detail-dayslot');
-  if (slot) slot.innerHTML = detailDayHTML();
+  if (slot) slot.innerHTML = dayNavHTML('detail-date');
 
   $('#detail-scroll').innerHTML =
     detailCountHTML(t) +
@@ -14205,34 +14297,80 @@ function festOwnById(id) {
   (DB.fests || []).forEach(function (f) { if (f.id === id) hit = f; });
   return hit;
 }
+function myDayById(id) {
+  var hit = null;
+  (DB.mydays || []).forEach(function (m) { if (m.id === id) hit = m; });
+  return hit;
+}
+/* 年份下拉：不指定年份，或 1900–2100 里挑一年。
+   「当年」随历法走：农历条目比的是农历年，公历条目比的是公历年，
+   否则农历腊月的条目会晚一年才出现 */
+function myDayYearOpts(cal, cur, isNew) {
+  var cy = cal === 'lunar' ? lunarOf(TODAY).y : new Date().getFullYear();
+  var c = cur || (isNew ? cy : 0);
+  var a = ['<option value="0"' + (c ? '' : ' selected') + '>不指定年份</option>'];
+  for (var y = 1900; y <= 2100; y++) {
+    a.push('<option value="' + y + '"' + (y === c ? ' selected' : '') + '>' + y + ' 年</option>');
+  }
+  return a.join('');
+}
 
+/* 节日与纪念日共用一个编辑窗口：归到哪一类里多了「纪念日」，
+   选到纪念日时才多出「年份」与「每年重复」两栏，保存时落进 DB.mydays。
+   两者字段本来不同（节日 cal / kind，纪念日 kind 存历法），这里统一在保存时转换：
+   跨类改就换个数组存放，免得同一个意思要维护两套窗口、改了这个忘了那个。 */
 function openFestEditor(cat, id) {
   var f = id ? festOwnById(id) : null;
-  var isNew = !f;
-  var kind = f ? f.kind : (cat === 'pub' ? 'pub' : 'buddha');
-  var cal = f ? f.cal : 'solar';
-  var mm = f ? +f.m : 1;
-  var dd = f ? +f.d : 1;
+  var m = (!f && id) ? myDayById(id) : null;
+  /* 找不到就别悄悄当成新增一条，顺手把失效的列表重画一次 */
+  if (id && !f && !m) {
+    toast('这条记录已不存在，列表已刷新');
+    renderFestSettings();
+    return;
+  }
+  var item = f || m || null;
+  var isNew = !item;
+  /* 新增时默认落在当前分段：纪念日分段点「添加」就该是纪念日 */
+  var kind = f ? (f.kind === 'pub' ? 'pub' : 'buddha')
+    : (m ? 'myd' : (cat === 'pub' ? 'pub' : (cat === 'myd' ? 'myd' : 'buddha')));
+  var isMyd = kind === 'myd';
+  var cal = f ? f.cal : (m ? (m.kind === 'lunar' ? 'lunar' : 'solar') : 'solar');
+  var mm = item ? +item.m : 1;
+  var dd = item ? +item.d : 1;
+  var yy = m ? (+m.y || 0) : 0;
+  var rep = m ? m.repeat !== false : true;   /* 纪念日默认每年重复 */
+  var itemId = item ? item.id : '';
+  var delText = isMyd ? '删除这个纪念日' : '删除这个节日';
 
   openModal(
-    '<h4>' + (isNew ? '添加节日' : '编辑节日') + '</h4>' +
+    '<h4>' + (isNew ? '添加节日 / 纪念日' : '编辑节日 / 纪念日') + '</h4>' +
     '<div class="field"><label>名称</label>' +
-      '<input id="f-fname" type="text" value="' + esc(f ? f.name : '') + '" placeholder="如：观音菩萨成道日、母亲节"></div>' +
+      '<input id="f-fname" type="text" value="' + esc(item ? item.name : '') +
+        '" placeholder="如：观音菩萨成道日、母亲生日"></div>' +
     '<div class="field"><label>归到哪一类</label><div class="seg2" id="f-fkind">' +
       '<button data-fkindset="buddha" class="' + (kind === 'buddha' ? 'on' : '') + '">佛教节日</button>' +
       '<button data-fkindset="pub" class="' + (kind === 'pub' ? 'on' : '') + '">公共节日</button>' +
+      '<button data-fkindset="myd" class="' + (kind === 'myd' ? 'on' : '') + '">纪念日</button>' +
     '</div></div>' +
     '<div class="field"><label>历法</label><div class="seg2" id="f-mdkind">' +
       '<button data-mdkind="solar" class="' + (cal === 'solar' ? 'on' : '') + '">公历</button>' +
       '<button data-mdkind="lunar" class="' + (cal === 'lunar' ? 'on' : '') + '">农历</button>' +
     '</div></div>' +
+    '<div class="field' + (isMyd ? '' : ' hidden') + '" id="f-fyear"><label id="f-mylab">年份' +
+      (cal === 'lunar' ? '（农历年）' : '（公历年）') + '</label>' +
+      '<select id="f-fyy">' + myDayYearOpts(cal, yy, isNew) + '</select></div>' +
     '<div class="field-row">' +
       '<div class="field"><label>月</label><select id="f-mdm">' + myDayMonthOpts(cal, mm) + '</select></div>' +
       '<div class="field"><label>日</label><select id="f-mdd">' + myDayDayOpts(cal, dd) + '</select></div>' +
     '</div>' +
-    '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十遇小月按廿九；公历 2 月 29 日遇平年按 2 月 28 日</div>' +
+    '<div class="field-chk' + (isMyd ? '' : ' hidden') + '" id="f-frep" data-mtog="1">' +
+      '<div class="lbl">每年重复</div>' +
+      '<span class="switch' + (rep ? ' on' : '') + '"></span></div>' +
+    '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十遇小月按廿九；公历 2 月 29 日遇平年按 2 月 28 日' +
+      (isMyd ? '；「只此一年」按所选历法的年份算' : '') + '</div>' +
     (isNew ? '' : '<div style="text-align:center;padding:4px 0 0">' +
-      '<button style="color:#b8442f;font-size:12.5px" data-fdel="' + esc(f.id) + '">删除这个节日</button></div>') +
+      '<button style="color:#b8442f;font-size:12.5px" data-fdel="' + esc(itemId) + '" id="f-fdel">' +
+      delText + '</button></div>') +
     '<div class="modal-actions">' +
       '<button data-mclose="1">取消</button>' +
       '<button class="primary" data-fsave="1">保存</button>' +
@@ -14240,19 +14378,45 @@ function openFestEditor(cat, id) {
     function () {
       var nm = ($('#f-fname').value || '').trim();
       var kd = $('#f-mdkind .on');
-      var kdVal = kd ? kd.dataset.mdkind : 'solar';
+      var calVal = kd ? kd.dataset.mdkind : 'solar';
       var cd = $('#f-fkind .on');
       var cdVal = cd ? cd.dataset.fkindset : 'buddha';
       var mv = parseInt($('#f-mdm').value, 10) || 1;
       var dv = parseInt($('#f-mdd').value, 10) || 1;
+      var yEl = $('#f-fyy');
+      var yv = yEl ? (parseInt(yEl.value, 10) || 0) : 0;
+      var repVal = !!document.querySelector('#modal [data-mtog] .switch.on');
       if (!nm) { toast('请填写名称'); return; }
-      if (kdVal === 'lunar') dv = Math.min(dv, 30);
+      if (calVal === 'lunar') dv = Math.min(dv, 30);
       else dv = Math.min(dv, daysInMonth(2024, mv));
+      var toMyd = cdVal === 'myd';
+      /* 「只此一年」却没选年份：按当年记下，免得这条纪念日永远显示不出来 */
+      if (toMyd && !repVal && !yv) {
+        yv = calVal === 'lunar' ? lunarOf(TODAY).y : new Date().getFullYear();
+        toast('已按 ' + yv + ' 年记为一次性纪念日');
+      }
       if (isNew) {
-        DB.fests = DB.fests || [];
-        DB.fests.push({ id: uid('ft'), kind: cdVal, name: nm, cal: kdVal, m: mv, d: dv });
+        if (toMyd) {
+          DB.mydays = DB.mydays || [];
+          DB.mydays.push({ id: uid('md'), name: nm, kind: calVal, m: mv, d: dv, y: yv, repeat: repVal });
+        } else {
+          DB.fests = DB.fests || [];
+          DB.fests.push({ id: uid('ft'), kind: cdVal, name: nm, cal: calVal, m: mv, d: dv });
+        }
+      } else if (toMyd && m) {
+        m.name = nm; m.kind = calVal; m.m = mv; m.d = dv; m.y = yv; m.repeat = repVal;
+      } else if (!toMyd && f) {
+        f.kind = cdVal; f.name = nm; f.cal = calVal; f.m = mv; f.d = dv;
+      } else if (toMyd) {
+        /* 节日改成纪念日：换个数组存放 */
+        DB.fests = (DB.fests || []).filter(function (x) { return x.id !== itemId; });
+        DB.mydays = DB.mydays || [];
+        DB.mydays.push({ id: uid('md'), name: nm, kind: calVal, m: mv, d: dv, y: yv, repeat: repVal });
       } else {
-        f.kind = cdVal; f.name = nm; f.cal = kdVal; f.m = mv; f.d = dv;
+        /* 纪念日改成节日 */
+        DB.mydays = (DB.mydays || []).filter(function (x) { return x.id !== itemId; });
+        DB.fests = DB.fests || [];
+        DB.fests.push({ id: uid('ft'), kind: cdVal, name: nm, cal: calVal, m: mv, d: dv });
       }
       saveNow();
       LunarCache = {};
@@ -14262,18 +14426,13 @@ function openFestEditor(cat, id) {
       renderFestSettings();
       if (UI.view === 'home') renderHome();
       if (UI.view === 'fest') renderFestivals();
-      toast(isNew ? '已添加节日' : '已保存');
+      toast(isNew ? (toMyd ? '已添加纪念日' : '已添加节日') : '已保存');
     }
   );
   setTimeout(function () { var el = $('#f-fname'); if (el) el.focus(); }, 140);
 }
 
 /* ---------- 我的纪念日 ---------- */
-function renderMyDays() {
-  var box = $('#festset-scroll');
-  if (!box) return;
-  box.innerHTML = myDaysListHTML();
-}
 /* 纪念日的列表（节日管理页的「纪念日」分段直接用这段 HTML） */
 function myDaysListHTML() {
   var list = DB.mydays || [];
@@ -14373,92 +14532,8 @@ function myDayDayOpts(kind, cur) {
   return a.join('');
 }
 
-function openMyDayEditor(id) {
-  var m = null;
-  (DB.mydays || []).forEach(function (x) { if (x.id === id) m = x; });
-  /* 同上：找不到就别悄悄当成新增一条纪念日，顺手把失效的列表重画一次 */
-  if (id && !m) {
-    toast('这条纪念日已不存在，列表已刷新');
-    renderFestSettings();
-    return;
-  }
-  var isNew = !m;
-  var kind = (m && m.kind) || 'solar';   /* 新增的默认选公历 */
-  var mm = m ? +m.m : 1;
-  var dd = m ? +m.d : 1;
-  var yy = m ? (+m.y || 0) : 0;
-  var rep = m ? m.repeat !== false : true;   /* 默认每年重复 */
-
-  /* 年份就是一个可滚动的下拉框：1900 – 2100 全区间都能选，新条目默认落在实际当年；
-     旧存档里没记年份（y = 0）的仍停在「不指定年份」，不会被悄悄改写。
-     注意「当年」随历法走：农历条目比的是农历年，公历条目比的是公历年，
-     否则农历腊月的条目会晚一年才出现（表单里写了「农历年」就是为了说清这一点） */
-  function yearOpts() {
-    var cy = kind === 'lunar' ? lunarOf(TODAY).y : new Date().getFullYear();
-    var cur = yy || (isNew ? cy : 0);
-    var a = ['<option value="0"' + (cur ? '' : ' selected') + '>不指定年份</option>'];
-    for (var y = 1900; y <= 2100; y++) {
-      a.push('<option value="' + y + '"' + (y === cur ? ' selected' : '') + '>' + y + ' 年</option>');
-    }
-    return a.join('');
-  }
-
-  openModal(
-    '<h4>' + (isNew ? '添加纪念日' : '编辑纪念日') + '</h4>' +
-    '<div class="field"><label>名称</label>' +
-      '<input id="f-mdname" type="text" value="' + esc(m ? m.name : '') + '" placeholder="如：母亲生日、皈依纪念日"></div>' +
-    '<div class="field"><label>历法</label><div class="seg2" id="f-mdkind">' +
-      '<button data-mdkind="solar" class="' + (kind === 'solar' ? 'on' : '') + '">公历</button>' +
-      '<button data-mdkind="lunar" class="' + (kind === 'lunar' ? 'on' : '') + '">农历</button>' +
-    '</div></div>' +
-    '<div class="field"><label id="f-mdlab">年份' + (kind === 'lunar' ? '（农历年）' : '（公历年）') +
-      '</label><select id="f-mdy">' + yearOpts() + '</select></div>' +
-    '<div class="field-row">' +
-      '<div class="field"><label>月</label><select id="f-mdm">' + myDayMonthOpts(kind, mm) + '</select></div>' +
-      '<div class="field"><label>日</label><select id="f-mdd">' + myDayDayOpts(kind, dd) + '</select></div>' +
-    '</div>' +
-    '<div class="dlg-sub" style="padding:2px 2px 10px">农历三十：该月只有廿九时，按当月最后一天算；「只此一年」按所选历法的年份算</div>' +
-    '<div class="field-chk" data-mtog="1">' +
-      '<div class="lbl">每年重复</div>' +
-      '<span class="switch' + (rep ? ' on' : '') + '"></span></div>' +
-    (isNew ? '' : '<div style="text-align:center;padding:4px 0 0">' +
-      '<button style="color:#b8442f;font-size:12.5px" data-mddel="' + esc(m.id) + '">删除这个纪念日</button></div>') +
-    '<div class="modal-actions">' +
-      '<button data-mclose="1">取消</button>' +
-      '<button class="primary" data-mdsave="1">保存</button>' +
-    '</div>',
-    function () {
-      var nm = ($('#f-mdname').value || '').trim();
-      var kd = $('#f-mdkind .on');
-      var kdVal = kd ? kd.dataset.mdkind : 'solar';
-      var mv = parseInt($('#f-mdm').value, 10) || 1;
-      var dv = parseInt($('#f-mdd').value, 10) || 1;
-      var yv = parseInt($('#f-mdy').value, 10) || 0;
-      var repVal = !!document.querySelector('#modal [data-mtog] .switch.on');
-      if (!nm) { toast('请填写名称'); return; }
-      var maxDay = kdVal === 'lunar' ? 30 : daysInMonth(2024, mv);
-      if (dv > maxDay) dv = maxDay;
-      /* 「只此一年」却没选年份：按当年记下，免得这条纪念日永远显示不出来。
-         农历条目要按农历年记，否则腊月那类会晚一年才命中 */
-      if (!repVal && !yv) {
-        yv = kdVal === 'lunar' ? lunarOf(TODAY).y : new Date().getFullYear();
-        toast('已按 ' + yv + ' 年记为一次性纪念日');
-      }
-      if (isNew) {
-        DB.mydays.push({ id: uid('md'), name: nm, kind: kdVal, m: mv, d: dv, y: yv, repeat: repVal });
-      } else {
-        m.name = nm; m.kind = kdVal; m.m = mv; m.d = dv; m.y = yv; m.repeat = repVal;
-      }
-      saveNow();
-      LunarCache = {};
-      closeModal();
-      renderMyDays();
-      if (UI.view === 'home') renderHome();
-      toast(isNew ? '已添加纪念日' : '已保存');
-    }
-  );
-  setTimeout(function () { var el = $('#f-mdname'); if (el) el.focus(); }, 140);
-}
+/* 点纪念日那一行：与节日共用同一个编辑窗口（归到哪一类里选「纪念日」） */
+function openMyDayEditor(id) { openFestEditor('myd', id); }
 
 /* ---------- 设置：一组开关做成一个弹窗 ---------- */
 /* 斋戒日与节日预告都是「几类各自独立的开关」，挤在设置页里太长，
@@ -14840,52 +14915,58 @@ function bindEvents() {
       if (msel) msel.innerHTML = myDayMonthOpts(kd, parseInt(msel.value, 10) || 1);
       var dsel = document.getElementById('f-mdd');
       if (dsel) dsel.innerHTML = myDayDayOpts(kd, parseInt(dsel.value, 10) || 1);
-      var ylab = document.getElementById('f-mdlab');
+      var ylab = document.getElementById('f-mylab');
       if (ylab) ylab.textContent = '年份' + (kd === 'lunar' ? '（农历年）' : '（公历年）');
       return;
     }
-    /* 节日编辑弹窗：佛教 / 公共 二选一 */
+    /* 节日 / 纪念日编辑弹窗：归到哪一类 三选一。
+       选到「纪念日」才多出年份与「每年重复」两栏，删除按钮的说法也跟着换 */
     var fks = e.target.closest('[data-fkindset]');
     if (fks) {
       Array.prototype.forEach.call(document.querySelectorAll('#f-fkind button'), function (b) {
         b.classList.toggle('on', b === fks);
       });
+      var isMyd = fks.dataset.fkindset === 'myd';
+      var ybox = document.getElementById('f-fyear');
+      if (ybox) ybox.classList.toggle('hidden', !isMyd);
+      var rbox = document.getElementById('f-frep');
+      if (rbox) rbox.classList.toggle('hidden', !isMyd);
+      var dlb = document.getElementById('f-fdel');
+      if (dlb) dlb.textContent = isMyd ? '删除这个纪念日' : '删除这个节日';
       return;
     }
-    /* 节日编辑弹窗：删除自己添加的节日 */
+    /* 节日 / 纪念日编辑弹窗：删除自己添加的这一条（两个数组里各找一次） */
     var fdel = e.target.closest('[data-fdel]');
     if (fdel) {
       var fid = fdel.dataset.fdel;
       var fo = festOwnById(fid);
-      if (!fo) return;
-      askConfirm('删除这个节日？',
-        '「' + esc(fo.name) + '」将从节日列表中移除。内置节日不能删除，只能隐藏。',
+      if (fo) {
+        askConfirm('删除这个节日？',
+          '「' + esc(fo.name) + '」将从节日列表中移除。内置节日不能删除，只能隐藏。',
+          '删除',
+          function () {
+            DB.fests = (DB.fests || []).filter(function (x) { return x.id !== fid; });
+            saveNow();
+            LunarCache = {};
+            festsCacheClear();
+            renderFestSettings();
+            if (UI.view === 'home') renderHome();
+            if (UI.view === 'fest') renderFestivals();
+            toast('已删除');
+          });
+        return;
+      }
+      var mo = myDayById(fid);
+      if (!mo) return;
+      askConfirm('删除这个纪念日？',
+        '「' + esc(mo.name) + '」将从我的纪念日中移除。',
         '删除',
         function () {
-          DB.fests = (DB.fests || []).filter(function (x) { return x.id !== fid; });
+          DB.mydays = (DB.mydays || []).filter(function (x) { return x.id !== fid; });
           saveNow();
           LunarCache = {};
           festsCacheClear();
           renderFestSettings();
-          if (UI.view === 'home') renderHome();
-          if (UI.view === 'fest') renderFestivals();
-          toast('已删除');
-        });
-      return;
-    }
-    var mdel = e.target.closest('[data-mddel]');
-    if (mdel) {
-      var mid = mdel.dataset.mddel;
-      var mm0 = null;
-      (DB.mydays || []).forEach(function (x) { if (x.id === mid) mm0 = x; });
-      if (!mm0) return;
-      askConfirm('删除这个纪念日？',
-        '「' + esc(mm0.name) + '」将从我的纪念日中移除。',
-        '删除',
-        function () {
-          DB.mydays = DB.mydays.filter(function (x) { return x.id !== mid; });
-          saveNow();
-          renderMyDays();
           if (UI.view === 'home') renderHome();
           toast('已删除');
         });
@@ -14964,7 +15045,7 @@ function bindEvents() {
       return;
     }
     if (e.target.closest('[data-mok]') || e.target.closest('[data-tsave]') ||
-        e.target.closest('[data-mdsave]') || e.target.closest('[data-fsave]')) {
+        e.target.closest('[data-fsave]')) {
       if (modalOnOk) modalOnOk();
       return;
     }
@@ -15057,6 +15138,7 @@ function bindEvents() {
     if (el) {
       var dy = +el.dataset.day || 1;
       if (UI.view === 'detail') shiftDetailDate(dy);
+      else if (UI.view === 'diaryedit') shiftDiaryEditDate(dy);
       else shiftDate(dy);
       return;
     }
@@ -15064,6 +15146,7 @@ function bindEvents() {
     /* 回到今天：日信息第一行的按钮，先于日期选择器处理 */
     if (e.target.closest('[data-gotoday]')) {
       if (UI.view === 'detail') { gotoDetailDate(TODAY); return; }
+      if (UI.view === 'diaryedit') { gotoDiaryEditDate(TODAY); return; }
       setMode('record');
       UI.view = 'home'; UI.viewStack = [];
       renderView();
@@ -15078,6 +15161,10 @@ function bindEvents() {
     /* 详情页顶部日信息 -> 日期选择器，选完仍停在这项功课的详情页 */
     el = e.target.closest('#detail-date');
     if (el) { openDatePicker(true); return; }
+
+    /* 日记编辑页顶部日信息 -> 日期选择器，选完仍停在编辑页 */
+    el = e.target.closest('#dedit-date');
+    if (el) { openDatePicker('dedit'); return; }
 
     /* 切 tab */
     el = e.target.closest('[data-tab]');
@@ -15313,13 +15400,15 @@ function bindEvents() {
     }
 
     /* 点进日记正文：这时才自动补地点 */
-    if (e.target.closest('#blocks')) maybeAutoPlace();
+    if (e.target.closest('.blocks')) maybeAutoPlace();
 
     /* 日记：天气 / 地点 / 插入时间 */
     if (e.target.closest('[data-wx]')) { chooseWeather(); return; }
     if (e.target.closest('[data-loc]')) { chooseLocation(); return; }
     if (e.target.closest('[data-nowtime]')) { insertTimeStamp(); return; }
     if (e.target.closest('[data-copyall]')) { copyAllDiary(); return; }
+    /* 元信息行右边的铅笔：打开整页的日记编辑页 */
+    if (e.target.closest('[data-dedit]')) { openDiaryEditor(); return; }
     var ln = e.target.closest('[data-line]');
     if (ln) { insertDiaryLine(+ln.dataset.line || 1); return; }
 
@@ -15331,17 +15420,13 @@ function bindEvents() {
     if (e.target.closest('#btn-mode')) { toggleMode(); return; }
     if (e.target.closest('#btn-menu')) { openMenu(); return; }
     if (e.target.closest('#btn-add-task')) { openTaskEditor(null, UI.taskCat); return; }
-    if (e.target.closest('#btn-add-fest')) {
-      if (UI.festSetCat === 'myd') openMyDayEditor(null);
-      else openFestEditor(UI.festSetCat, null);
-      return;
-    }
+    if (e.target.closest('#btn-add-fest')) { openFestEditor(UI.festSetCat, null); return; }
     if (e.target.closest('#btn-add-place')) { openPlaceForm({ mode: 'manage' }); return; }
   });
 
   /* 点进日记正文：这时才自动补地点（工具条、天气/地点 chip 不算） */
   app.addEventListener('focusin', function (e) {
-    if (e.target.closest('#blocks')) maybeAutoPlace();
+    if (e.target.closest('.blocks')) maybeAutoPlace();
   });
 
   /* 横向划动切换分段：节日一览（佛教 / 公共 / 斋戒 / 节气 / 纪念日）
@@ -15581,10 +15666,11 @@ function bindEvents() {
     if (document.getElementById('modal').classList.contains('on')) return;
     if (document.getElementById('sheet').classList.contains('on')) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    /* 只有首页与详情页的左右键才是「换日期」，设置 / 节日 / 功课设置页不该被偷偷改掉背景日期 */
-    if (UI.view !== 'home' && UI.view !== 'detail') return;
+    /* 只有首页 / 详情页 / 日记编辑页的左右键才是「换日期」，设置 / 节日 / 功课设置页不该被偷偷改掉背景日期 */
+    if (UI.view !== 'home' && UI.view !== 'detail' && UI.view !== 'diaryedit') return;
     var kd = e.key === 'ArrowLeft' ? -1 : 1;
     if (UI.view === 'detail') shiftDetailDate(kd);
+    else if (UI.view === 'diaryedit') shiftDiaryEditDate(kd);
     else shiftDate(kd);
   });
 
@@ -15742,13 +15828,14 @@ function firstCatWithData(ds) {
   return UI.tab === 'diary' ? 'nianfo' : UI.tab;
 }
 
-var datePickInDetail = false;
+/* 选完日期回到哪个页面：''＝首页（true 亦同）/ 'detail' 功课详情 / 'dedit' 日记编辑 */
+var datePickMode = '';
 /* 系统日期选择器是否还开着：用完之后这个隐形 input 会留在页面上，
    返回键不能为了删它白吞一次（用户会觉得「返回失灵一次」） */
 var datePickOpen = false;
 var datePickAt = 0;
-function openDatePicker(inDetail) {
-  datePickInDetail = !!inDetail;
+function openDatePicker(mode) {
+  datePickMode = mode === true ? 'detail' : (mode === 'dedit' ? 'dedit' : '');
   var inp = document.getElementById('native-date');
   if (!inp) {
     inp = document.createElement('input');
@@ -15759,7 +15846,8 @@ function openDatePicker(inDetail) {
     inp.addEventListener('change', function () {
       datePickOpen = false;
       if (!inp.value) return;
-      if (datePickInDetail) gotoDetailDate(inp.value);
+      if (datePickMode === 'detail') gotoDetailDate(inp.value);
+      else if (datePickMode === 'dedit') gotoDiaryEditDate(inp.value);
       else selectDate(inp.value);
     });
     /* 取消选择不会触发 change：不清标记的话，下一次返回键会被白吞一次 */
