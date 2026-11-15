@@ -87,6 +87,18 @@
           check('导入计数按上限收口', outDb.records['2026-11-15'].c.t1 === 3);
         }
 
+        /* 2.10：坏增量值封顶而不是清零；只写日记（没有功课）的备份也要能导回来 */
+        check('clampCount 把 Infinity 封顶而不是清零',
+          t.clampCount(Infinity) === t.MAX_COUNT, 'got=' + t.clampCount(Infinity));
+        var diaryOnly = t.sanitizeImport({
+          v: 1, settings: {}, tasks: [],
+          records: { '2026-11-15': { dt: '只写了日记' } }
+        });
+        check('空功课、只有日记的备份可以导入',
+          !!diaryOnly && diaryOnly.records['2026-11-15'].dt === '只写了日记');
+        check('功课与记录都为空的备份仍被拒收',
+          t.sanitizeImport({ v: 1, settings: {}, tasks: [], records: {} }) === null);
+
         check('空列表自动进入功课设置',
           !doc.querySelector('#view-tasks').classList.contains('hidden'));
         check('空列表自动打开推荐功课弹窗',
@@ -118,19 +130,19 @@
               !doc.querySelector('#modal').classList.contains('on'));
             var rows = doc.querySelectorAll('#tasks-scroll .tk-row').length;
             check('推荐功课已写入列表', rows > 0, 'rows=' + rows);
-            check('默认不显示专修计时图标',
-              doc.querySelectorAll('#tasks-scroll .ft-ico').length === 0);
+            check('每行都有闹钟图标，未开启的置灰',
+              doc.querySelectorAll('#tasks-scroll .ft-ico.off').length === rows,
+              'off=' + doc.querySelectorAll('#tasks-scroll .ft-ico.off').length + ' rows=' + rows);
 
-            /* 打开第一项的编辑弹窗，把专修计时拨开，保存后应出现小时钟 */
+            /* 打开第一项的编辑弹窗，把专修计时拨开，保存后该行闹钟点亮 */
             var firstEdit = doc.querySelector('#tasks-scroll [data-tedit]');
             if (firstEdit) firstEdit.click();
             var tsw = doc.querySelector('#modal [data-mftimer] .switch');
             if (tsw) tsw.click();
             var fsave = doc.querySelector('#modal [data-tsave]');
             if (fsave) fsave.click();
-            check('开启专修计时后显示时间图标',
-              doc.querySelectorAll('#tasks-scroll .ft-ico').length === 1,
-              'got=' + doc.querySelectorAll('#tasks-scroll .ft-ico').length);
+            var lit = doc.querySelectorAll('#tasks-scroll .ft-ico:not(.off)').length;
+            check('开启专修计时后该行闹钟点亮', lit === 1, 'lit=' + lit);
 
             /* 再次打开：已有条目全部置灰，仍可转去「自定义」 */
             var reopen = doc.querySelector('#btn-recommend-tasks');

@@ -4,6 +4,38 @@
 
 ---
 
+## 2.10（2026-11-15）
+
+> `APP_VERSION` 2.9 → 2.10、`sw.js` 缓存 `v42` → `v43`。**本轮未重打 APK**：仓库里仍只有 `学佛日记-2.9.apk`（内嵌页面为 `a3455d3`，与 2.10 的 `index.html` 不一致），要用 2.10 请走网页版 / PWA，详见 README 第三节。
+
+**界面与交互**
+
+- **功课列表的闹钟常驻**：`.ft-ico` 不再按开关注入/移除，改为一直渲染，未开「专修计时」时带 `.off` 类置灰（`--ink3` + `opacity:.5`），`aria-label` / `title` 分别写「专修计时已开启 / 已关闭」；开关切换时行内文字不再左右跳，也不用逐个比对图标数量。
+- **日记编辑框不再被整块重建**：新增 `renderHomeBody(body)`，整页重绘与切 tab 共用；同一天、内容未变（`cleanDiaryText(diaryText) === recDiaryText(rec)`）时保留已建好的 `#blocks .ed`，翻月历／跨天检查不再丢光标、输入法组合态与正文内部滚动位置。
+- **按住按钮划走不计数**：`pointerdown` 记下起点坐标，新增 `pointermove` 监听，位移超过 12px 即 `clearHold()`；「按住 + 想滚列表」「点错了想划走」不再落一次计数。
+- **提示条可折行**：`.toast` 去掉 `white-space:nowrap`，改 `max-width:calc(100vw - 44px)` + 居中折行，长文案在窄屏不再被切掉两端。
+- **日期选择器不再吞返回键**：新增 `datePickOpen`，`openDatePicker()` 打开时置位、`change` 时清掉；`__closeTopLayer()` 只有选择器真的还开着才消费一次返回，其余情况顺手删掉残留的 `#native-date` 空壳。
+- **更新内容不再被引导弹窗挤掉**：`whatsNewOnBoot(hadData, tries)` 遇到 `#modal.on` 时改为 1.5 秒后重试（最多 3 次），不再直接 return 导致这次升级被静默跳过、下次补弹一整串历史。
+- **详情页按年窗口跟随日期**：`gotoDetailDate()` 补上与 `shiftDetailDate()` 一致的 `UI.detail.yEnd` 同步，跳到近年补录后「按年」表不再停在旧年段、一格都不高亮。
+- **已删除条目点编辑不再变成新建**：`openTaskEditor()` / `openMyDayEditor()` 带着 id 却找不到时 toast 提示并返回，不再静默 `push` 一条同名条目。
+- 弹窗关闭时一并清掉 `_ackBack`（暂存的编辑弹窗片段），避免返回键把已经关掉的弹窗「复活」。
+
+**数据层**
+
+- **`normalizeSettings()` 先兜底**：`settings` 被写成字符串 / 数字 / 数组时先换成 `{}`。这里在严格模式下给原始值赋属性会抛 `TypeError`，以前会连累整库进「读坏」只读模式。
+- **`loadDB()` 收口更严**：计数改走 `clampCount()`（补回 1 亿上限，以前只挡 NaN/负数）；任务按 `id` 去重（重复 id 会让计数只算到第一条、删一条删两条）；`step` 走 `clampStep()`、`builtin`/`hidden` 只认严格布尔、`bkey` 校验分类前缀。
+- **旧日记块数组迁移彻底**：折成 `dt` 之后 `delete rr.d`。`recDiaryText()` 见到 `dt` 会早退，留着 `d` 会让 `__dbMigrated` 每次启动都为真，等于每次开机全库重写一遍。
+- **空功课备份可导入**：`sanitizeImport()` 不再因 `tasks` 为空直接拒收（2.9 起全新安装的列表本来就是空的，只写日记的用户导出的备份以前永远导不回来）；改为「功课与记录都为空」才判为空备份。
+- **`clampCount(Infinity)` 封顶而不是归零**：先判 `isFinite` 再取整，坏增量值不会把当天计数清零。
+- **导入如实反馈落盘结果**：`saveNow()` 返回 `saveDB()` 的布尔值，导入后写入失败时提示「已导入但没能写入本机存储，请立即导出备份」，不再覆盖成「导入成功」。
+- 导入时 `__dbMigrated` 在 `migrateBuiltin()` **之前**清零，语义与启动流程一致。
+
+**测试**
+
+- `tests/smoke.html` 的两条闹钟断言跟着改：默认每行都有 `.ft-ico` 且全部带 `.off`，拨开某一项后 `.ft-ico:not(.off)` 恰好 1 个。
+
+---
+
 ## 2.9（2026-11-14）
 
 > `APP_VERSION` 2.9（未变）、`sw.js` 缓存 `v34` → `v38`（本次修订再 +1 到 `v42`）、`versionCode 41`。仓库里的 `学佛日记-2.9.apk` 仍是早前那一版（内嵌页面为改动前的 `index.html`，SHA-256 `f4f733a8…`），要带上本节改动需重新打包；证书不变（`9ad2a321…1bcc14`），可直接覆盖安装。

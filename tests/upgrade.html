@@ -48,8 +48,9 @@
   try {
     localStorage.clear();
     localStorage.setItem('xuefo.diary.v1', JSON.stringify(OLD));
-    /* 老用户早就看过 2.9 的更新说明：这样弹窗只可能来自首次引导，断言才准 */
-    localStorage.setItem('xuefo.seenver', '2.9');
+    /* 老用户早就看过当前版本的更新说明：这样弹窗只可能来自首次引导，断言才准。
+       这里写一个比任何真实版本都高的号，免得每次升版本这行都要跟着改 */
+    localStorage.setItem('xuefo.seenver', '9.9');
   } catch (e) { }
 
   var frame = document.getElementById('app');

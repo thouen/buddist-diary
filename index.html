@@ -544,8 +544,9 @@ img{max-width:100%;display:block}
 .tk-row .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .tk-row .nm .nm-l{display:flex;align-items:center;gap:5px;min-width:0}
 .tk-row .nm b{font-weight:400;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif);flex:0 1 auto;min-width:0}
-/* 专修计时开着时，名称右边挂一只小闹钟；关掉就完全不占位置 */
+/* 名称右边常驻一只小闹钟：专修计时开着是功课红，关掉就灰着（形制不变，一眼看得出开了没有） */
 .tk-row .nm .ft-ico{flex:0 0 auto;display:inline-flex;align-items:center;color:var(--accent)}
+.tk-row .nm .ft-ico.off{color:var(--ink3);opacity:.5}
 .tk-row .nm .ft-ico svg{
   width:12.5px;height:12.5px;stroke:currentColor;fill:none;
   stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
@@ -785,7 +786,9 @@ label.rb-row{cursor:pointer}
 .toast{
   position:fixed;left:50%;bottom:calc(26px + var(--safe-b));transform:translate(-50%,10px);
   background:rgba(51,44,36,.92);color:#fff;font-size:12.5px;padding:8px 16px;border-radius:20px;
-  z-index:120;opacity:0;pointer-events:none;transition:all .22s ease;white-space:nowrap;
+  z-index:120;opacity:0;pointer-events:none;transition:all .22s ease;
+  /* 长文案（如「数据已在另一个窗口更新…」）在窄屏上要能折行，不能两端被切掉 */
+  max-width:calc(100vw - 44px);white-space:normal;text-align:center;line-height:1.5;
   letter-spacing:.5px;
 }
 .toast.on{opacity:1;transform:translate(-50%,0)}
@@ -10004,7 +10007,7 @@ var CHINA=[["北京市",["东城区","西城区","朝阳区","丰台区","石景
 /* ---------- 常量 ---------- */
 var STORE_KEY = 'xuefo.diary.v1';
 /* 当前版本：发版时只改这一处，界面「设置 → 关于」与更新提示都以它为准 */
-var APP_VERSION = '2.9';
+var APP_VERSION = '2.10';
 /* 上次打开过的版本，与数据分开存，导入备份不会把它带过来 */
 var SEENVER_KEY = 'xuefo.seenver';
 var WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
@@ -10057,9 +10060,9 @@ var BUILTIN = {
   ],
   jing: [
     '心经', '金刚经', '地藏经', '楞严经', '法华经', '观世音菩萨普门品',
-    '阿弥陀经', '十善业道经', '无量寿经', '普贤行愿品', '吉祥经',
-    '大乘起信论', '二十一尊度母礼赞经', '大势至菩萨念佛圆通章',
-    '四种决定清净明诲章', '文殊菩萨净行品', '大乘离文字普光明藏经', '随念三宝经'
+    '阿弥陀经', '吉祥经', '随念三宝经', '十善业道经', '无量寿经', '普贤行愿品', 
+    '四种决定清净明诲章', '文殊菩萨净行品', '大势至菩萨念佛圆通章',
+    '大乘起信论', '二十一尊度母礼赞经', '大乘离文字普光明藏经'
   ],
   zhou: [
     '楞严咒', '大悲咒', '六字大明咒', '准提咒', '文殊菩萨心咒',
@@ -10163,7 +10166,7 @@ var FEST_BUILTIN = {
     { k: 's9-5a', n: '中华慈善日', cal: 'solar', m: 9, d: 5 },
     { k: 's9-5b', n: '国际慈善日', cal: 'solar', m: 9, d: 5 },
     { k: 's9-10', n: '教师节', cal: 'solar', m: 9, d: 10 },
-    { k: 's9-18', n: '九一八', cal: 'solar', m: 9, d: 18 },
+    { k: 's9-18', n: '九一八事变纪念日', cal: 'solar', m: 9, d: 18 },
     { k: 's9-21', n: '国际和平日', cal: 'solar', m: 9, d: 21 },
     { k: 's9-30', n: '烈士纪念日', cal: 'solar', m: 9, d: 30 },
     { k: 's10-1', n: '国庆节', cal: 'solar', m: 10, d: 1 },
@@ -10313,9 +10316,13 @@ var TODAY = fmtDate(new Date());
 /* 计数 / 增量上限：手误敲一串数字也不至于把统计打成 1e+21，或让累计越过安全整数 */
 var MAX_COUNT = 100000000;
 function clampCount(v) {
-  v = Math.floor(Number(v) || 0);
-  if (!isFinite(v) || v < 0) return 0;
-  return v > MAX_COUNT ? MAX_COUNT : v;
+  var n = Number(v);
+  /* Infinity / -Infinity 先判掉：先 Math.floor 再判 isFinite 会把「无穷大」收成 0，
+     而按钮上的坏增量值本该封顶，不该把当天计数清零 */
+  if (!isFinite(n)) return n > 0 ? MAX_COUNT : 0;
+  n = Math.floor(n);
+  if (n < 0) return 0;
+  return n > MAX_COUNT ? MAX_COUNT : n;
 }
 /* 增量（默认 / 专修）的上限与导入校验保持一致 */
 function clampStep(v) {
@@ -10383,7 +10390,9 @@ function defaultDB() {
 /* 斋日显示的历史：1.x 早期是三个独立开关 -> 1.x 中期~2.1 是单选 -> 2.2 起改回多选。
    这里把前两种旧存档一次性迁成多选（showShuo / showZhai6 / showZhai10）。 */
 function normalizeSettings(src) {
-  var s = src || {};
+  /* settings 被写成字符串 / 数字 / 数组时先兜成 {}：这里是严格模式，
+     给原始值的属性赋值会抛 TypeError，一抛就会被 loadDB 当成「整库读坏」 */
+  var s = (src && typeof src === 'object' && !Array.isArray(src)) ? src : {};
   if (typeof s.zhaiMulti !== 'boolean') {
     var zS = false, zL = false, zT = false;
     if (typeof s.showShuo === 'boolean' || typeof s.showZhai6 === 'boolean' || typeof s.showZhai10 === 'boolean') {
@@ -10713,10 +10722,23 @@ function loadDB() {
         typeof t.name === 'string' && t.name &&
         !!(CAT_MAP[t.cat]);
     });
+    /* 同一 id 的重复条目会让计数全算到第一条、删一条删掉两条：留先来的那条 */
+    var seenIds = {};
+    db.tasks = db.tasks.filter(function (t) {
+      if (seenIds[t.id]) { __dbMigrated = true; return false; }
+      seenIds[t.id] = 1;
+      return true;
+    });
     db.tasks.forEach(function (t) {
       t.goal = clampCount(t.goal);
       t.mgoal = clampCount(t.mgoal);
       t.tgoal = clampCount(t.tgoal);
+      /* 默认增量 / 布尔字段按导入同一套口径收口：手改出来的字符串 "false" 不能当真值用 */
+      t.step = clampStep(t.step);
+      t.builtin = t.builtin === true;
+      t.hidden = t.hidden === true;
+      if (typeof t.bkey === 'string' && t.bkey.indexOf(t.cat + ':') === 0) t.bkey = t.bkey.slice(0, 100);
+      else delete t.bkey;
       /* 2.8：专修增量，老存档没有这个字段就按分类默认值补上（念佛 3，其余 1） */
       t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? clampStep(t.fstep) : catFocusStep(t.cat);
       /* 专修计时开关：没存过就交给 taskFocusTimer() 按分类默认值走，不用写回存档 */
@@ -10735,12 +10757,14 @@ function loadDB() {
       if (!rr || typeof rr !== 'object' || Array.isArray(rr)) { delete db.records[ds]; return; }
       if (!rr.c || typeof rr.c !== 'object' || Array.isArray(rr.c)) rr.c = {};
       Object.keys(rr.c).forEach(function (k) {
-        var v = Math.floor(Number(rr.c[k]));
-        if (!isFinite(v) || v <= 0) delete rr.c[k];
-        else rr.c[k] = v;
+        var v = clampCount(rr.c[k]);
+        if (v > 0) rr.c[k] = v;
+        else delete rr.c[k];
       });
-      /* 2.5：日记由块数组改成一整篇纯文本，只在有旧数据时迁一次 */
-      if (Array.isArray(rr.d)) { recDiaryText(rr); __dbMigrated = true; }
+      /* 2.5：日记由块数组改成一整篇纯文本，只在有旧数据时迁一次。
+         折完之后一定要把 rec.d 删掉——recDiaryText() 见到 dt 会直接早退，
+         留着 d 会让「已迁移」每次启动都为真，等于每次开机全库重写一遍 */
+      if (Array.isArray(rr.d)) { recDiaryText(rr); delete rr.d; __dbMigrated = true; }
       else if (typeof rr.dt !== 'string') rr.dt = '';
     });
     db.mydays = normalizeMyDays(db.mydays);
@@ -10793,7 +10817,7 @@ function saveSoon() {
 }
 function saveNow() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-  saveDB();
+  return saveDB();
 }
 
 function taskById(id) {
@@ -11181,6 +11205,8 @@ function closeModal() {
   $('#modal').classList.remove('on');
   modalOnOk = null;
   _confirmOpen = false;
+  /* 暂存的编辑弹窗片段一并丢掉：留着它，返回键会把一个早已关掉的弹窗「复活」出来 */
+  _ackBack = null;
   /* 斋戒日 / 节日预告弹窗：拨动时只重画弹窗本身，关窗时才重画设置页——
      每次拨动都重画会把设置页的滚动位置清回顶部 */
   var wasSwitch = !!_swCfg;
@@ -11305,14 +11331,27 @@ function renderHome() {
   if (UI.tab === 'diary' && DB.settings.showDiary === false) UI.tab = CATS[0].k;
   tabsEl.innerHTML = renderTabsHTML();
 
+  renderHomeBody(body);
+}
+
+/* 内容区（五个 tab 里的东西）统一在这里画：整页重绘与切 tab 共用一份逻辑。
+   日记页同一天、同一份内容重复渲染时保留已经建好的编辑框 —— 整块重建会丢
+   光标、输入法组合态与正文内部的滚动位置（翻月历、跨天检查都会走到这里） */
+function renderHomeBody(body) {
+  if (!body) return;
   if (UI.tab === 'diary') {
-    body.innerHTML = '<div class="diary" id="diary-box"></div>';
-    renderDiaryInto($('#diary-box'));
-  } else {
-    body.innerHTML = '<div id="cat-sum"></div><div class="list" id="task-list"></div>';
-    $('#cat-sum').innerHTML = renderCatSumHTML(UI.tab, UI.date);
-    renderTaskListInto($('#task-list'), UI.tab);
+    var dbox = $('#diary-box');
+    var keep = !!(dbox && diaryDate === UI.date && $('#blocks .ed') &&
+      cleanDiaryText(diaryText) === recDiaryText(getRec(UI.date, false)));
+    if (!keep) {
+      body.innerHTML = '<div class="diary" id="diary-box"></div>';
+      renderDiaryInto($('#diary-box'));
+    }
+    return;
   }
+  body.innerHTML = '<div id="cat-sum"></div><div class="list" id="task-list"></div>';
+  $('#cat-sum').innerHTML = renderCatSumHTML(UI.tab, UI.date);
+  renderTaskListInto($('#task-list'), UI.tab);
 }
 
 /* 日历 */
@@ -13578,6 +13617,8 @@ function gotoDetailDate(ds) {
   UI.detail.y = pd.getFullYear();
   UI.detail.m = pd.getMonth() + 1;
   UI.detail.year = pd.getFullYear();
+  /* 「按年」表的六年窗口也要跟着走，否则跳到近年补录后表格还停在旧年段、一格都不高亮 */
+  if (pd.getFullYear() > (UI.detail.yEnd || 0)) UI.detail.yEnd = pd.getFullYear();
   renderDetail();
   var host = $('#detail-scroll');
   if (host) {
@@ -13625,16 +13666,17 @@ function renderTaskSettings() {
        置顶 / 上移 / 下移 / 隐藏 / 删除都收进「更多」的底部菜单，
        一行文字才有地方，点击目标也从 24px 涨到 30px */
     list.forEach(function (t) {
+      var ftOn = taskFocusTimer(t);
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<span class="nm-l">' +
             '<b>' + esc(t.name) + '</b>' +
-            /* 只给开了专修计时的项一个小闹钟，没开就不占地方 */
-            (taskFocusTimer(t)
-              ? '<span class="ft-ico" role="img" aria-label="专修计时已开启" title="专修计时已开启">' +
-                  '<svg viewBox="0 0 24 24"><circle cx="12" cy="13.2" r="7.2"/><path d="M12 9.4v3.8l2.6 1.6"/><path d="M9.6 2.9h4.8"/><path d="M12 2.9v2.9"/></svg>' +
-                '</span>'
-              : '') +
+            /* 小闹钟常驻：开了专修计时是红的，没开就灰着，位置不跳 */
+            '<span class="ft-ico' + (ftOn ? '' : ' off') + '" role="img" title="' +
+              (ftOn ? '专修计时已开启' : '专修计时已关闭') + '" aria-label="' +
+              (ftOn ? '专修计时已开启' : '专修计时已关闭') + '">' +
+              '<svg viewBox="0 0 24 24"><circle cx="12" cy="13.2" r="7.2"/><path d="M12 9.4v3.8l2.6 1.6"/><path d="M9.6 2.9h4.8"/><path d="M12 2.9v2.9"/></svg>' +
+            '</span>' +
           '</span>' +
           '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
             ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
@@ -13672,6 +13714,8 @@ function renderTaskSettings() {
 
 function openTaskEditor(taskId, cat) {
   var t = taskId ? taskById(taskId) : null;
+  /* 带着 id 来却找不到（另一个窗口改过数据 / 跨天重载）：不能静默变成「新建同名功课」 */
+  if (taskId && !t) { toast('这项功课已不存在，请刷新后重试'); return; }
   var isNew = !t;
   var c = CAT_MAP[cat || (t ? t.cat : UI.taskCat)];
   var name = t ? t.name : '';
@@ -14236,6 +14280,8 @@ function myDayDayOpts(kind, cur) {
 function openMyDayEditor(id) {
   var m = null;
   (DB.mydays || []).forEach(function (x) { if (x.id === id) m = x; });
+  /* 同上：找不到就别悄悄当成新增一条纪念日 */
+  if (id && !m) { toast('这条纪念日已不存在，请刷新后重试'); return; }
   var isNew = !m;
   var kind = (m && m.kind) || 'solar';   /* 新增的默认选公历 */
   var mm = m ? +m.m : 1;
@@ -14379,6 +14425,21 @@ function redrawSwitchModal() {
    「设置 → 关于 → 更新内容」可以随时看全部。 */
 var REL_NOTES = [
   {
+    v: '2.10', date: '2026-11-15',
+    items: [
+      '功课设置里的名字右边常驻一只小闹钟：开了「专修计时」是功课红，关掉就置灰，一眼看得出开没开',
+      '写日记时翻日历、切菜单、跨天检查都不会再重建编辑框，光标、输入法正在拼的字与正文滚动位置都留在原处',
+      '按住 +1/+10 这类按钮又划走（想滚列表或发现点错了）不再照旧记一次',
+      '只写日记、一项功课都没有的备份现在也能导回来（以前会被当成「格式不正确」拒收）',
+      '数据里个别字段坏掉不再让整库进只读：设置项被写成字符串、重复的功课、超过一亿的计数都会就地收口',
+      '系统日期选择器用完就收掉，不再白吞一次返回键',
+      '「更新内容」被首次引导弹窗挡住时会稍后再弹，不会静默跳过、下次补弹一整串历史',
+      '提示条文案长时在窄屏上折行显示，不再两端被切掉',
+      '详情页跳到别的年份补录后，「按年」表跟着跳到那一段，不再一格都不高亮',
+      '功课或纪念日已被删掉时点编辑会如实提示，不再悄悄变成新建一条'
+    ]
+  },
+  {
     v: '2.9', date: '2026-11-14',
     items: [
       '功课快捷增量分两套方案（+1/+3/+7/+21 与 +1/+10/+100/+1000），可在「编辑功课」里逐项切换；小「＋」改为单击弹出「调整数量」',
@@ -14493,8 +14554,16 @@ function markSeenVersion() {
 }
 /* 升级后弹一次。没记过版本号的老存档从 2.0 起算（把错过的几版一起列出来），
    全新安装则直接记成当前版本，不打扰。 */
-function whatsNewOnBoot(hadData) {
-  if (loadError || document.querySelector('#modal.on')) return;
+function whatsNewOnBoot(hadData, tries) {
+  if (loadError) return;
+  if (document.querySelector('#modal.on')) {
+    /* 首次引导 / 只读提示挡在前面时别直接放弃，等它关掉再看；
+       直接 return 会让这次升级静默跳过，下次启动把好几版的历史一口气补弹出来 */
+    if ((tries || 0) < 3) {
+      setTimeout(function () { whatsNewOnBoot(hadData, (tries || 0) + 1); }, 1500);
+    }
+    return;
+  }
   var seen = seenVersion() ||
     (hadData ? REL_NOTES[REL_NOTES.length - 1].v : APP_VERSION);
   var list = notesSince(seen);
@@ -15248,7 +15317,7 @@ function bindEvents() {
     };
 
     clearHold();
-    holdState = { run: runD, timer: null, rep: null, fired: false };
+    holdState = { run: runD, timer: null, rep: null, fired: false, sx: e.clientX, sy: e.clientY };
     if (dbtn.dataset.norep) {
       /* 专修模式的大按钮：不连加。轻点抬手加一次；长按不计数，改成弹窗修改专修增量 */
       holdState.timer = setTimeout(function () {
@@ -15290,7 +15359,7 @@ function bindEvents() {
     };
 
     clearHold();
-    holdState = { run: run, timer: null, rep: null, fired: false };
+    holdState = { run: run, timer: null, rep: null, fired: false, sx: e.clientX, sy: e.clientY };
     /* 快捷增量按钮支持长按连加；「+」单击即弹窗，不设长按 */
     if (act !== 'step') {
       holdState.timer = setTimeout(function () {
@@ -15312,6 +15381,12 @@ function bindEvents() {
   };
   window.addEventListener('pointerup', endHold);
   window.addEventListener('pointercancel', function () { clearHold(); });
+  /* 按住「+」之后手指划走（想滚列表、或者发现点错了想撤）：不要照旧落一次计数 */
+  window.addEventListener('pointermove', function (e) {
+    if (!holdState) return;
+    var dx = e.clientX - holdState.sx, dy = e.clientY - holdState.sy;
+    if (Math.abs(dx) > 12 || Math.abs(dy) > 12) clearHold();
+  }, { passive: true });
   /* 兜底：WebView 被来电 / 切后台 / 系统手势打断时可能收不到 pointerup，
      连加定时器会一直跑下去，所以失焦与切后台时也清一次 */
   window.addEventListener('blur', function () { clearHold(); });
@@ -15500,14 +15575,7 @@ function switchTab(k, anim) {
   });
   var body = $('#home-body');
   if (!body) return;
-  if (UI.tab === 'diary') {
-    body.innerHTML = '<div class="diary" id="diary-box"></div>';
-    renderDiaryInto($('#diary-box'));
-  } else {
-    body.innerHTML = '<div id="cat-sum"></div><div class="list" id="task-list"></div>';
-    $('#cat-sum').innerHTML = renderCatSumHTML(UI.tab, UI.date);
-    renderTaskListInto($('#task-list'), UI.tab);
-  }
+  renderHomeBody(body);
   if (anim) {
     body.classList.remove('swipe-l', 'swipe-r');
     void body.offsetWidth;
@@ -15555,6 +15623,9 @@ function firstCatWithData(ds) {
 }
 
 var datePickInDetail = false;
+/* 系统日期选择器是否还开着：用完之后这个隐形 input 会留在页面上，
+   返回键不能为了删它白吞一次（用户会觉得「返回失灵一次」） */
+var datePickOpen = false;
 function openDatePicker(inDetail) {
   datePickInDetail = !!inDetail;
   var inp = document.getElementById('native-date');
@@ -15565,11 +15636,13 @@ function openDatePicker(inDetail) {
     inp.style.cssText = 'position:fixed;left:50%;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;';
     document.body.appendChild(inp);
     inp.addEventListener('change', function () {
+      datePickOpen = false;
       if (!inp.value) return;
       if (datePickInDetail) gotoDetailDate(inp.value);
       else selectDate(inp.value);
     });
   }
+  datePickOpen = true;
   inp.value = UI.date;
   try {
     if (inp.showPicker) inp.showPicker();
@@ -15928,8 +16001,9 @@ function sanitizeImport(src) {
     if (t.ftimer === true || t.ftimer === false) task.ftimer = t.ftimer;
     out.tasks.push(task);
   });
-  if (!out.tasks.length) return null;
-
+  /* 功课一项都没有也照样接收：2.9 起全新安装的列表本来就是空的，
+     只写日记的用户导出的备份 tasks 为空，以前会被当成「格式不正确」永远导不回来。
+     真正的空备份（功课与记录都没有）留到记录也解析完之后再判 */
   var idSet = {};
   out.tasks.forEach(function (t) { idSet[t.id] = 1; });
 
@@ -15973,6 +16047,8 @@ function sanitizeImport(src) {
     if (r.locOff) rec.locOff = 1;
     out.records[ds] = rec;
   });
+
+  if (!out.tasks.length && !Object.keys(out.records).length) return null;
 
   report.tasks = out.tasks.length;
   report.records = Object.keys(out.records).length;
@@ -16073,8 +16149,8 @@ function importData() {
           function () {
             var snap = saveSnapshot();
             /* 源数据缺哪个迁移标记就补哪个；不能把「当前最新」强行写上去 */
-            migrateBuiltin(db);
             __dbMigrated = false;
+            migrateBuiltin(db);
             DB = db;
             if (!DB.places.some(function (x) { return x.id === DB.settings.defaultPlaceId; })) {
               DB.settings.defaultPlaceId = '';
@@ -16085,10 +16161,15 @@ function importData() {
             invalidateTotals();
             LunarCache = {};
             festsCacheClear();
-            saveNow();
+            var saved = saveNow();
             updateReadOnlyUI();
             renderView();
-            toast(snap ? '导入成功，已保存当前数据快照' : '导入成功（当前数据快照未能保存）');
+            /* 落盘失败还要报「导入成功」，用户就会以为已经存好，下次启动才发现回滚 */
+            if (!saved) {
+              toast('已导入但没能写入本机存储，请立即导出备份');
+            } else {
+              toast(snap ? '导入成功，已保存当前数据快照' : '导入成功（当前数据快照未能保存）');
+            }
           });
       } catch (e) {
         toast('备份文件格式不正确，未导入任何数据');
@@ -16128,6 +16209,7 @@ function wipeData() {
           var brokenN = brokenKeys().length;
           askConfirm('最后确认：清空全部数据？',
             '功课与日记将被全部删除，清空后不可恢复。' +
+              '<br>导入备份前自动留的快照也会一并删除。' +
               (brokenN ? '<br>本机另有 ' + brokenN + ' 份损坏原件，会保留下来供恢复。' : ''),
             '确认清空',
             function () {
@@ -16305,7 +16387,11 @@ window.__closeTopLayer = function () {
   }
   if (document.querySelector('#sheet.on')) { closeSheet(); return true; }
   var nd = document.getElementById('native-date');
-  if (nd) { nd.remove(); return true; }
+  if (nd) {
+    /* 只有选择器真的还开着才吃掉这次返回；其余情况顺手清掉空壳，别白吞一次按键 */
+    if (datePickOpen) { datePickOpen = false; nd.remove(); return true; }
+    nd.remove();
+  }
   var backs = document.querySelectorAll('[data-back]');
   for (var i = 0; i < backs.length; i++) {
     var el = backs[i];
