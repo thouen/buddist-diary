@@ -10,12 +10,12 @@
 
 **界面与交互**
 
-- **功课列表的闹钟常驻，位置改到副标题行末尾**：`.ft-ico` 不再按开关注入/移除，改为一直渲染，未开「专修计时」时带 `.off` 类置灰（`--ink3` + `opacity:.5`），`aria-label` / `title` 分别写「专修计时已开启 / 已关闭」；新增 `.nm-sub` 包住「单位 · 快捷 · 默认 · 专修」与闹钟，参数文字照旧单行省略、闹钟贴右端，名字长短与开关状态都不会让图标左右跳。
+- **功课列表的闹钟常驻，位置改到副标题行末尾**：`.ft-ico` 不再按开关注入/移除，改为一直渲染，未开「专修计时」时带 `.off` 类置灰（`--ink2` + `opacity:.75`，实测 `--ink3` 再叠 opacity 只有 1.8:1，等于看不见），`aria-label` / `title` 分别写「专修计时已开启 / 已关闭」；新增 `.nm-sub` 包住「单位 · 快捷 · 默认 · 专修」与闹钟，参数文字照旧单行省略，闹钟 `margin-left:auto` 贴右端，名字长短与开关状态都不会让图标左右跳。
 - **功课名称创建后锁定**：编辑已有功课时 `#f-name` 渲染为 `readonly`（虚线边 + 次要字色 + 一行说明「名称创建后不能更改」），保存时一律沿用 `t.name`，不再读输入框；新增功课仍可填名字，`sanitizeImport()` 与保存时的同分类重名校验（`toast('这个分类里已经有同名功课了')`）保持不变。
 - **日记编辑框不再被整块重建**：新增 `renderHomeBody(body)`，整页重绘与切 tab 共用；同一天、内容未变（`cleanDiaryText(diaryText) === recDiaryText(rec)`）时保留已建好的 `#blocks .ed`，翻月历／跨天检查不再丢光标、输入法组合态与正文内部滚动位置。
 - **按住按钮划走不计数**：`pointerdown` 记下起点坐标，新增 `pointermove` 监听，位移超过 12px 即 `clearHold()`；「按住 + 想滚列表」「点错了想划走」不再落一次计数。
 - **提示条可折行**：`.toast` 去掉 `white-space:nowrap`，改 `max-width:calc(100vw - 44px)` + 居中折行，长文案在窄屏不再被切掉两端。
-- **日期选择器不再吞返回键**：新增 `datePickOpen`，`openDatePicker()` 打开时置位、`change` 时清掉；`__closeTopLayer()` 只有选择器真的还开着才消费一次返回，其余情况顺手删掉残留的 `#native-date` 空壳。
+- **日期选择器不再吞返回键**：新增 `datePickOpen` + `datePickAt`，`openDatePicker()` 打开时置位，`change` / `cancel` / `window focus` 后清掉；`__closeTopLayer()` 只在「标记为真且 60 秒内」消费一次返回，其余情况不再删输入框（原生对话框还开着时删元素可能丢用户刚选的日期）。
 - **更新内容不再被引导弹窗挤掉**：`whatsNewOnBoot(hadData, tries)` 遇到 `#modal.on` 时改为 1.5 秒后重试（最多 3 次），不再直接 return 导致这次升级被静默跳过、下次补弹一整串历史。
 - **详情页按年窗口跟随日期**：`gotoDetailDate()` 补上与 `shiftDetailDate()` 一致的 `UI.detail.yEnd` 同步，跳到近年补录后「按年」表不再停在旧年段、一格都不高亮。
 - **已删除条目点编辑不再变成新建**：`openTaskEditor()` / `openMyDayEditor()` 带着 id 却找不到时 toast 提示并返回，不再静默 `push` 一条同名条目。
@@ -31,9 +31,43 @@
 - **导入如实反馈落盘结果**：`saveNow()` 返回 `saveDB()` 的布尔值，导入后写入失败时提示「已导入但没能写入本机存储，请立即导出备份」，不再覆盖成「导入成功」。
 - 导入时 `__dbMigrated` 在 `migrateBuiltin()` **之前**清零，语义与启动流程一致。
 
+**二次复审补修（同日，同版本号）**
+
+> 发版前又通读了一遍全部代码（CSS / 数据层 / 渲染层 / 设置与事件），以下为第二轮修掉的问题。
+
+界面与交互：
+
+- 主页日历 `shiftMonth()` 加了 1900–2100 边界：翻过头 toast 提示，不再翻出一整月空白（农历库只覆盖这段）。
+- 总览模式下点日历格改走 `scrollSummaryToDate(ds)`，不再把卡片列表拉回顶部。
+- `#festset-scroll` / `#places-scroll` 底部补 72px 内边距：最后一条不再被固定的「添加」按钮盖住。
+- Esc 现在也能关底部菜单；左右方向键只在首页 / 详情页改日期，设置 / 节日页不会被偷偷改掉背景日期。
+- 日记「插入空行」在上方插行时光标落到新行（`b.s + 1`，以前停在上一行行尾）；「撤回 / 插行 / 圆点」之后调用 `refreshTabDots()`，底部分类圆点立刻跟着变。
+- `currentCaret()` 改为优先用正文里的真实选区，`pendingCaret` 只在失焦时兜底。
+- 功课设置页重画时保留 `scrollTop`（编辑 / 隐藏 / 排序后不再跳回顶部）。
+- 「按年」表的六年窗口改由 `syncDetailYearWindow()` 双向对齐（补录更早年份时也压低窗口），跨天 / 跨年时同步 `UI.detail.year`；`renderDetailStats()` 对空 items 兜底，不再出现「Infinity 年」。
+
+数据层：
+
+- `recIsEmpty()` 补上 `r.loc`：只填了临时地点、还没记数的那一天不再被 `pruneRec()` 当空记录清掉。
+- `loadDB()` 迁移旧日记块数组时，只有 `dt` 已有内容才 `delete rr.d`；否则先删 `dt` 再折块，避免旧日记被整段丢掉。
+- 布尔字段统一由 `asBool()` 收纳（`true` / `1` / `'true'` 都算真），`builtin` 不会被误判成假而跳过 `bkey` 迁移。
+- `normalizeSettings()` 不再用 `Object.assign`，逐键拷贝并跳过 `__proto__` / `constructor` / `prototype`。
+- `seenIds` / `idSet` / `_totals` / `_mtotals` 改成 `Object.create(null)`：id 叫 `constructor` 时不会被原型链误判成「重复」或读到脏总数。
+- `normalizePlaces()` 校验 id 类型并去重：数字 id 会让「默认地点」比对失败被清空。
+- `sanitizeImport()` 对重复功课 id 去重，并计入 `skippedTasks`。
+
+写入与会话：
+
+- 新增 `persistFailed`：`saveDB()` 写入失败（多半配额满）时置位，顶部横幅常驻提示「写入本机存储失败…请先导出备份」，按钮文案变「导出备份」并走 `exportData()`；下次写入成功后自动撤下。以前这种情况只有一条 2.4 秒的 toast，用户以为日记已保存。
+- 新增 `resetDiaryState()`：导入 / 重新载入 / 清空后作废 `diaryText` 与撤回栈，避免按一次「撤回」把导入前的旧正文写回新库。
+- 导入空功课备份后自动 `openTaskOnboarding()`；`FileReader.onerror` 也给出「读不出这个文件」提示。
+- 清空数据后重置 `UI.viewStack` / `UI.detail`；确认文案补上「常用地点、自定义节日与纪念日、全部设置项都会恢复默认」。
+- `showView()` 发现目标页面已在栈里时回到它原来的位置：节日一览 ⇄ 节日管理来回切不再一层层压栈，返回键不再原地打转。
+
 **测试**
 
-- `tests/smoke.html` 的两条闹钟断言跟着改：默认每行都有 `.ft-ico` 且全部带 `.off`，拨开某一项后 `.ft-ico:not(.off)` 恰好 1 个。
+- `tests/smoke.html` 的两条闹钟断言跟着改：默认每行都有 `.ft-ico` 且全部带 `.off`，拨开某一项后 `.ft-ico:not(.off)` 恰好 1 个；另加「编辑已有功课时名称只读」。
+- 第二轮改动后 `node --check` 与 `cdp_smoke.py` 重跑：smoke 38 项 / upgrade 8 项全绿。
 
 ---
 
