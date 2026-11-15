@@ -136,8 +136,8 @@
 
 ### 方式二：直接安装 APK
 
-- 文件：`学佛日记-2.9.apk`，约 397 KB，支持 **Android 7.0 及以上**，`versionCode 41`
-- ⚠️ **2.10 没有对应的 APK**。仓库里的这个包内嵌的是 2.9 早期提交 `a3455d3` 的页面，既缺 11 月 15 日那次修订（坏日期防白屏、导入校验、只读恢复提示等），也不含 2.10 的全部改动。要发布当前代码必须重新打包；在重打之前，**2.10 请以网页版 / PWA 为准**，不要用这个 APK 代表 2.10。
+- 文件：`学佛日记-2.10.apk`，约 417 KB，支持 **Android 7.0 及以上**，`versionCode 42`
+- 内嵌页面即本仓库的 `index.html`（2.10），打包时已核对逐字节一致（SHA-256 `cc413ce8…`，比对方法见「发布检查清单」）
 - 传到手机后点击安装，需允许「安装未知来源应用」；首次打开若提示风险，选择「仍要安装」即可
 - 内嵌页面由 WebView 以 `https://appassets.local` 提供，`localStorage` 能长期保存，重启应用数据不丢
 - 返回键：先关弹窗 / 菜单 / 日期层，再退二级页面（详情、设置等），回到首页再按一次才退出
@@ -147,9 +147,9 @@
 
 **关于权限（如实说明）**：2.2 起已从 `AndroidManifest.xml` 删掉 `INTERNET`、`ACCESS_FINE_LOCATION`、`ACCESS_COARSE_LOCATION`、`READ_MEDIA_IMAGES`、`READ_MEDIA_VISUAL_USER_SELECTED`、`READ_EXTERNAL_STORAGE`，`aapt2 dump permissions` 现在**一个权限都没有**。网页一侧也没有任何网络请求与定位调用，导出走系统「下载」、导入走系统文件选择器，都不需要权限。
 
-**关于签名**：2.0 / 2.2 / 2.3 / 2.4 / 2.5 / 2.6 / 2.7 / 2.8 / 2.9 使用同一张证书（SHA-256 `9ad2a321…1bcc14`），可直接覆盖安装到已装 2.0 的手机，数据保留。签名私钥 `xuefo.keystore` 不在本仓库，请另行备份；若哪天换了新签名，就无法覆盖安装，必须先导出备份 → 卸载旧版 → 装新版 → 导入备份。
+**关于签名**：2.0 / 2.2 / 2.3 / 2.4 / 2.5 / 2.6 / 2.7 / 2.8 / 2.9 / 2.10 使用同一张证书（SHA-256 `9ad2a321…1bcc14`），可直接覆盖安装到已装 2.0 的手机，数据保留。签名私钥 `xuefo.keystore` 不在本仓库，请另行备份；若哪天换了新签名，就无法覆盖安装，必须先导出备份 → 卸载旧版 → 装新版 → 导入备份。
 
-> **重新打包目前做不了**：仓库里只有 APK 二进制，没有安卓外壳源码（Java / Kotlin、Gradle、`AndroidManifest.xml`），签名私钥也不在仓库。既无法从本仓库复现构建，也无法审计或修改外壳；这些文件补齐之前，不要宣称仓库里的 APK 与 `index.html` 一致。若要用当前页面发版，推荐先走「方式一」（部署为 PWA）——`index.html`、`manifest.webmanifest`、`icons/` 就是全部静态资源。WebView 内 Service Worker 不生效属正常现象，不影响功能；当前页面也已跳过 `appassets.local` 下的 SW 注册。
+> **关于可重建性（如实说明）**：本仓库只有 APK 二进制，不含安卓外壳源码（Java、Gradle、`AndroidManifest.xml`）与签名私钥——外壳工程和密钥由维护者本地保管。每次发版，包内 `assets/index.html` 都与仓库同版本的 `index.html` **逐字节核对过**（SHA-256 记在 CHANGELOG 与本节），但仅凭本仓库无法复现同一次构建，也无法审计外壳代码。要自己出包，走「方式一」的 PWA 路线最稳：`index.html`、`manifest.webmanifest`、`icons/` 就是全部静态资源。WebView 内 Service Worker 不生效属正常现象，不影响功能；页面在 `appassets.local` 下也已跳过 SW 注册。
 
 ## 四、数据与隐私
 
@@ -190,7 +190,7 @@
 
 - [ ] **`sw.js` 顶部的 `CACHE` 版本号已 +1**（当前 `xuefo-diary-v43`）。不改的话，老用户会一直读到缓存里的旧页面
 - [ ] `icons/` 里的三张图标与当前设计一致（192 / 512 / maskable-512）
-- [ ] **可重建性**：先确认仓库里有安卓外壳源码（Java / Kotlin、Gradle、`AndroidManifest.xml`）与签名私钥；两者缺一就不要发布「已与当前 `index.html` 一致」的声明。补齐后重打 APK，再核对 APK 内 `assets/index.html` 与 `index.html` **归一化换行后一致**：工作区在 Windows 上通常是 CRLF（`git ls-files --eol` 显示 `i/lf w/crlf`），先统一去掉 `\r` 再比 SHA-256，例如 `unzip -p 学佛日记-x.y.apk assets/index.html | tr -d '\r' | sha256sum` 与 `tr -d '\r' < index.html | sha256sum`
+- [ ] **核对内嵌页**：`unzip -p 学佛日记-x.y.apk assets/index.html | sha256sum` 与 `sha256sum index.html` 必须相同（本仓库文件是 LF；若在 Windows 上另存过，先 `tr -d '\r'` 再比）。外壳源码与签名私钥不在仓库，构建由维护者本地完成，仓库一侧只能做这项核对
 - [ ] 改 `AndroidManifest.xml` 的 `versionCode`（每次 +1）与 `versionName`，再打包
 - [ ] `apksigner verify --print-certs` 确认证书仍是 `9ad2a321…1bcc14`，否则老用户无法覆盖安装
 - [ ] 跑一遍自动冒烟测试：`python tests/cdp_smoke.py`（本机 Chrome / Edge，无第三方依赖），必须两页都看到 `SMOKE OK`。`smoke.html` 覆盖首次安装空列表与自动引导、导入清洗（非法日期 / 超限计数 / 迁移标记保留）、推荐功课的添加与「自定义」入口；`upgrade.html` 覆盖老存档迁移与「老用户不会被首次引导打断」
@@ -208,7 +208,7 @@ xuefo-diary/
 ├── sw.js                 # 离线缓存（版本号需随发布递增）
 ├── icons/                # 应用图标（192 / 512 / maskable）
 ├── tests/                # 冒烟测试（smoke.html / upgrade.html + cdp_smoke.py）
-├── 学佛日记-2.9.apk       # 安卓安装包（内嵌 a3455d3 版页面，无任何权限声明；2.10 未重打）
+├── 学佛日记-2.10.apk      # 安卓安装包（内嵌 2.10 页面，无任何权限声明）
 ├── CHANGELOG.md          # 历史版本改动
 ├── REVIEW-2026-11-15.md  # 2.10 全量审查报告（已修 / 未修清单与验证记录）
 ├── REVIEW-2026-11-14.md  # 2.9 全面审查报告（问题清单与修复对照）

@@ -6,7 +6,7 @@
 
 ## 2.10（2026-11-15）
 
-> `APP_VERSION` 2.9 → 2.10、`sw.js` 缓存 `v42` → `v43`。**本轮未重打 APK**：仓库里仍只有 `学佛日记-2.9.apk`（内嵌页面为 `a3455d3`，与 2.10 的 `index.html` 不一致），要用 2.10 请走网页版 / PWA，详见 README 第三节。
+> `APP_VERSION` 2.9 → 2.10、`sw.js` 缓存 `v42` → `v43`、`versionCode 42`。APK 已重打：`学佛日记-2.10.apk` 内嵌页面与工作区 `index.html` 逐字节一致（SHA-256 `cc413ce8…`），证书不变（`9ad2a321…1bcc14`），可直接覆盖安装；`tests/smoke.html` 与 `tests/upgrade.html` 均 `SMOKE OK`。
 
 **界面与交互**
 
