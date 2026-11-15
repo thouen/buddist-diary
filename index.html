@@ -13176,7 +13176,7 @@ function detailItems(t, d) {
       ds = d.y + '-' + pad2(d.m) + '-' + pad2(i);
       rec = DB.records[ds];
       n = (rec && rec.c[t.id]) || 0;
-      items.push({ d: i, n: n, ds: ds, hl: ds === UI.date, today: ds === TODAY });
+      items.push({ d: i, n: n, ds: ds, hl: ds === UI.date, today: ds === TODAY, future: ds > TODAY });
     }
     return items;
   }
@@ -13193,7 +13193,9 @@ function detailItems(t, d) {
       items.push({
         m: i, n: total,
         hl: i === d.m,
-        today: d.year === now.getFullYear() && i === now.getMonth() + 1
+        today: d.year === now.getFullYear() && i === now.getMonth() + 1,
+        future: d.year > now.getFullYear() ||
+          (d.year === now.getFullYear() && i > now.getMonth() + 1)
       });
     }
     return items;
@@ -13215,6 +13217,20 @@ function detailItems(t, d) {
     items.push({ y: y, n: tot, hl: y === d.year, today: y === cy });
   }
   return items;
+}
+
+/* 连续达标：从窗口末尾往回数。还没到的日子跳过；
+   今天 / 本月还没做满也不算断签（和「连续功课」同一个习惯） */
+function goalStreakItems(items, goal) {
+  var n = 0, counted = false;
+  for (var i = items.length - 1; i >= 0; i--) {
+    var it = items[i];
+    if (it.future) continue;
+    if (it.n >= goal) { n++; counted = true; continue; }
+    if (!counted && it.today) continue;
+    break;
+  }
+  return n;
 }
 
 /* 格子里的数字过大时用「万 / 亿」，避免撑破小格 */
@@ -13445,23 +13461,26 @@ function renderDetailStats() {
   var periodLabel, keyLabel, sub2, sub3, tip, table;
 
   if (d.range === 'day') {
+    /* 已经在看本月时，「本月」按钮没有可回的地方，直接不画 */
+    var atNowM = d.y === +TODAY.slice(0, 4) && d.m === +TODAY.slice(5, 7);
     periodLabel =
       '<button class="navbtn" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + d.y + ' 年 ' + d.m + ' 月</div>' +
       '<button class="navbtn" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">' + LOOP_ARROW + '本月</button>';
+      (atNowM ? '' : '<button class="today-btn" data-p="now">' + LOOP_ARROW + '本月</button>');
     /* 翻到别的月份时，表头的合计不再是「本月」 */
-    keyLabel = (d.y === +TODAY.slice(0, 4) && d.m === +TODAY.slice(5, 7)) ? '本月合计' : '此月合计';
+    keyLabel = atNowM ? '本月合计' : '此月合计';
     sub2 = '<span>记录 <b>' + active + '</b> 天</span>';
     sub3 = '<span>日均 <b>' + avg + '</b></span><span>单日最高 <b>' + peak + '</b></span>';
     tip = '点按日期回到该日 · 左右滑动切换月份';
     table = dayTableHTML(items, d, t);
   } else if (d.range === 'month') {
+    var atNowY = d.year === +TODAY.slice(0, 4);
     periodLabel =
       '<button class="navbtn" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + d.year + ' 年</div>' +
       '<button class="navbtn" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">' + LOOP_ARROW + '今年</button>';
+      (atNowY ? '' : '<button class="today-btn" data-p="now">' + LOOP_ARROW + '今年</button>');
     keyLabel = '本年合计';
     sub2 = '<span>记录 <b>' + active + '</b> 个月</span>';
     sub3 = '<span>月均 <b>' + avg + '</b></span><span>单月最高 <b>' + peak + '</b></span>';
@@ -13479,7 +13498,7 @@ function renderDetailStats() {
       '<button class="navbtn' + (y0 <= 1901 ? ' dis' : '') + '" data-p="-1"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="pt">' + (y0 === y1 ? y0 + ' 年' : y0 + ' – ' + y1 + ' 年') + '</div>' +
       '<button class="navbtn' + (y1 >= cy ? ' dis' : '') + '" data-p="1"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-      '<button class="today-btn" data-p="now">' + LOOP_ARROW + '近年</button>';
+      (y1 >= cy ? '' : '<button class="today-btn" data-p="now">' + LOOP_ARROW + '近年</button>');
     keyLabel = '近年合计';
     sub2 = '<span>记录 <b>' + active + '</b> 年</span>';
     sub3 = '<span>年均 <b>' + avg + '</b></span><span>单年最高 <b>' + peak + '</b></span>';
@@ -13488,20 +13507,25 @@ function renderDetailStats() {
   }
 
   /* 目标按口径分开：按日认日目标、按月认月目标；按年不显示任何目标 / 达标字样。
-     总目标只是累计数字对照，不参与任何统计达标。 */
+     总目标只是累计数字对照，不参与任何统计达标。
+     达标分两项：连续达标＝从最近往回没断过的段数，总达标＝窗口内达标的总段数。 */
   var goalStat = '';
   if (d.range === 'day') {
     if (goal > 0) {
       var hit = 0;
       items.forEach(function (it) { if (it.n >= goal) hit++; });
-      goalStat = '<span class="goal-note">目标 <b>' + goal + '</b> · 达标 <b>' + hit + '</b> 天</span>';
+      goalStat = '<span class="goal-note">目标 <b>' + goal + '</b>' +
+        ' · 连续达标 <b>' + goalStreakItems(items, goal) + '</b> 天' +
+        ' · 总达标 <b>' + hit + '</b> 天</span>';
     }
   } else if (d.range === 'month') {
     var mgStat = taskMonthGoal(t);
     if (mgStat > 0) {
       var mhit = 0;
       items.forEach(function (it) { if (it.n >= mgStat) mhit++; });
-      goalStat = '<span class="goal-note">月目标 <b>' + mgStat + '</b> · 达标 <b>' + mhit + '</b> 个月</span>';
+      goalStat = '<span class="goal-note">月目标 <b>' + mgStat + '</b>' +
+        ' · 连续达标 <b>' + goalStreakItems(items, mgStat) + '</b> 个月' +
+        ' · 总达标 <b>' + mhit + '</b> 个月</span>';
     }
   }
 
