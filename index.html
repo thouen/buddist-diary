@@ -82,6 +82,22 @@ img{max-width:100%;display:block}
   overflow:hidden;
 }
 
+/* 数据读坏后的只读恢复模式：顶部常驻提示，不能只靠启动时弹一次 */
+.ro-banner{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  margin:calc(6px + var(--safe-t)) 10px 3px;padding:8px 10px;
+  border-radius:10px;background:#fbe9e4;border:1px solid #e8bdb1;
+  color:#7a2b1c;font-size:11.5px;line-height:1.5;
+}
+.ro-banner span{flex:1;min-width:0}
+.ro-banner button{
+  flex:0 0 auto;font-size:11px;padding:4px 8px;border-radius:7px;
+  background:#fff;border:1px solid #d9a497;color:#7a2b1c;
+}
+/* 横幅自己让开了刘海，下面的顶栏 / 页头就别再让一次 */
+.ro-banner:not(.hidden) ~ .view .topbar,
+.ro-banner:not(.hidden) ~ .view .page-head{padding-top:10px}
+
 /* ---------- 顶栏 ---------- */
 .topbar{
   display:flex;align-items:center;justify-content:space-between;
@@ -676,7 +692,7 @@ img{max-width:100%;display:block}
   border:1px solid #ecd0c8;border-radius:5px;padding:1px 5px;letter-spacing:.5px;
 }
 
-/* 恢复内置功课：按分类分组、勾选框选择（整行是 label，点哪都能勾） */
+/* 添加推荐功课：按分类分组、勾选框选择（整行是 label，点哪都能勾） */
 .rb-wrap{max-height:46vh;max-height:46dvh;overflow-y:auto;overscroll-behavior:contain;margin:0 -2px 0}
 .rb-sec{
   display:flex;align-items:baseline;gap:6px;padding:9px 2px 4px;
@@ -852,6 +868,8 @@ label.rb-row{cursor:pointer}
 .mcell.today,.ycell.today{background:var(--gold-soft);border-color:#e3cd9a;box-shadow:inset 0 0 0 1px #e3cd9a}
 .mcell.on,.ycell.on{background:var(--accent);border-color:var(--accent);box-shadow:none}
 .mcell.on .mm,.mcell.on .mn,.ycell.on .yy,.ycell.on .yn{color:#fff}
+/* 选中的月份 / 年份恰好是当前月 / 年时，用金色内圈把「今天」这层信息留住 */
+.mcell.today.on,.ycell.today.on{box-shadow:inset 0 0 0 2px #e3cd9a}
 
 .chart-tip{text-align:center;font-size:11.5px;color:var(--ink2);height:20px;padding:6px 0 0;font-variant-numeric:tabular-nums}
 
@@ -1273,6 +1291,12 @@ label.rb-row{cursor:pointer}
 <body>
 <div id="app">
 
+  <!-- 数据读坏时：常驻只读提示，避免用户以为新记录已经保存 -->
+  <div class="ro-banner hidden" id="ro-banner" role="alert">
+    <span>只读恢复模式：新记录不会保存。原始内容已另存。</span>
+    <button type="button" id="ro-export">导出原件</button>
+  </div>
+
   <!-- ============ 主页 ============ -->
   <section id="view-home" class="view">
     <header class="topbar">
@@ -1328,8 +1352,8 @@ label.rb-row{cursor:pointer}
       </button>
       <div class="page-title">功课设置</div>
       <div class="right">
-        <!-- 恢复内置功课：点开列出全部内置经咒佛号，由用户勾选要补回哪些 -->
-        <button class="iconbtn" id="btn-restore-builtin" aria-label="恢复内置功课" title="恢复内置功课">
+        <!-- 添加推荐功课：点开列出全部推荐经咒佛号，由用户勾选要添加哪些 -->
+        <button class="iconbtn" id="btn-recommend-tasks" aria-label="添加推荐功课" title="添加推荐功课">
           <svg viewBox="0 0 24 24"><path d="M4.6 9.4A8 8 0 1 1 4 14"/><path d="M4.2 4.6v5h5"/><path d="M12 8.2v4.3l2.9 1.7"/></svg>
         </button>
       </div>
@@ -10303,16 +10327,6 @@ function isYmdKey(ds) {
 var DB = null;
 
 function defaultDB() {
-  var tasks = [];
-  CATS.forEach(function (c) {
-    BUILTIN[c.k].forEach(function (name) {
-      tasks.push({
-        id: uid('t'), cat: c.k, name: name, bkey: builtinKey(c.k, name),
-        unit: BUILTIN_UNIT[name] || c.unit, step: c.step, fstep: catFocusStep(c.k),
-        goal: 0, builtin: true, hidden: false
-      });
-    });
-  });
   return {
     v: 1,
     builtinRev: BUILTIN_REV,
@@ -10347,7 +10361,7 @@ function defaultDB() {
       useLastPlace: true,
       lastPlaceId: ''
     }, HINT_DEFAULT),
-    tasks: tasks,
+    tasks: [],
     mydays: [],
     places: [],
     /* 用户自定义的佛教 / 公共节日，与内置节日分开放 */
@@ -10438,7 +10452,7 @@ function normalizeSettings(src) {
 }
 
 /* 常用地点：{ id, name, prov, city }。
-   旧版本可能带 lat/lng，这里只做只读兼容（不再写入、不显示、不外发） */
+   旧版本可能带 lat/lng，加载时直接丢弃（不写入、不显示、不外发） */
 function normalizePlaces(list) {
   if (!Array.isArray(list)) return [];
   return list.filter(function (x) {
@@ -10450,8 +10464,7 @@ function normalizePlaces(list) {
       prov: String(x.prov || ''),
       city: String(x.city || '')
     };
-    if (x.lat != null && x.lat !== '' && isFinite(+x.lat)) o.lat = +x.lat;
-    if (x.lng != null && x.lng !== '' && isFinite(+x.lng)) o.lng = +x.lng;
+    /* 旧版本可能带经纬度：不再写回、不再导出，避免备份把家庭坐标带出去 */
     return o;
   });
 }
@@ -10626,15 +10639,51 @@ function freshDB() {
 
 /* 读取失败时：原件另存一份、置位 loadError，并且不再写回（避免把原件盖掉） */
 var loadError = false;
+var brokenSaveFailed = false;
+
+/* 生成一个可按字典序排序的时间戳：年月日时分秒 + 毫秒
+   只用秒级时间戳时，同一秒内连续失败会互相覆盖 */
+function tsStamp() {
+  var d = new Date();
+  return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+    pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) +
+    ('00' + d.getMilliseconds()).slice(-3);
+}
+
+function xuefoKeys(prefix) {
+  var out = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(prefix) === 0) out.push(k);
+    }
+  } catch (e) { }
+  return out;
+}
+
+function brokenKeys() {
+  return xuefoKeys('xuefo.diary.broken.').sort().reverse();
+}
+
+/* 损坏原件只留最近两份：每次启动都失败时，不能无限占满 localStorage */
+function pruneBrokenRaw(keep) {
+  brokenKeys().slice(keep || 2).forEach(function (k) {
+    try { localStorage.removeItem(k); } catch (e) { }
+  });
+}
 
 function keepBrokenRaw(raw) {
   loadError = true;
+  brokenSaveFailed = false;
+  var key = 'xuefo.diary.broken.' + tsStamp();
   try {
-    var d = new Date();
-    var ts = d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
-      pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
-    localStorage.setItem('xuefo.diary.broken.' + ts, raw);
-  } catch (e) { }
+    localStorage.setItem(key, raw);
+    /* 隐私模式 / 配额满时 setItem 可能没抛错但也没写进去 */
+    if (localStorage.getItem(key) !== raw) brokenSaveFailed = true;
+  } catch (e) {
+    brokenSaveFailed = true;
+  }
+  pruneBrokenRaw(2);
 }
 
 function loadDB() {
@@ -10649,11 +10698,19 @@ function loadDB() {
     }
     db.settings = normalizeSettings(db.settings);
     if (!Array.isArray(db.tasks)) db.tasks = [];
+    /* 单个 null / 字符串 / 缺字段的任务不该把整库打成「读坏」：逐条过滤掉 */
+    db.tasks = db.tasks.filter(function (t) {
+      return t && typeof t === 'object' && !Array.isArray(t) &&
+        typeof t.id === 'string' && t.id &&
+        typeof t.name === 'string' && t.name &&
+        !!(CAT_MAP[t.cat]);
+    });
     db.tasks.forEach(function (t) {
-      t.goal = +t.goal > 0 ? Math.floor(+t.goal) : 0;
-      t.mgoal = +t.mgoal > 0 ? Math.floor(+t.mgoal) : 0;
+      t.goal = clampCount(t.goal);
+      t.mgoal = clampCount(t.mgoal);
+      t.tgoal = clampCount(t.tgoal);
       /* 2.8：专修增量，老存档没有这个字段就按分类默认值补上（念佛 3，其余 1） */
-      t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? Math.floor(+t.fstep) : catFocusStep(t.cat);
+      t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? clampStep(t.fstep) : catFocusStep(t.cat);
       /* 专修计时开关：没存过就交给 taskFocusTimer() 按分类默认值走，不用写回存档 */
       if (t.ftimer !== true && t.ftimer !== false) delete t.ftimer;
       /* 快捷增量方案：没存过就交给 taskScheme() 按分类默认值走，不用写回存档 */
@@ -11650,7 +11707,11 @@ function refreshCalCell(ds) {
 }
 
 function refreshTaskRow(taskId) {
-  var row = document.querySelector('.task[data-id="' + taskId + '"]');
+  /* 导入的 id 可能带引号 / 方括号，拼进 querySelector 会直接抛错；按 dataset 比对最稳 */
+  var row = null;
+  Array.prototype.forEach.call(document.querySelectorAll('.task[data-id]'), function (el) {
+    if (!row && el.dataset.id === taskId) row = el;
+  });
   if (!row) return;
   var t = taskById(taskId);
   var r = DB.records[UI.date];
@@ -11748,7 +11809,8 @@ function streakHTML() {
   var fi = lunarOf(first);
   var cy = new Date().getFullYear();
   var since = '自 ' + (fi.shy !== cy ? fi.shy + '年' : '') + fi.shm + '月' + fi.shd + '日 起';
-  var sub = n > 0 ? since : '最近一次在 ' + dayGap(first, TODAY) + ' 天前';
+  /* 「最近一次」要的是最新一条（dates 为倒序），不能拿最早一条算 */
+  var sub = n > 0 ? since : '最近一次在 ' + dayGap(dates[0], TODAY) + ' 天前';
   return '<div class="streak' + (n > 0 ? '' : ' off') + '">' +
       '<div class="sk-l">' +
         '<div class="sk-num"><b>' + n + '</b><em>天</em></div>' +
@@ -11988,7 +12050,7 @@ function renderDiaryInto(box) {
 /* 一整篇就是一个 textarea：它本身就是纯文本，光标、粘贴、整篇复制都由浏览器保证正确 */
 function diaryEditorHTML() {
   /* 不放 placeholder：写日记这件事没有一句话能替用户开口，空框就是空框 */
-  return '<div id="blocks"><textarea class="ed" spellcheck="false"' +
+  return '<div id="blocks"><textarea class="ed" spellcheck="false" aria-label="日记正文"' +
     (diaryRO ? ' readonly' : '') +
     '></textarea></div>';
 }
@@ -12718,6 +12780,9 @@ function syncTodayIfNeeded() {
     if (UI.detail) { UI.detail.y = pd.getFullYear(); UI.detail.m = pd.getMonth() + 1; }
     toast('已进入新的一天');
   }
+  /* 跨天后必须重绘：日期条、日历「今天」高亮、连续天数都还停在昨天；
+     checkDayChange() 下一轮会因 TODAY 已经是新日期而直接 return，不能指望它补画 */
+  renderView();
   return true;
 }
 /* 数量输入只收纯数字：1e3 / 12.9 / 12abc 这类以前会被 parseInt 悄悄截成 1 或 12 */
@@ -12913,7 +12978,7 @@ function detailItems(t, d) {
       }
       items.push({
         m: i, n: total,
-        hl: d.year === now.getFullYear() && i === now.getMonth() + 1,
+        hl: i === d.m,
         today: d.year === now.getFullYear() && i === now.getMonth() + 1
       });
     }
@@ -13456,7 +13521,7 @@ function swipeDetailStats(step) {
   if (d.range === 'year') {
     var cy = parseYmd(TODAY).getFullYear();
     var ne = (d.yEnd || cy) + step * 6;
-    d.yEnd = Math.min(cy, Math.max(1996, ne));
+    d.yEnd = Math.min(cy, Math.max(1901, ne));
     renderDetailStats();
   } else if (d.range === 'month') {
     d.year += step;
@@ -13545,7 +13610,8 @@ function renderTaskSettings() {
     '</div><div class="set-card" style="margin:0 12px">';
 
   if (!list.length) {
-    html += '<div class="empty-state" style="padding:40px 20px;font-size:12.5px">还没有功课，点下方按钮添加</div>';
+    html += '<div class="empty-state" style="padding:40px 20px;font-size:12.5px">还没有功课<br>' +
+      '<span style="font-size:11.5px;color:var(--ink3)">点右上角「添加推荐功课」，或点下方「添加功课」自己新建</span></div>';
   } else {
     /* 窄屏每行只留两颗按钮：编辑 + 更多。
        置顶 / 上移 / 下移 / 隐藏 / 删除都收进「更多」的底部菜单，
@@ -13643,7 +13709,7 @@ function openTaskEditor(taskId, cat) {
       var scEl = document.querySelector('#f-scheme button.on');
       var sch = scEl && SCHEMES[scEl.dataset.scheme] ? scEl.dataset.scheme : scheme;
       if (!nm) { toast('请填写名称'); return; }
-      /* 同分类里重名会让「哪条是哪条」说不清：恢复内置靠名字兜底、汇总也按名字认 */
+      /* 同分类里重名会让「哪条是哪条」说不清：添加推荐功课靠名字兜底、汇总也按名字认 */
       var clash = DB.tasks.some(function (x) { return x !== t && x.cat === c.k && x.name === nm; });
       if (clash) { toast('这个分类里已经有同名功课了'); return; }
       /* 数值统一收口：空 / 0 / 非数字都回落成默认，上限与导入校验一致，别造出「编辑能存、导入会拒」的值 */
@@ -13656,7 +13722,7 @@ function openTaskEditor(taskId, cat) {
         DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, scheme: sch, fstep: fst,
           ftimer: ftimerOn, goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
-        /* 老存档的内置条目没有 bkey：改名之前先把它钉在原名字上，否则以后「恢复内置」会补出重复条目 */
+        /* 老存档的内置条目没有 bkey：改名之前先把它钉在原名字上，否则以后「添加推荐功课」会补出重复条目 */
         if (!t.bkey && t.builtin && (BUILTIN[t.cat] || []).indexOf(t.name) >= 0) {
           t.bkey = builtinKey(t.cat, t.name);
         }
@@ -13684,7 +13750,7 @@ function askDeleteTask(t) {
   askConfirm(
     '彻底删除这项功课？',
     '「' + esc(t.name) + '」在各日期上已记的计数会一并删掉，不可恢复。<br>' +
-      (t.builtin ? '内置功课删掉后，可用「功课设置」右上角的恢复图标补回来。<br>' : '') +
+      (t.builtin ? '内置功课删掉后，可用「功课设置」右上角的「添加推荐功课」加回来。<br>' : '') +
       '只想暂时不显示，可以在编辑弹窗里关掉「在功课列表中显示」。',
     '彻底删除',
     function () { deleteTask(t.id); }
@@ -14308,8 +14374,8 @@ var REL_NOTES = [
       '「我的纪念日」并入节日管理（佛教节日 / 公共节日 / 纪念日三段），节日一览与节日管理可互相跳转；设置里的「我的纪念日」改成一个开关',
       '导出备份可直接调系统分享面板发到网盘、微信，也可以只存到下载目录，两种方式都会说明存到哪',
       '设置 → 关于里的版本行可随时回看「更新内容」',
-      '内置功课现在也能彻底删除；删错了点「功课设置」右上角的恢复图标，勾选着补回',
-      '功课设置每行只留「编辑」与「⋯ 更多」，排序 / 隐藏 / 删除收进菜单；分类可左右划动切换；恢复内置改成勾选框',
+      '内置功课现在也能彻底删除；删错了点「功课设置」右上角的「添加推荐功课」，勾选着补回',
+      '功课设置每行只留「编辑」与「⋯ 更多」，排序 / 隐藏 / 删除收进菜单；分类可左右划动切换；添加推荐功课改成勾选框',
       '念佛类功课的专修增量默认值改为 3（其余分类仍是 1），可在「编辑功课」里逐项改',
       '详情页右上角「专」点亮即进入专修模式并开始计时；退出、返回、换日期前都先确认一次，并写明本次已专修多久',
       '功课新增「专修计时」开关（只有「行法」类默认开启）：关掉后不显示计时，退出专修模式也不用确认',
@@ -14365,7 +14431,7 @@ var REL_NOTES = [
       '节日一览：佛教节日与公共节日合在一页，可按年翻看',
       '我的重要日：自定义农历 / 公历纪念日，列表按最近到来排序并显示还有多少天',
       '日记：按天记录，可插入时间、图片与拍照',
-      '功课设置：增删改、上下移动、恢复内置功课；佛历基准（+543 / +544）、斋日显示、二十四节气都可调',
+      '功课设置：增删改、上下移动、添加推荐功课；佛历基准（+543 / +544）、斋日显示、二十四节气都可调',
       '数据概况按念佛 / 诵经 / 持咒 / 行法 / 日记五类分项统计；导出、导入 JSON 备份；清空全部数据',
       // '单文件网页应用：离线可用，可「添加到主屏幕」当 App 用，也有安卓安装包'
     ]
@@ -14522,7 +14588,10 @@ function renderSettings() {
   html += '<div class="set-sec"><div class="set-title">数据</div><div class="set-card">' +
     '<div class="set-row" data-actx="stats"><div class="lbl">数据概况<em>记录天数与五类总数</em></div><span class="val" id="data-stat">查看</span><span class="chev">›</span></div>' +
     '<div class="set-row" data-actx="export"><div class="lbl">导出备份<em>生成 JSON 文件，可分享到网盘或存到下载目录</em></div><span class="chev">›</span></div>' +
-    '<div class="set-row" data-actx="import"><div class="lbl">导入备份<em>将覆盖当前全部数据</em></div><span class="chev">›</span></div>' +
+    '<div class="set-row" data-actx="import"><div class="lbl">导入备份<em>导入前自动保存当前数据快照，仍会覆盖当前数据</em></div><span class="chev">›</span></div>' +
+    (brokenKeys().length
+      ? '<div class="set-row" data-actx="broken"><div class="lbl">损坏数据原件<em>共 ' + brokenKeys().length + ' 份，可导出后尝试恢复</em></div><span class="chev">›</span></div>'
+      : '') +
     '</div></div>';
 
   html += '<div class="set-sec"><div class="set-title">关于</div><div class="set-card">' +
@@ -14548,6 +14617,20 @@ function bindEvents() {
 
   /* 遮罩 / 弹层 */
   document.getElementById('mask').addEventListener('click', closeSheet);
+  /* 只读恢复模式横幅：把损坏原件导出，别让用户只看到一条提示 */
+  var roExp = document.getElementById('ro-export');
+  if (roExp) roExp.addEventListener('click', function () { exportBrokenRaw(); });
+  /* 另一个标签页写了同一个 localStorage 键：不要静默互相覆盖 */
+  window.addEventListener('storage', function (e) {
+    if (e.key !== STORE_KEY || !e.newValue) return;
+    if (document.querySelector('#modal.on') || document.querySelector('#sheet.on') || _confirmOpen) {
+      toast('数据已在另一个窗口更新；关掉当前弹窗后刷新页面即可载入');
+      return;
+    }
+    askConfirm('数据已在另一个窗口更新',
+      '重新载入会以另一个窗口保存的版本为准；当前窗口未保存的改动会被覆盖。',
+      '重新载入', reloadFromStorage);
+  });
   document.getElementById('modal').addEventListener('click', function (e) {
     if (e.target.id === 'modal') { if (_ackBack) cancelConfirm(); else closeModal(); return; }
     if (e.target.closest('[data-ack-cancel]')) { cancelConfirm(); return; }
@@ -14679,6 +14762,12 @@ function bindEvents() {
       DB.settings[sk] = !DB.settings[sk];
       saveNow();
       redrawSwitchModal();
+      return;
+    }
+    /* 推荐功课弹窗：关掉弹窗，转去自定义添加（保存后回到功课设置页） */
+    if (e.target.closest('[data-radd]')) {
+      closeModal();
+      openTaskEditor(null, UI.taskCat);
       return;
     }
     if (e.target.closest('[data-mok]') || e.target.closest('[data-tsave]') ||
@@ -14857,7 +14946,7 @@ function bindEvents() {
         renderDetailStats();
       } else if (UI.detail.range === 'year') {
         var ne = (UI.detail.yEnd || cy0) + (+pv) * 6;
-        UI.detail.yEnd = Math.min(cy0, Math.max(1996, ne));
+        UI.detail.yEnd = Math.min(cy0, Math.max(1901, ne));
         renderDetailStats();
       } else if (UI.detail.range === 'month') {
         UI.detail.year += (+pv);
@@ -14929,9 +15018,9 @@ function bindEvents() {
     el = e.target.closest('[data-tedit]');
     if (el) { openTaskEditor(el.dataset.tedit); return; }
 
-    /* 功课设置右上角：恢复内置功课（弹窗里自己勾选要补哪几项） */
-    if (e.target.closest('#btn-restore-builtin')) {
-      openRestoreBuiltin();
+    /* 功课设置右上角：添加推荐功课（弹窗里自己勾选要加哪几项，也可自定义） */
+    if (e.target.closest('#btn-recommend-tasks')) {
+      openRecommendTasks(false);
       return;
     }
 
@@ -15025,6 +15114,7 @@ function bindEvents() {
       else if (act === 'import') importData();
       else if (act === 'wipe') wipeData();
       else if (act === 'stats') showStats();
+      else if (act === 'broken') openBrokenList();
       else if (act === 'whatsnew') openWhatsNew(REL_NOTES);
       return;
     }
@@ -15287,8 +15377,10 @@ function bindEvents() {
 
   /* 键盘（桌面调试） */
   window.addEventListener('keydown', function (e) {
-    if (e.target.closest && e.target.closest('input,textarea')) return;
+    /* 输入框、下拉框、按钮、可编辑区、打开着的底部菜单都不该改背景日期 */
+    if (e.target.closest && e.target.closest('input,textarea,select,button,[contenteditable]')) return;
     if (document.getElementById('modal').classList.contains('on')) return;
+    if (document.getElementById('sheet').classList.contains('on')) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     var kd = e.key === 'ArrowLeft' ? -1 : 1;
     if (UI.view === 'detail') shiftDetailDate(kd);
@@ -15607,10 +15699,10 @@ function moveTask(id, dir) {
   renderTaskSettings();
 }
 
-/* 恢复内置功课：内置条目现在可以彻底删除，这里就是「删错了」的后悔药。
-   入口是「功课设置」右上角的图标，弹窗按分类铺开全部内置条目：
-   缺的默认勾上、已有的置灰，补哪些由用户自己定 */
-function openRestoreBuiltin() {
+/* 添加推荐功课：内置条目是推荐清单，既可以直接勾选，也可以自定义添加。
+   入口在「功课设置」右上角；缺的默认勾上、已有的置灰，加哪些由用户自己定。
+   首次安装 / 列表为空时由 openTaskOnboarding() 自动打开。 */
+function openRecommendTasks(isFirstRun) {
   var html = '', missing = 0;
   CATS.forEach(function (c) {
     var names = BUILTIN[c.k] || [];
@@ -15635,18 +15727,22 @@ function openRestoreBuiltin() {
         '</label>';
     });
     missing += miss;
-    html += '<div class="rb-sec">' + c.n + '<em>' + (miss ? '缺 ' + miss + ' 项' : '齐全') + '</em></div>' + rows;
+    html += '<div class="rb-sec">' + c.n + '<em>' + (miss ? '可添加 ' + miss + ' 项' : '已有') + '</em></div>' + rows;
   });
 
+  var noTasks = !DB.tasks.length;
   openModal(
-    '<h4>恢复内置功课</h4>' +
-    '<div class="dlg-sub">' + (missing
-      ? '缺的都已勾上，取消勾选就不补；已有的不会重复添加，也不会动你改过的参数'
-      : '内置功课一项不缺，没有需要补回的') + '</div>' +
+    '<h4>添加推荐功课</h4>' +
+    '<div class="dlg-sub">' + (noTasks
+      ? '先挑几项常做的功课开始；不想加的取消勾选即可，也可以点「自定义」自己写一项。'
+      : (missing
+        ? '勾选想添加的推荐功课；已有的不会重复添加，也不会动你改过的参数。'
+        : '推荐功课都已经有了，可以点「自定义」新建一项。')) + '</div>' +
     '<div class="rb-wrap">' + html + '</div>' +
     '<div class="modal-actions">' +
-      '<button data-mclose="1">取消</button>' +
-      (missing ? '<button class="primary" data-mok="1">恢复所选</button>' : '') +
+      '<button data-mclose="1">' + (isFirstRun ? '稍后' : '取消') + '</button>' +
+      '<button data-radd="1">自定义</button>' +
+      (missing ? '<button class="primary" data-mok="1">添加所选</button>' : '') +
     '</div>',
     function () {
       var picked = [];
@@ -15655,13 +15751,15 @@ function openRestoreBuiltin() {
         var v = String(ck.dataset.rpick || '').split('|');
         if (v.length === 2 && CAT_MAP[v[0]]) picked.push({ cat: v[0], name: v[1] });
       });
-      restoreBuiltin(picked);
+      closeModal();
+      addRecommendedTasks(picked);
     }
   );
 }
 
-/* 把勾选的内置功课补回来：只补真的没有的，参数一律用分类默认值 */
-function restoreBuiltin(picked) {
+/* 把勾选的推荐功课加进来：只加真的没有的，参数一律用分类默认值 */
+function addRecommendedTasks(picked) {
+  if (!(picked || []).length) { toast('没有勾选任何功课'); return; }
   var added = 0;
   (picked || []).forEach(function (x) {
     if (findBuiltinTask(x.cat, x.name)) return;
@@ -15674,7 +15772,7 @@ function restoreBuiltin(picked) {
   invalidateTotals();
   saveNow();
   renderTaskSettings();
-  toast('已补回 ' + added + ' 项内置功课');
+  toast('已添加 ' + added + ' 项推荐功课');
 }
 
 /* ---------- 数据 ---------- */
@@ -15721,6 +15819,8 @@ function shareBackupFile(file, blob, fname) {
 }
 
 function exportData() {
+  /* 只读恢复模式下 DB 是空的：导出它只会给用户一份假备份，甚至覆盖网盘里的真备份 */
+  if (loadError) { exportBrokenRaw(); return; }
   try {
     var copy = JSON.parse(JSON.stringify(DB));
     /* 2.0 起日记只保存文字，旧版本留下的图片块不再写进备份 */
@@ -15749,16 +15849,31 @@ function exportData() {
   } catch (e) { toast('导出失败'); }
 }
 
+/* 导入报告：给确认框显示「跳过了多少坏数据 / 截断了什么」，不再静默处理 */
+var lastImportReport = null;
+
+/* 迁移版本号只接受源文件里的值，上限是当前版本；缺失当 0，让 loadDB()/migrateBuiltin() 决定补哪一批。
+   以前固定写成「当前最新」，会把 2.8 备份里的新功课永久挡在门外 */
+function importRev(v, max) {
+  var n = Math.floor(Number(v));
+  if (!isFinite(n) || n < 0) return 0;
+  return n > max ? max : n;
+}
+
 /* 导入前体检：结构不对就不收，字段一律收口到合法范围（防止把网页代码当数据带进来） */
 function sanitizeImport(src) {
+  lastImportReport = null;
   if (!src || typeof src !== 'object' || Array.isArray(src)) return null;
   if (!Array.isArray(src.tasks)) return null;
   if (!src.records || typeof src.records !== 'object' || Array.isArray(src.records)) return null;
 
+  var report = { badDates: 0, skippedTasks: 0, truncatedDiary: 0, truncatedRecords: 0, tasks: 0, records: 0 };
   var out = {
     v: 1,
-    builtinRev: BUILTIN_REV,
-    orderRev: 1,
+    builtinRev: importRev(src.builtinRev, BUILTIN_REV),
+    orderRev: importRev(src.orderRev, 2),
+    fstepRev: importRev(src.fstepRev, 1),
+    bkeyRev: importRev(src.bkeyRev, 1),
     settings: normalizeSettings(src.settings),
     tasks: [],
     mydays: normalizeMyDays(src.mydays),
@@ -15771,40 +15886,50 @@ function sanitizeImport(src) {
   CATS.forEach(function (c) { catSet[c.k] = 1; });
 
   src.tasks.forEach(function (t) {
-    if (!t || typeof t !== 'object' || Array.isArray(t)) return;
-    if (typeof t.id !== 'string' || !t.id.trim()) return;
-    if (!catSet[t.cat]) return;
-    if (typeof t.name !== 'string' || !t.name.trim()) return;
-    out.tasks.push({
+    if (!t || typeof t !== 'object' || Array.isArray(t)) { report.skippedTasks++; return; }
+    if (typeof t.id !== 'string' || !t.id.trim()) { report.skippedTasks++; return; }
+    if (!catSet[t.cat]) { report.skippedTasks++; return; }
+    if (typeof t.name !== 'string' || !t.name.trim()) { report.skippedTasks++; return; }
+    var task = {
       id: t.id.slice(0, 64),
       cat: t.cat,
       name: t.name.slice(0, 60),
       unit: (typeof t.unit === 'string' ? t.unit : '').slice(0, 8),
-      step: Math.min(100000, Math.max(1, Math.floor(Number(t.step)) || 1)),
+      step: clampStep(t.step),
       scheme: (t.scheme === 'big' || t.scheme === 'small') ? t.scheme : '',
-      fstep: Math.min(100000, Math.max(1, Math.floor(Number(t.fstep)) || catFocusStep(t.cat))),
-      goal: Math.max(0, Math.floor(Number(t.goal)) || 0),
-      mgoal: Math.max(0, Math.floor(Number(t.mgoal)) || 0),
-      tgoal: Math.max(0, Math.floor(Number(t.tgoal)) || 0),
+      fstep: (+t.fstep > 0 && isFinite(+t.fstep)) ? clampStep(t.fstep) : catFocusStep(t.cat),
+      goal: clampCount(t.goal),
+      mgoal: clampCount(t.mgoal),
+      tgoal: clampCount(t.tgoal),
       builtin: !!t.builtin,
       hidden: !!t.hidden
-    });
+    };
+    /* bkey 是内置功课的稳定身份：原样保留，否则改过名的条目「添加推荐功课」时会补出重复项 */
+    if (typeof t.bkey === 'string' && t.bkey.indexOf(t.cat + ':') === 0) {
+      task.bkey = t.bkey.slice(0, 100);
+    }
+    /* 专修计时只认布尔值；没存过就交给 taskFocusTimer() 按分类默认值走 */
+    if (t.ftimer === true || t.ftimer === false) task.ftimer = t.ftimer;
+    out.tasks.push(task);
   });
   if (!out.tasks.length) return null;
 
   var idSet = {};
   out.tasks.forEach(function (t) { idSet[t.id] = 1; });
 
-  Object.keys(src.records).slice(0, 20000).forEach(function (ds) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return;
+  var recKeys = Object.keys(src.records);
+  if (recKeys.length > 20000) report.truncatedRecords = recKeys.length - 20000;
+  recKeys.slice(0, 20000).forEach(function (ds) {
+    /* 形状对不算数：2026-02-31 / 2026-13-01 会让农历库抛错或悄悄进位 */
+    if (!isYmdKey(ds)) { report.badDates++; return; }
     var r = src.records[ds];
     if (!r || typeof r !== 'object' || Array.isArray(r)) return;
     var rec = { c: {} };
     if (r.c && typeof r.c === 'object' && !Array.isArray(r.c)) {
       Object.keys(r.c).forEach(function (k) {
         if (!idSet[k]) return;
-        var v = Math.floor(Number(r.c[k]));
-        if (isFinite(v) && v > 0) rec.c[k] = v;
+        var v = clampCount(r.c[k]);
+        if (v > 0) rec.c[k] = v;
       });
     }
     /* 日记：新版是 dt 一段纯文本，老备份里的块数组一并折成纯文本 */
@@ -15821,7 +15946,10 @@ function sanitizeImport(src) {
       dtext = buf.join('\n');
     }
     dtext = cleanDiaryText(dtext);
-    if (dtext.length > 40000) dtext = dtext.slice(0, 40000);
+    if (dtext.length > 40000) {
+      report.truncatedDiary++;
+      dtext = dtext.slice(0, 40000);
+    }
     if (dtext) rec.dt = dtext;
     if (typeof r.loc === 'string' && r.loc.trim()) rec.loc = r.loc.slice(0, 40);
     if (typeof r.w === 'string' && r.w.trim()) rec.w = r.w.slice(0, 20);
@@ -15830,7 +15958,69 @@ function sanitizeImport(src) {
     out.records[ds] = rec;
   });
 
+  report.tasks = out.tasks.length;
+  report.records = Object.keys(out.records).length;
+  lastImportReport = report;
   return out;
+}
+
+/* 导入 / 覆盖前留一份快照：只保留最近 3 份，不参与主数据读写 */
+function saveSnapshot() {
+  var raw = null;
+  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { }
+  if (!raw && DB) { try { raw = JSON.stringify(DB); } catch (e) { } }
+  if (!raw) return '';
+  var key = 'xuefo.diary.snapshot.' + tsStamp();
+  try {
+    localStorage.setItem(key, raw);
+    if (localStorage.getItem(key) !== raw) return '';
+    xuefoKeys('xuefo.diary.snapshot.').sort().reverse().slice(3).forEach(function (k) {
+      try { localStorage.removeItem(k); } catch (e) { }
+    });
+    return key;
+  } catch (e) { return ''; }
+}
+
+function brokenKeyLabel(k) {
+  var s = String(k || '').replace('xuefo.diary.broken.', '');
+  if (!/^\d{14,17}$/.test(s)) return s || '损坏原件';
+  return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8) + ' ' +
+    s.slice(8, 10) + ':' + s.slice(10, 12) + ':' + s.slice(12, 14);
+}
+
+function fmtBytes(n) {
+  n = Math.max(0, Number(n) || 0);
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+/* 导出损坏原件：主数据解析失败时，它才是用户真正该拿去恢复的东西 */
+function exportBrokenRaw(key) {
+  key = key || brokenKeys()[0];
+  var raw = '';
+  if (key) {
+    try { raw = localStorage.getItem(key) || ''; } catch (e) { raw = ''; }
+  }
+  if (!raw) { toast('没有找到损坏原件'); return; }
+  var fname = '学佛日记-损坏原件-' + brokenKeyLabel(key).replace(/[-: ]/g, '') + '.txt';
+  if (nativeSaveText(fname, raw)) { toast('已导出损坏原件'); return; }
+  var blob = new Blob([raw], { type: 'text/plain;charset=utf-8' });
+  downloadBackupBlob(blob, fname);
+}
+
+function openBrokenList() {
+  var keys = brokenKeys();
+  if (!keys.length) { toast('本机没有损坏原件'); return; }
+  openSheet('损坏数据原件', keys.map(function (k) {
+    var raw = '';
+    try { raw = localStorage.getItem(k) || ''; } catch (e) { }
+    return {
+      t: brokenKeyLabel(k),
+      s: fmtBytes(raw.length) + ' · 点按导出为 .txt',
+      fn: function () { exportBrokenRaw(k); }
+    };
+  }));
 }
 
 function importData() {
@@ -15851,22 +16041,38 @@ function importData() {
           inp.remove();
           return;
         }
-        askConfirm('导入将覆盖当前全部数据？',
-          '导入的备份会替换这台设备上现有的全部记录，此操作不可撤销。',
-          '覆盖并导入',
+        var rep = lastImportReport || {};
+        var dates = Object.keys(db.records).sort();
+        var range = dates.length ? dates[0] + ' 至 ' + dates[dates.length - 1] : '无记录';
+        var notes = [];
+        if (rep.badDates) notes.push('跳过 ' + rep.badDates + ' 条非法日期');
+        if (rep.skippedTasks) notes.push('跳过 ' + rep.skippedTasks + ' 条结构不完整的功课');
+        if (rep.truncatedDiary) notes.push(rep.truncatedDiary + ' 篇日记超过 4 万字，已截断');
+        if (rep.truncatedRecords) notes.push('超过 2 万天，后 ' + rep.truncatedRecords + ' 条未导入');
+        var sub = '当前 ' + DB.tasks.length + ' 项功课 / ' + Object.keys(DB.records).length + ' 天记录 → ' +
+          '将导入 ' + db.tasks.length + ' 项功课 / ' + rep.records + ' 天记录（' + range + '）。' +
+          '导入前会自动保存一份当前数据快照，但导入仍会覆盖当前数据。' +
+          (notes.length ? '<br><b>已处理：</b>' + notes.join('；') + '。' : '');
+        askConfirm('导入将覆盖当前全部数据？', sub, '覆盖并导入',
           function () {
+            var snap = saveSnapshot();
+            /* 源数据缺哪个迁移标记就补哪个；不能把「当前最新」强行写上去 */
+            migrateBuiltin(db);
+            __dbMigrated = false;
             DB = db;
             if (!DB.places.some(function (x) { return x.id === DB.settings.defaultPlaceId; })) {
               DB.settings.defaultPlaceId = '';
             }
             /* 用户明确选择覆盖：解除“读取失败不写回”的保护 */
             loadError = false;
+            brokenSaveFailed = false;
             invalidateTotals();
             LunarCache = {};
             festsCacheClear();
             saveNow();
+            updateReadOnlyUI();
             renderView();
-            toast('导入成功');
+            toast(snap ? '导入成功，已保存当前数据快照' : '导入成功（当前数据快照未能保存）');
           });
       } catch (e) {
         toast('备份文件格式不正确，未导入任何数据');
@@ -15878,8 +16084,9 @@ function importData() {
   inp.click();
 }
 
-/* 清空本机所有与本应用相关的痕迹：localStorage 的 xuefo.* 与旧图片库 */
-function wipeAllLocal() {
+/* 清空本机所有与本应用相关的痕迹：localStorage 的 xuefo.* 与旧图片库。
+   preserveBroken=true 时保留损坏原件——那是用户唯一可能恢复的副本，不能跟着清掉 */
+function wipeAllLocal(preserveBroken) {
   var keys = [];
   try {
     for (var i = 0; i < localStorage.length; i++) {
@@ -15887,7 +16094,10 @@ function wipeAllLocal() {
       if (k && k.indexOf('xuefo.') === 0) keys.push(k);
     }
   } catch (e) { }
-  keys.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { } });
+  keys.forEach(function (k) {
+    if (preserveBroken && k.indexOf('xuefo.diary.broken.') === 0) return;
+    try { localStorage.removeItem(k); } catch (e) { }
+  });
   try {
     if (window.indexedDB && indexedDB.deleteDatabase) indexedDB.deleteDatabase('xuefo-img');
   } catch (e) { }
@@ -15899,12 +16109,15 @@ function wipeData() {
       t: '确认清空', s: '所有功课与日记将被删除', warn: true,
       fn: function () {
         setTimeout(function () {
+          var brokenN = brokenKeys().length;
           askConfirm('最后确认：清空全部数据？',
-            '功课与日记将被全部删除，清空后不可恢复。',
+            '功课与日记将被全部删除，清空后不可恢复。' +
+              (brokenN ? '<br>本机另有 ' + brokenN + ' 份损坏原件，会保留下来供恢复。' : ''),
             '确认清空',
             function () {
-              wipeAllLocal();
+              wipeAllLocal(true);
               loadError = false;
+              brokenSaveFailed = false;
               DB = defaultDB();
               invalidateTotals();
               saveNow();
@@ -15915,7 +16128,10 @@ function wipeData() {
               UI.date = TODAY; UI.tab = 'nianfo'; UI.view = 'home';
               setMode('record');
               renderView();
+              updateReadOnlyUI();
               toast('已清空');
+              /* 清空后没有任何功课：和首次安装一样，去设置页挑推荐功课 */
+              if (!DB.tasks.length) openTaskOnboarding();
             });
         }, 120);
       }
@@ -15988,6 +16204,21 @@ function earliestDate() {
   return keys[0] || '';
 }
 
+/* 另一个窗口更新了数据：按 storage 事件重新读一次
+   （先清 loadError，再由 loadDB() 决定是否重新置位） */
+function reloadFromStorage() {
+  loadError = false;
+  brokenSaveFailed = false;
+  DB = loadDB();
+  if (__dbMigrated) { __dbMigrated = false; saveNow(); }
+  invalidateTotals();
+  LunarCache = {};
+  festsCacheClear();
+  updateReadOnlyUI();
+  renderView();
+  if (loadError) showLoadError(); else toast('已重新载入');
+}
+
 /* ---------- 跨天自动刷新 ----------
    页面常驻（过 24:00 或隔夜回前台）时，把「今天」推到新的一天并重绘 */
 function checkDayChange() {
@@ -16012,21 +16243,45 @@ function checkDayChange() {
   renderView();
 }
 
+/* 数据读坏时：顶部横幅常驻，不依赖用户记住启动时弹过的提示 */
+function updateReadOnlyUI() {
+  var b = document.getElementById('ro-banner');
+  if (b) b.classList.toggle('hidden', !loadError);
+}
+
 /* 数据读坏时的提示：说明原件已保留、暂不写入 */
 function showLoadError() {
+  updateReadOnlyUI();
   openModal(
     '<h4>数据没能读出来</h4>' +
     '<div style="font-size:13px;line-height:1.9;color:#5a5145">' +
-      '本机保存的数据这次无法解析，原始内容已经原样另存了一份，没有被覆盖。<br><br>' +
-      '为防止覆盖原件，现在暂时不保存任何新记录。可以到「设置 → 导入备份」恢复；' +
-      '如果确认原数据已损坏，也可以到「设置 → 清空全部数据」重新开始。' +
+      (brokenSaveFailed
+        ? '本机保存的数据这次无法解析，而且原始内容的副本也没能另存成功（存储可能已满）。请先不要清空数据。<br><br>'
+        : '本机保存的数据这次无法解析，原始内容已经原样另存了一份，没有被覆盖。<br><br>') +
+      '为防止覆盖原件，现在暂时不保存任何新记录（顶部会一直显示只读提示）。' +
+      '可以点顶部「导出原件」把损坏内容保存出来，再到「设置 → 导入备份」恢复；' +
+      '如果确认原数据已损坏，也可以到「设置 → 清空全部数据」重新开始（损坏原件会保留）。' +
     '</div>' +
     '<div class="modal-actions"><button data-mclose="1">知道了</button></div>'
   );
 }
 
+/* 没有任何功课时：自动进入「功课设置」，并打开「添加推荐功课」让用户自己挑 */
+function openTaskOnboarding() {
+  if (loadError || !DB || DB.tasks.length) return;
+  UI.taskCat = 'nianfo';
+  UI.view = 'tasks';
+  UI.viewStack = ['home'];
+  renderView();
+  setTimeout(function () {
+    if (loadError || !DB || DB.tasks.length) return;
+    if (document.querySelector('#modal.on')) return;
+    openRecommendTasks(true);
+  }, 320);
+}
+
 /* 给外壳用的返回键钩子：先关最上层，没人接才让外壳退出。
-   当前 APK 外壳尚未调用它，接入后才会生效 */
+   APK 外壳的 DEX 里已出现 __closeTopLayer 字符串（见 REVIEW-2026-11-14.md），此处保留兜底 */
 window.__closeTopLayer = function () {
   if (document.querySelector('#modal.on')) {
     if (_ackBack) cancelConfirm(); else closeModal();
@@ -16053,6 +16308,9 @@ function init() {
   try { hadData = !!localStorage.getItem(STORE_KEY); } catch (e) { }
   DB = loadDB();
   if (__dbMigrated) { __dbMigrated = false; saveNow(); }
+  /* 全新安装：首次引导弹窗会挡住「更新内容」的时机，这里直接记下已看版本，
+     免得用户挑完推荐功课、下次启动又被补弹一遍 2.0–2.9 的历史清单 */
+  if (!hadData) markSeenVersion();
   var d = new Date();
   UI.date = TODAY;
   UI.calY = d.getFullYear();
@@ -16061,7 +16319,9 @@ function init() {
 
   bindEvents();
   renderView();
+  updateReadOnlyUI();
   if (loadError) showLoadError();
+  else if (!DB.tasks.length) openTaskOnboarding();
 
   /* 更新提示：等首屏画完再弹，读坏数据时（已弹提示）不打扰 */
   setTimeout(function () { whatsNewOnBoot(hadData); }, 500);
@@ -16088,8 +16348,9 @@ function init() {
     setTimeout(function () { toast('点击右上角菜单，可管理功课与节日'); }, 600);
   }
 
-  /* Service Worker */
-  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  /* Service Worker：APK 的 appassets.local 里没有 sw.js，注册只会产生无意义的 404 */
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0 &&
+      location.hostname !== 'appassets.local') {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js').catch(function () { });
     });
@@ -16098,6 +16359,22 @@ function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 if (document.readyState !== 'loading') init();
+
+/* 自动化冒烟测试入口：只在 ?test=1 时挂到 window，正常使用不留任何测试接口 */
+if (/[?&]test=1(?:&|$)/.test(location.search)) {
+  window.__xuefoTest = {
+    sanitizeImport: sanitizeImport,
+    defaultDB: defaultDB,
+    freshDB: freshDB,
+    isYmdKey: isYmdKey,
+    clampCount: clampCount,
+    clampStep: clampStep,
+    BUILTIN_REV: BUILTIN_REV,
+    MAX_COUNT: MAX_COUNT,
+    lastImportReport: function () { return lastImportReport; },
+    db: function () { return DB; }
+  };
+}
 
 })();
 

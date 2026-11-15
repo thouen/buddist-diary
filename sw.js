@@ -2,7 +2,7 @@
    ⚠️ 发布须知：每次发布新的 index.html，必须把下面 CACHE 的版本号 +1
    （例如 v25 → v26），否则老用户会一直读到缓存里的旧页面。
    发布检查清单见 README 的「发布检查清单」一节。 */
-var CACHE = 'xuefo-diary-v38';
+var CACHE = 'xuefo-diary-v39';
 var ASSETS = [
   './',
   './index.html',
@@ -28,7 +28,8 @@ self.addEventListener('activate', function (e) {
   e.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(keys.map(function (k) {
-        return k === CACHE ? null : caches.delete(k);
+        /* 只清本应用的缓存：同源下可能有别的 PWA，不能把它们的离线资源一起删掉 */
+        return (k.indexOf('xuefo-diary-') === 0 && k !== CACHE) ? caches.delete(k) : null;
       }));
     }).then(function () { return self.clients.claim(); })
   );
@@ -38,7 +39,7 @@ self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
   var req = e.request;
   e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then(function (hit) {
+    caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then(function (hit) {
       if (hit) return hit;
       return fetch(req).then(function (res) {
         /* 只缓存同源且成功的响应：以前不看状态码，一次 404 会被缓存到

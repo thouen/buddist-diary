@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>学佛日记升级回归</title>
+</head>
+<body>
+<pre id="out">RUNNING</pre>
+<iframe id="app" style="width:420px;height:800px;border:0"></iframe>
+<script>
+(function () {
+  var out = document.getElementById('out');
+  var lines = [];
+  var failed = 0;
+
+  function check(name, ok, detail) {
+    if (ok) lines.push('ok   ' + name);
+    else {
+      failed++;
+      lines.push('FAIL ' + name + (detail ? ' — ' + detail : ''));
+    }
+  }
+
+  function finish() {
+    lines.push(failed ? ('SMOKE FAILED: ' + failed) : 'SMOKE OK');
+    out.textContent = lines.join('\n');
+    document.title = failed ? 'SMOKE FAILED' : 'SMOKE OK';
+  }
+
+  /* 先在同一个 file:// 源里放一份 2.8 风格的老存档，再让 iframe 启动应用 */
+  var OLD = {
+    v: 1,
+    builtinRev: 0,
+    orderRev: 0,
+    fstepRev: 0,
+    bkeyRev: 0,
+    settings: {},
+    tasks: [{
+      id: 't_keep', cat: 'nianfo', name: '我的自定义念佛', unit: '遍',
+      step: 10, fstep: 1, goal: 0, builtin: false, hidden: false
+    }],
+    records: { '2026-11-14': { c: { t_keep: 42 } } },
+    mydays: [],
+    places: [],
+    fests: [],
+    festHidden: {}
+  };
+  try {
+    localStorage.clear();
+    localStorage.setItem('xuefo.diary.v1', JSON.stringify(OLD));
+    /* 老用户早就看过 2.9 的更新说明：这样弹窗只可能来自首次引导，断言才准 */
+    localStorage.setItem('xuefo.seenver', '2.9');
+  } catch (e) { }
+
+  var frame = document.getElementById('app');
+  frame.onload = function () {
+    var doc = frame.contentDocument;
+    var t = frame.contentWindow.__xuefoTest;
+    if (!t) {
+      lines.push('FAIL 测试入口未暴露（?test=1）');
+      finish();
+      return;
+    }
+    setTimeout(function () {
+      try {
+        var db = t.db();
+        check('老存档的任务被保留', !!db.tasks.filter(function (x) { return x.id === 't_keep'; }).length);
+        check('自定义功课名字没被改', db.tasks.some(function (x) {
+          return x.id === 't_keep' && x.name === '我的自定义念佛';
+        }));
+        check('老存档的计数没丢', db.records['2026-11-14'] &&
+          db.records['2026-11-14'].c.t_keep === 42);
+        check('新版本内置功课按 builtinRev 补入', db.tasks.length > 1, 'tasks=' + db.tasks.length);
+        check('念佛类专修增量按 fstepRev 迁移为 3',
+          db.tasks.some(function (x) { return x.id === 't_keep' && x.fstep === 3; }));
+        check('老用户不会误入首次引导', !doc.querySelector('#modal').classList.contains('on'));
+        check('老用户停留在首页', !doc.querySelector('#view-home').classList.contains('hidden'));
+        check('首页渲染出自定义功课',
+          doc.querySelector('#home-body').textContent.indexOf('我的自定义念佛') >= 0);
+      } catch (e) {
+        failed++;
+        lines.push('FAIL 运行异常：' + (e && e.stack ? e.stack : e));
+      }
+      finish();
+    }, 900);
+  };
+  frame.src = '../index.html?test=1';
+})();
+</script>
+</body>
+</html>

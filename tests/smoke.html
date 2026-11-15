@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>学佛日记冒烟测试</title>
+</head>
+<body>
+<pre id="out">RUNNING</pre>
+<iframe id="app" style="width:420px;height:800px;border:0"></iframe>
+<script>
+(function () {
+  var out = document.getElementById('out');
+  var lines = [];
+  var failed = 0;
+
+  function check(name, ok, detail) {
+    if (ok) lines.push('ok   ' + name);
+    else {
+      failed++;
+      lines.push('FAIL ' + name + (detail ? ' — ' + detail : ''));
+    }
+  }
+
+  function finish() {
+    lines.push(failed ? ('SMOKE FAILED: ' + failed) : 'SMOKE OK');
+    out.textContent = lines.join('\n');
+    document.title = failed ? 'SMOKE FAILED' : 'SMOKE OK';
+  }
+
+  /* 尽量从干净的 localStorage 开始（file:// 需要 --allow-file-access-from-files） */
+  try { localStorage.clear(); } catch (e) { }
+
+  var frame = document.getElementById('app');
+  frame.onload = function () {
+    var win = frame.contentWindow;
+    var doc = frame.contentDocument;
+    var t = win.__xuefoTest;
+    if (!t) {
+      lines.push('FAIL 测试入口未暴露（?test=1）');
+      finish();
+      return;
+    }
+
+    /* 等 init() 里的首次引导计时器（320ms）跑完 */
+    setTimeout(function () {
+      try {
+        var db = t.defaultDB();
+        check('全新安装没有预置功课', db.tasks.length === 0, 'tasks=' + db.tasks.length);
+        check('builtinRev 保持最新，首次安装不会被迁移回填', db.builtinRev === t.BUILTIN_REV);
+        check('isYmdKey 拒绝 2026-02-31', t.isYmdKey('2026-02-31') === false);
+        check('isYmdKey 接受 2024-02-29', t.isYmdKey('2024-02-29') === true);
+        check('clampCount 收口到 1 亿', t.clampCount(1e300) === t.MAX_COUNT);
+        check('clampStep 下限为 1', t.clampStep(0) === 1);
+
+        var src = {
+          v: 1,
+          builtinRev: 2,
+          orderRev: 1,
+          bkeyRev: 1,
+          settings: {},
+          tasks: [{
+            id: 't1', cat: 'nianfo', name: '念佛', unit: '遍',
+            step: 100, fstep: 1, ftimer: false, bkey: 'nianfo:念佛',
+            goal: 1e300, mgoal: -1, tgoal: 'x'
+          }],
+          records: {
+            '2026-13-01': { c: { t1: 5 } },
+            '2026-02-31': { c: { t1: 5 } },
+            '2026-11-15': { c: { t1: 3 } }
+          }
+        };
+        var outDb = t.sanitizeImport(src);
+        check('导入结果非空', !!outDb);
+        if (outDb) {
+          check('保留 builtinRev（不被强行写成最新）', outDb.builtinRev === 2, 'got=' + outDb.builtinRev);
+          check('保留 orderRev', outDb.orderRev === 1, 'got=' + outDb.orderRev);
+          check('保留 bkeyRev', outDb.bkeyRev === 1, 'got=' + outDb.bkeyRev);
+          check('缺失的 fstepRev 当 0，交给迁移决定', outDb.fstepRev === 0, 'got=' + outDb.fstepRev);
+          check('保留任务 bkey', outDb.tasks[0].bkey === 'nianfo:念佛');
+          check('保留 ftimer=false', outDb.tasks[0].ftimer === false);
+          check('导入目标收口到 1 亿', outDb.tasks[0].goal === t.MAX_COUNT, 'got=' + outDb.tasks[0].goal);
+          check('无意义目标归零', outDb.tasks[0].mgoal === 0 && outDb.tasks[0].tgoal === 0);
+          check('非法日期键被拒绝', Object.keys(outDb.records).length === 1 &&
+            !!outDb.records['2026-11-15']);
+          check('非法日期计数正确', t.lastImportReport().badDates === 2,
+            'got=' + t.lastImportReport().badDates);
+          check('导入计数按上限收口', outDb.records['2026-11-15'].c.t1 === 3);
+        }
+
+        check('空列表自动进入功课设置',
+          !doc.querySelector('#view-tasks').classList.contains('hidden'));
+        check('空列表自动打开推荐功课弹窗',
+          doc.querySelector('#modal').classList.contains('on'));
+        check('弹窗标题是「添加推荐功课」',
+          doc.querySelector('#modal-box').textContent.indexOf('添加推荐功课') >= 0);
+        check('只读横幅默认隐藏',
+          doc.querySelector('#ro-banner').classList.contains('hidden'));
+
+        /* 真的点一次「添加所选」：勾选默认全选，应写入列表并关掉弹窗 */
+        var okBtn = doc.querySelector('#modal [data-mok]');
+        check('推荐弹窗有「添加所选」按钮', !!okBtn);
+        if (okBtn) okBtn.click();
+
+        setTimeout(function () {
+          try {
+            check('点「添加所选」后弹窗关闭',
+              !doc.querySelector('#modal').classList.contains('on'));
+            var rows = doc.querySelectorAll('#tasks-scroll .tk-row').length;
+            check('推荐功课已写入列表', rows > 0, 'rows=' + rows);
+
+            /* 再次打开：已有条目全部置灰，仍可转去「自定义」 */
+            var reopen = doc.querySelector('#btn-recommend-tasks');
+            check('功课设置页有「添加推荐功课」入口', !!reopen);
+            if (reopen) reopen.click();
+            check('推荐弹窗可再次打开',
+              doc.querySelector('#modal').classList.contains('on'));
+            var radd = doc.querySelector('#modal [data-radd]');
+            check('推荐弹窗有「自定义」入口', !!radd);
+            if (radd) radd.click();
+            setTimeout(function () {
+              try {
+                check('自定义添加打开了功课编辑弹窗',
+                  doc.querySelector('#modal').classList.contains('on') &&
+                  !!doc.querySelector('#f-name'));
+              } catch (e2) {
+                failed++;
+                lines.push('FAIL 运行异常：' + (e2 && e2.stack ? e2.stack : e2));
+              }
+              finish();
+            }, 150);
+          } catch (e1) {
+            failed++;
+            lines.push('FAIL 运行异常：' + (e1 && e1.stack ? e1.stack : e1));
+            finish();
+          }
+        }, 150);
+      } catch (e) {
+        failed++;
+        lines.push('FAIL 运行异常：' + (e && e.stack ? e.stack : e));
+        finish();
+      }
+    }, 900);
+  };
+  frame.src = '../index.html?test=1';
+})();
+</script>
+</body>
+</html>

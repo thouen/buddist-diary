@@ -3,6 +3,7 @@
   "short_name": "学佛日记",
   "description": "记录每日念佛、诵经、持咒、行法与修行日记，内嵌农历、佛历、斋日与佛教节日。",
   "lang": "zh-CN",
+  "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

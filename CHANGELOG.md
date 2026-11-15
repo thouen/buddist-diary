@@ -6,7 +6,22 @@
 
 ## 2.9（2026-11-14）
 
-> `APP_VERSION` 2.9（未变）、`sw.js` 缓存 `v34` → `v38`、`versionCode 41`。仓库里的 `学佛日记-2.9.apk` 仍是早前那一版（内嵌页面为改动前的 `index.html`，SHA-256 `f4f733a8…`），要带上本节改动需重新打包；证书不变（`9ad2a321…1bcc14`），可直接覆盖安装。
+> `APP_VERSION` 2.9（未变）、`sw.js` 缓存 `v34` → `v38`（本次修订再 +1 到 `v39`）、`versionCode 41`。仓库里的 `学佛日记-2.9.apk` 仍是早前那一版（内嵌页面为改动前的 `index.html`，SHA-256 `f4f733a8…`），要带上本节改动需重新打包；证书不变（`9ad2a321…1bcc14`），可直接覆盖安装。
+
+**二次修订（2026-11-15）：首次安装引导与数据恢复链路**
+
+- **首次安装不再预置功课**：`defaultDB()` 返回空 `tasks`，同时保留 `builtinRev = BUILTIN_REV`，避免首次启动又被迁移补回一整套内置功课。列表为空时进入应用会自动跳到「功课设置」（`openTaskOnboarding()`）并打开「添加推荐功课」弹窗，由用户自己勾选；不做选择就是一份空列表。清空数据后同样走这个引导。
+- **「恢复内置功课」改名为「添加推荐功课」**：入口 `#btn-restore-builtin` → `#btn-recommend-tasks`，`openRestoreBuiltin()` / `restoreBuiltin()` → `openRecommendTasks()` / `addRecommendedTasks()`；弹窗文案改为「添加所选」，已有条目仍置灰；新增「自定义」按钮（`data-radd`），关掉弹窗后直接打开新建功课编辑框，首次安装也能只建自己的功课。
+- **只读恢复模式持续可见**：数据读坏后顶部常驻 `#ro-banner`（`updateReadOnlyUI()`），并带「导出原件」按钮；新增「设置 → 数据 → 损坏数据原件」列表（`openBrokenList()`），可逐份导出为 `.txt`。只读模式下 `exportData()` 改为导出损坏原件，不再给出一份空数据库的假备份。
+- **损坏原件更可靠**：时间戳精确到毫秒（`tsStamp()`），只保留最近两份（`pruneBrokenRaw()`）避免占满存储；`setItem` 后回读校验，写不进去时在提示里如实说明。清空数据（`wipeAllLocal(true)`）保留 `xuefo.diary.broken.*`。
+- **导入更安全、更透明**：导入前自动写一份 `xuefo.diary.snapshot.<时间戳>` 快照（保留最近 3 份）；确认框先列出「当前 → 将导入」的功课数、记录天数、日期范围，以及跳过的非法日期 / 残缺功课、被截断的日记；`sanitizeImport()` 保留 `builtinRev` / `orderRev` / `fstepRev` / `bkeyRev`（不再一律写成最新）、保留 `bkey` 与 `ftimer`，计数与目标统一用 `clampCount()`、增量用 `clampStep()`；日期用 `isYmdKey()` 校验，`2026-02-31` 这类整条跳过。
+- **存档读取更抗坏数据**：`loadDB()` 逐条过滤结构不完整的任务，而不是让整库落入「读坏」分支；目标与专修增量一并收口。跨天落账后 `syncTodayIfNeeded()` 会 `renderView()`，日期条 / 日历高亮 / 连续天数不再停在昨天。
+- **统计修正**：按月视图的选中高亮改为 `i === d.m`（原来只高亮当前月，翻到别的年份也亮着）；「最近一次在 N 天前」改用最新一条记录（`dates[0]`）；年份浏览下限由 1996 改为 1901，与农历库覆盖范围一致；`refreshTaskRow()` 不再把任务 id 拼进 `querySelector`，导入 id 带引号 / 方括号也不会抛错。
+- **隐私**：地点数据里旧版本留下的 `lat` / `lng` 在加载时直接丢弃，不显示、不写回、不导出。
+- **多窗口**：监听 `storage` 事件，另一个标签页保存后提示「重新载入」（`reloadFromStorage()`），不再静默互相覆盖。
+- **无障碍 / 键盘**：方向键切换日期时忽略输入框、下拉框、按钮、可编辑区与打开的底部菜单；日记 textarea 补 `aria-label`。
+- **离线缓存**：`sw.js` 缓存 `v38` → `v39`；`activate` 只删除 `xuefo-diary-` 前缀的旧缓存（同源其他 PWA 不受影响）；`ignoreSearch` 只用于导航请求；`appassets.local` 下不再注册 Service Worker；`manifest.webmanifest` 增加 `"id": "./"`。
+- **回归测试**：新增 `tests/smoke.html`、`tests/upgrade.html` 与 `tests/cdp_smoke.py`（纯标准库 CDP 驱动，`python tests/cdp_smoke.py`），覆盖空列表引导、推荐功课添加 / 自定义入口、导入清洗与迁移标记保留，以及老存档迁移不会误入首次引导；页面加 `?test=1` 时才暴露 `window.__xuefoTest`。
 
 **修订：全量代码审查后的修复**
 
