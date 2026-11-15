@@ -107,6 +107,8 @@
               !doc.querySelector('#modal').classList.contains('on'));
             var rows = doc.querySelectorAll('#tasks-scroll .tk-row').length;
             check('推荐功课已写入列表', rows > 0, 'rows=' + rows);
+            check('功课列表显示专修计时配置',
+              doc.querySelector('#tasks-scroll').textContent.indexOf('专修计时 关') >= 0);
 
             /* 再次打开：已有条目全部置灰，仍可转去「自定义」 */
             var reopen = doc.querySelector('#btn-recommend-tasks');

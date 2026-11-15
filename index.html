@@ -548,6 +548,8 @@ img{max-width:100%;display:block}
   font-style:normal;font-size:10.5px;color:var(--ink3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+/* 专修计时开着时给个重点色：一列扫下来就知道哪几项会走计时 */
+.tk-row .nm em .ft-on{color:var(--accent)}
 .tk-row .mini{
   flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
   color:var(--ink2);font-size:15px;line-height:1;background:var(--card2);border:1px solid var(--line);
@@ -1354,7 +1356,8 @@ label.rb-row{cursor:pointer}
       <div class="right">
         <!-- 添加推荐功课：点开列出全部推荐经咒佛号，由用户勾选要添加哪些 -->
         <button class="iconbtn" id="btn-recommend-tasks" aria-label="添加推荐功课" title="添加推荐功课">
-          <svg viewBox="0 0 24 24"><path d="M4.6 9.4A8 8 0 1 1 4 14"/><path d="M4.2 4.6v5h5"/><path d="M12 8.2v4.3l2.9 1.7"/></svg>
+          <!-- 清单 + 勾选：表示从推荐清单里挑，而不是「恢复/重置」 -->
+          <svg viewBox="0 0 24 24"><path d="M4 6.4l1.5 1.5L8.2 5.2"/><path d="M11.5 7h8.5"/><path d="M4 12.4l1.5 1.5 2.7-2.7"/><path d="M11.5 13h8.5"/><path d="M4 18.4l1.5 1.5 2.7-2.7"/><path d="M11.5 19h8.5"/></svg>
         </button>
       </div>
     </div>
@@ -13620,7 +13623,9 @@ function renderTaskSettings() {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
+          '<em>' + esc(t.unit) + ' · 专修计时 ' +
+            (taskFocusTimer(t) ? '<span class="ft-on">开</span>' : '关') +
+            ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
             ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
