@@ -124,6 +124,19 @@
                 check('自定义添加打开了功课编辑弹窗',
                   doc.querySelector('#modal').classList.contains('on') &&
                   !!doc.querySelector('#f-name'));
+                /* 关掉编辑弹窗 → 回首页 → 切日记页，确认工具条在位置天气与正文之间 */
+                var mclose = doc.querySelector('#modal [data-mclose]');
+                if (mclose) mclose.click();
+                var back = doc.querySelector('#view-tasks [data-back]');
+                if (back) back.click();
+                var dtab = doc.querySelector('#home-tabs [data-tab="diary"]');
+                if (dtab) dtab.click();
+                var kids = Array.prototype.map.call(doc.querySelectorAll('#diary-box > *'), function (el) {
+                  return el.id || String(el.className || '').split(' ')[0];
+                });
+                check('日记工具条位于位置天气与正文之间',
+                  kids[0] === 'diary-meta' && kids[1] === 'diary-bar' && kids[2] === 'blocks',
+                  kids.join(','));
               } catch (e2) {
                 failed++;
                 lines.push('FAIL 运行异常：' + (e2 && e2.stack ? e2.stack : e2));

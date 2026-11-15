@@ -398,10 +398,10 @@ img{max-width:100%;display:block}
 
 /* ---------- 日记编辑器 ---------- */
 .diary{padding:12px 14px calc(30px + var(--safe-b));display:flex;flex-direction:column;gap:2px}
+/* 工具条紧跟在「位置 / 天气」下面、正文上面：编辑时顶部依次是日信息、标签栏、位置天气、按钮排 */
 .diary-bar{
-  display:flex;gap:6px;padding:10px 0 0;margin-top:6px;
-  border-top:1px dashed var(--line);position:sticky;bottom:0;
-  background:linear-gradient(to top,var(--bg) 60%,rgba(245,240,230,0));
+  display:flex;gap:7px;padding:3px 0 10px;margin-top:0;
+  border-bottom:1px dashed var(--line);
 }
 .dbtn{
   flex:1;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card);
@@ -992,7 +992,6 @@ label.rb-row{cursor:pointer}
 .sheet-item .wdot{margin-right:2px}
 
 /* ---------- 日记工具条（图标） ---------- */
-.diary-bar{display:flex;gap:7px;padding:10px 0 calc(9px + var(--safe-b));margin-top:8px}
 .dbtn{height:38px;padding:0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .dbtn svg{
   width:19px;height:19px;stroke:currentColor;fill:none;
@@ -1033,7 +1032,7 @@ label.rb-row{cursor:pointer}
 .streak.off .sk-num b,.streak.off .sk-num em{color:var(--ink3)}
 .streak.off{background:linear-gradient(135deg,#faf7f0,#f7f1e6);border-color:var(--line)}
 
-/* 日记工具条四项均分 */
+/* 日记工具条按钮均分 */
 .diary-bar .dbtn{flex:1}
 .diary-bar .dbtn svg{width:15px;height:15px}
 /* 未来的日期：工具条只留一句说明，按钮全部置灰 */
@@ -1046,7 +1045,7 @@ label.rb-row{cursor:pointer}
 }
 .chip:disabled{opacity:.5}
 
-/* 日记内容撑满可用高度，工具条贴近底部 */
+/* 日记正文撑满剩余高度 */
 .diary #blocks{flex:1 1 auto;min-height:0}
 /* 一整篇纯文本：正文就是一个 textarea，换行就是文本里的 \n */
 #blocks{display:flex;flex-direction:column;min-height:0}
@@ -12035,7 +12034,7 @@ function renderDiaryInto(box) {
   var dateChanged = diaryDate !== UI.date;
   diaryText = txt;
   diaryDate = UI.date;
-  box.innerHTML = diaryMetaHTML(rec) + diaryEditorHTML() + diaryBarHTML();
+  box.innerHTML = diaryMetaHTML(rec) + diaryBarHTML() + diaryEditorHTML();
   paintDiary();
   if (dateChanged) resetHistory();
   if (diaryRO) {
@@ -12385,7 +12384,7 @@ function copyAllDiary() {
   }
 }
 
-/* 让日记工具条贴近屏幕底部 */
+/* 让日记正文撑满剩余高度（工具条已经挪到正文上方，不再需要贴底） */
 function fitDiaryHeight(box) {
   try {
     var top = box.getBoundingClientRect().top;
