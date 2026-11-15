@@ -130,13 +130,15 @@
               !doc.querySelector('#modal').classList.contains('on'));
             var rows = doc.querySelectorAll('#tasks-scroll .tk-row').length;
             check('推荐功课已写入列表', rows > 0, 'rows=' + rows);
-            check('每行都有闹钟图标，未开启的置灰',
-              doc.querySelectorAll('#tasks-scroll .ft-ico.off').length === rows,
-              'off=' + doc.querySelectorAll('#tasks-scroll .ft-ico.off').length + ' rows=' + rows);
+            check('每行副标题末尾都有闹钟，未开启的置灰',
+              doc.querySelectorAll('#tasks-scroll .nm-sub .ft-ico.off').length === rows,
+              'off=' + doc.querySelectorAll('#tasks-scroll .nm-sub .ft-ico.off').length + ' rows=' + rows);
 
             /* 打开第一项的编辑弹窗，把专修计时拨开，保存后该行闹钟点亮 */
             var firstEdit = doc.querySelector('#tasks-scroll [data-tedit]');
             if (firstEdit) firstEdit.click();
+            check('编辑已有功课时名称只读',
+              !!(doc.querySelector('#f-name') && doc.querySelector('#f-name').readOnly));
             var tsw = doc.querySelector('#modal [data-mftimer] .switch');
             if (tsw) tsw.click();
             var fsave = doc.querySelector('#modal [data-tsave]');

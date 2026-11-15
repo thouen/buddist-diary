@@ -544,7 +544,9 @@ img{max-width:100%;display:block}
 .tk-row .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .tk-row .nm .nm-l{display:flex;align-items:center;gap:5px;min-width:0}
 .tk-row .nm b{font-weight:400;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif);flex:0 1 auto;min-width:0}
-/* 名称右边常驻一只小闹钟：专修计时开着是功课红，关掉就灰着（形制不变，一眼看得出开了没有） */
+/* 副标题那行的末尾常驻一只小闹钟：专修计时开着是功课红，关掉就灰着（形制不变，一眼看得出开了没有）。
+   参数文字可以省略，闹钟固定贴在右端，不会因为名字长短左右跳 */
+.tk-row .nm .nm-sub{display:flex;align-items:center;gap:5px;min-width:0}
 .tk-row .nm .ft-ico{flex:0 0 auto;display:inline-flex;align-items:center;color:var(--accent)}
 .tk-row .nm .ft-ico.off{color:var(--ink3);opacity:.5}
 .tk-row .nm .ft-ico svg{
@@ -556,6 +558,7 @@ img{max-width:100%;display:block}
   font-style:normal;font-size:10.5px;color:var(--ink3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+.tk-row .nm .nm-sub em{flex:0 1 auto;min-width:0}
 .tk-row .mini{
   flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
   color:var(--ink2);font-size:15px;line-height:1;background:var(--card2);border:1px solid var(--line);
@@ -658,6 +661,9 @@ img{max-width:100%;display:block}
   padding:0 11px;font-size:14px;color:var(--ink);outline:none;width:100%;
 }
 .field input:focus{border-color:#d9b3a8;background:#fff}
+/* 只读输入框（编辑功课时的名称）：虚线边 + 次要字色，一眼看出不能改 */
+.field input[readonly]{color:var(--ink2);border-style:dashed;cursor:default}
+.field input[readonly]:focus{border-color:var(--line);background:var(--card2)}
 .modal-actions{display:flex;gap:8px;margin-top:14px}
 .modal-actions button{
   flex:1;height:40px;border-radius:11px;font-size:14px;letter-spacing:1px;
@@ -13669,17 +13675,17 @@ function renderTaskSettings() {
       var ftOn = taskFocusTimer(t);
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
-          '<span class="nm-l">' +
-            '<b>' + esc(t.name) + '</b>' +
-            /* 小闹钟常驻：开了专修计时是红的，没开就灰着，位置不跳 */
+          '<span class="nm-l"><b>' + esc(t.name) + '</b></span>' +
+          /* 小闹钟挂在副标题那一行的末尾：开了专修计时是红的，没开就灰着，位置不跳 */
+          '<span class="nm-sub">' +
+            '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
+              ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
             '<span class="ft-ico' + (ftOn ? '' : ' off') + '" role="img" title="' +
               (ftOn ? '专修计时已开启' : '专修计时已关闭') + '" aria-label="' +
               (ftOn ? '专修计时已开启' : '专修计时已关闭') + '">' +
               '<svg viewBox="0 0 24 24"><circle cx="12" cy="13.2" r="7.2"/><path d="M12 9.4v3.8l2.6 1.6"/><path d="M9.6 2.9h4.8"/><path d="M12 2.9v2.9"/></svg>' +
             '</span>' +
           '</span>' +
-          '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
-            ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
                 (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
@@ -13730,7 +13736,10 @@ function openTaskEditor(taskId, cat) {
 
   openModal(
     '<h4>' + (isNew ? '添加功课' : '编辑功课') + '</h4>' +
-    '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '" placeholder="如：南无阿弥陀佛"></div>' +
+    /* 名称只在新增时填：建好以后就锁住，改名字请删除后重建（同名不同事最容易把统计搅混） */
+    '<div class="field"><label>名称</label><input id="f-name" type="text" value="' + esc(name) + '"' +
+      (isNew ? ' placeholder="如：南无阿弥陀佛"' : ' readonly aria-readonly="true"') + '></div>' +
+    (isNew ? '' : '<div class="field-note">名称创建后不能更改；要改名请先「删除这项功课」，再重新添加</div>') +
     '<div class="field"><label>计数单位</label><input id="f-unit" type="text" value="' + esc(unit) + '" placeholder="遍 / 部 / 卷"></div>' +
     '<div class="field"><label>快捷增量方案（+1 固定，另选一组）</label>' +
       '<div class="sign-seg" id="f-scheme">' +
@@ -13757,7 +13766,8 @@ function openTaskEditor(taskId, cat) {
       '<button class="primary" data-tsave="1">保存</button>' +
     '</div>',
     function () {
-      var nm = ($('#f-name').value || '').trim();
+      /* 名称建好即锁定：编辑时一律沿用原名字，输入框只服务「新增」 */
+      var nm = isNew ? ($('#f-name').value || '').trim() : t.name;
       var un = ($('#f-unit').value || '').trim() || '遍';
       var st = parseInt($('#f-step').value, 10);
       var fst = parseInt($('#f-fstep').value, 10);
@@ -13782,11 +13792,11 @@ function openTaskEditor(taskId, cat) {
         DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, scheme: sch, fstep: fst,
           ftimer: ftimerOn, goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
-        /* 老存档的内置条目没有 bkey：改名之前先把它钉在原名字上，否则以后「添加推荐功课」会补出重复条目 */
+        /* 老存档的内置条目没有 bkey：顺手按当前名字补上，否则以后「添加推荐功课」会补出重复条目 */
         if (!t.bkey && t.builtin && (BUILTIN[t.cat] || []).indexOf(t.name) >= 0) {
           t.bkey = builtinKey(t.cat, t.name);
         }
-        t.name = nm; t.unit = un; t.step = st; t.scheme = sch; t.fstep = fst;
+        t.unit = un; t.step = st; t.scheme = sch; t.fstep = fst;
         t.ftimer = ftimerOn;
         t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
         t.hidden = !showIt;
@@ -14427,7 +14437,8 @@ var REL_NOTES = [
   {
     v: '2.10', date: '2026-11-15',
     items: [
-      '功课设置里的名字右边常驻一只小闹钟：开了「专修计时」是功课红，关掉就置灰，一眼看得出开没开',
+      '功课设置里「单位 · 快捷 · 默认 · 专修」那一行的末尾常驻一只小闹钟：开了「专修计时」是功课红，关掉就置灰，参数再长也不挤掉它',
+      '功课名称创建后不能再改：编辑弹窗里名称一栏是只读的，要改名请删除后重新添加；新增功课时同分类重名会提示',
       '写日记时翻日历、切菜单、跨天检查都不会再重建编辑框，光标、输入法正在拼的字与正文滚动位置都留在原处',
       '按住 +1/+10 这类按钮又划走（想滚列表或发现点错了）不再照旧记一次',
       '只写日记、一项功课都没有的备份现在也能导回来（以前会被当成「格式不正确」拒收）',
