@@ -542,14 +542,19 @@ img{max-width:100%;display:block}
 .tk-row.hid .nm{opacity:.45}
 .tk-row .mini.eye.on{color:var(--accent);background:var(--accent-soft);border-color:#ecd0c8}
 .tk-row .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.tk-row .nm b{font-weight:400;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif)}
+.tk-row .nm .nm-l{display:flex;align-items:center;gap:5px;min-width:0}
+.tk-row .nm b{font-weight:400;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif);flex:0 1 auto;min-width:0}
+/* 专修计时开着时，名称右边挂一只小闹钟；关掉就完全不占位置 */
+.tk-row .nm .ft-ico{flex:0 0 auto;display:inline-flex;align-items:center;color:var(--accent)}
+.tk-row .nm .ft-ico svg{
+  width:12.5px;height:12.5px;stroke:currentColor;fill:none;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
 /* 窄屏：副标题长就省略，不再折成两行把整行撑高（完整参数在编辑弹窗里） */
 .tk-row .nm em{
   font-style:normal;font-size:10.5px;color:var(--ink3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-/* 专修计时开着时给个重点色：一列扫下来就知道哪几项会走计时 */
-.tk-row .nm em .ft-on{color:var(--accent)}
 .tk-row .mini{
   flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
   color:var(--ink2);font-size:15px;line-height:1;background:var(--card2);border:1px solid var(--line);
@@ -1050,7 +1055,7 @@ label.rb-row{cursor:pointer}
 /* 一整篇纯文本：正文就是一个 textarea，换行就是文本里的 \n */
 #blocks{display:flex;flex-direction:column;min-height:0}
 #blocks .ed{
-  flex:1 1 auto;width:100%;min-height:120px;box-sizing:border-box;
+  flex:1 1 auto;width:100%;min-height:220px;box-sizing:border-box;
   border:0;outline:none;background:transparent;resize:none;margin:0;
   padding:3px 0;font-family:inherit;font-size:15px;line-height:1.75;color:var(--ink);
   overflow-y:auto;-webkit-appearance:none;appearance:none;
@@ -10053,7 +10058,8 @@ var BUILTIN = {
   jing: [
     '心经', '金刚经', '地藏经', '楞严经', '法华经', '观世音菩萨普门品',
     '阿弥陀经', '十善业道经', '无量寿经', '普贤行愿品', '吉祥经',
-    '大乘起信论', '二十一尊度母礼赞经', '大势至菩萨念佛圆通章'
+    '大乘起信论', '二十一尊度母礼赞经', '大势至菩萨念佛圆通章',
+    '四种决定清净明诲章', '文殊菩萨净行品', '大乘离文字普光明藏经', '随念三宝经'
   ],
   zhou: [
     '楞严咒', '大悲咒', '六字大明咒', '准提咒', '文殊菩萨心咒',
@@ -13621,10 +13627,16 @@ function renderTaskSettings() {
     list.forEach(function (t) {
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
-          '<b>' + esc(t.name) + '</b>' +
-          '<em>' + esc(t.unit) + ' · 专修计时 ' +
-            (taskFocusTimer(t) ? '<span class="ft-on">开</span>' : '关') +
-            ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
+          '<span class="nm-l">' +
+            '<b>' + esc(t.name) + '</b>' +
+            /* 只给开了专修计时的项一个小闹钟，没开就不占地方 */
+            (taskFocusTimer(t)
+              ? '<span class="ft-ico" role="img" aria-label="专修计时已开启" title="专修计时已开启">' +
+                  '<svg viewBox="0 0 24 24"><circle cx="12" cy="13.2" r="7.2"/><path d="M12 9.4v3.8l2.6 1.6"/><path d="M9.6 2.9h4.8"/><path d="M12 2.9v2.9"/></svg>' +
+                '</span>'
+              : '') +
+          '</span>' +
+          '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
             ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
@@ -15704,7 +15716,7 @@ function moveTask(id, dir) {
 }
 
 /* 添加推荐功课：内置条目是推荐清单，既可以直接勾选，也可以自定义添加。
-   入口在「功课设置」右上角；缺的默认勾上、已有的置灰，加哪些由用户自己定。
+   入口在「功课设置」右上角；可加的项默认都不勾选、已有的置灰，加哪些由用户自己定。
    首次安装 / 列表为空时由 openTaskOnboarding() 自动打开。 */
 function openRecommendTasks(isFirstRun) {
   var html = '', missing = 0;
@@ -15727,7 +15739,7 @@ function openRecommendTasks(isFirstRun) {
          勾选框放右边，和已有条目的「已有 / 已隐藏」对齐在同一列 */
       rows += '<label class="rb-row">' +
         '<span class="rb-nm">' + esc(name) + '</span>' +
-        '<input type="checkbox" class="rb-ck" data-rpick="' + c.k + '|' + esc(name) + '" checked>' +
+        '<input type="checkbox" class="rb-ck" data-rpick="' + c.k + '|' + esc(name) + '">' +
         '</label>';
     });
     missing += miss;
@@ -15738,9 +15750,9 @@ function openRecommendTasks(isFirstRun) {
   openModal(
     '<h4>添加推荐功课</h4>' +
     '<div class="dlg-sub">' + (noTasks
-      ? '先挑几项常做的功课开始；不想加的取消勾选即可，也可以点「自定义」自己写一项。'
+      ? '先挑几项常做的功课开始：勾选后点「添加所选」；一项都没勾也没关系，也可以点「自定义」自己写一项。'
       : (missing
-        ? '勾选想添加的推荐功课；已有的不会重复添加，也不会动你改过的参数。'
+        ? '勾选想添加的推荐功课，再点「添加所选」；已有的不会重复添加，也不会动你改过的参数。'
         : '推荐功课都已经有了，可以点「自定义」新建一项。')) + '</div>' +
     '<div class="rb-wrap">' + html + '</div>' +
     '<div class="modal-actions">' +

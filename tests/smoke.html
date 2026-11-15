@@ -96,7 +96,18 @@
         check('只读横幅默认隐藏',
           doc.querySelector('#ro-banner').classList.contains('hidden'));
 
-        /* 真的点一次「添加所选」：勾选默认全选，应写入列表并关掉弹窗 */
+        /* 第一次打开时一项都不预选；把新增的诵经条目也核对一下 */
+        var modalText = doc.querySelector('#modal-box').textContent;
+        check('推荐清单包含新增诵经',
+          ['四种决定清净明诲章', '文殊菩萨净行品', '大乘离文字普光明藏经', '随念三宝经'].every(function (n) {
+            return modalText.indexOf(n) >= 0;
+          }));
+        var cks = doc.querySelectorAll('#modal .rb-ck');
+        check('推荐功课默认一项都不勾选',
+          cks.length > 0 && Array.prototype.every.call(cks, function (c) { return !c.checked; }));
+
+        /* 全勾上再点「添加所选」：应写入列表并关掉弹窗 */
+        Array.prototype.forEach.call(cks, function (c) { c.click(); });
         var okBtn = doc.querySelector('#modal [data-mok]');
         check('推荐弹窗有「添加所选」按钮', !!okBtn);
         if (okBtn) okBtn.click();
@@ -107,8 +118,19 @@
               !doc.querySelector('#modal').classList.contains('on'));
             var rows = doc.querySelectorAll('#tasks-scroll .tk-row').length;
             check('推荐功课已写入列表', rows > 0, 'rows=' + rows);
-            check('功课列表显示专修计时配置',
-              doc.querySelector('#tasks-scroll').textContent.indexOf('专修计时 关') >= 0);
+            check('默认不显示专修计时图标',
+              doc.querySelectorAll('#tasks-scroll .ft-ico').length === 0);
+
+            /* 打开第一项的编辑弹窗，把专修计时拨开，保存后应出现小时钟 */
+            var firstEdit = doc.querySelector('#tasks-scroll [data-tedit]');
+            if (firstEdit) firstEdit.click();
+            var tsw = doc.querySelector('#modal [data-mftimer] .switch');
+            if (tsw) tsw.click();
+            var fsave = doc.querySelector('#modal [data-tsave]');
+            if (fsave) fsave.click();
+            check('开启专修计时后显示时间图标',
+              doc.querySelectorAll('#tasks-scroll .ft-ico').length === 1,
+              'got=' + doc.querySelectorAll('#tasks-scroll .ft-ico').length);
 
             /* 再次打开：已有条目全部置灰，仍可转去「自定义」 */
             var reopen = doc.querySelector('#btn-recommend-tasks');
