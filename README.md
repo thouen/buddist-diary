@@ -139,9 +139,9 @@
 
 ### 方式二：直接安装 APK
 
-- 文件：`学佛日记-2.10.apk`，约 417 KB，支持 **Android 7.0 及以上**，`versionCode 42`
-- 包内 `assets/index.html` 与发版提交 `3bd08e5` 的 `index.html` 逐字节一致（SHA-256 `cc413ce8…`，比对方法见「发布检查清单」）
-- ⚠️ **这个包是 2.10 的，不含 2.10 之后合入的改动**（专修计时一次模式、日记整页编辑、节日编辑并入纪念日、专修模式布局重排、回当前按钮按需隐藏与三次复审补修等）；2.11 的 `index.html` 是 SHA-256 `280bac58…`，两者不一致。要用这些新功能请走网页版 / PWA，或重新打包；本版未重打 APK，`versionCode` 仍为 42
+- 文件：`学佛日记-2.11.apk`，约 425 KB，支持 **Android 7.0 及以上**，`versionCode 43`
+- 包内 `assets/index.html` 与发版提交的 `index.html` 逐字节一致（SHA-256 `d5727f86…`，比对方法见「发布检查清单」），`manifest.webmanifest` 与 `icons/` 三张图标也已核对一致
+- 打包后跑过仓库自带的两份测试页（`tests/smoke.html`、`tests/upgrade.html`），均为 `SMOKE OK`
 - 传到手机后点击安装，需允许「安装未知来源应用」；首次打开若提示风险，选择「仍要安装」即可
 - 内嵌页面由 WebView 以 `https://appassets.local` 提供，`localStorage` 能长期保存，重启应用数据不丢
 - 返回键：先关弹窗 / 菜单 / 日期层，再退二级页面（详情、设置等），回到首页再按一次才退出
@@ -151,7 +151,7 @@
 
 **关于权限（如实说明）**：2.2 起已从 `AndroidManifest.xml` 删掉 `INTERNET`、`ACCESS_FINE_LOCATION`、`ACCESS_COARSE_LOCATION`、`READ_MEDIA_IMAGES`、`READ_MEDIA_VISUAL_USER_SELECTED`、`READ_EXTERNAL_STORAGE`，`aapt2 dump permissions` 现在**一个权限都没有**。网页一侧也没有任何网络请求与定位调用，导出走系统「下载」、导入走系统文件选择器，都不需要权限。
 
-**关于签名**：2.0 / 2.2 / 2.3 / 2.4 / 2.5 / 2.6 / 2.7 / 2.8 / 2.9 / 2.10 使用同一张证书（SHA-256 `9ad2a321…1bcc14`），可直接覆盖安装到已装 2.0 的手机，数据保留。签名私钥 `xuefo.keystore` 不在本仓库，请另行备份；若哪天换了新签名，就无法覆盖安装，必须先导出备份 → 卸载旧版 → 装新版 → 导入备份。
+**关于签名**：2.0 / 2.2 / 2.3 / 2.4 / 2.5 / 2.6 / 2.7 / 2.8 / 2.9 / 2.10 / 2.11 使用同一张证书（SHA-256 `9ad2a321…1bcc14`），可直接覆盖安装到已装 2.0 的手机，数据保留。签名私钥 `xuefo.keystore` 不在本仓库，请另行备份；若哪天换了新签名，就无法覆盖安装，必须先导出备份 → 卸载旧版 → 装新版 → 导入备份。
 
 > **关于可重建性（如实说明）**：本仓库只有 APK 二进制，不含安卓外壳源码（Java、Gradle、`AndroidManifest.xml`）与签名私钥——外壳工程和密钥由维护者本地保管。每次发版，包内 `assets/index.html` 都与仓库同版本的 `index.html` **逐字节核对过**（SHA-256 记在 CHANGELOG 与本节），但仅凭本仓库无法复现同一次构建，也无法审计外壳代码。要自己出包，走「方式一」的 PWA 路线最稳：`index.html`、`manifest.webmanifest`、`icons/` 就是全部静态资源。WebView 内 Service Worker 不生效属正常现象，不影响功能；页面在 `appassets.local` 下也已跳过 SW 注册。
 
@@ -212,7 +212,7 @@ xuefo-diary/
 ├── sw.js                 # 离线缓存（版本号需随发布递增）
 ├── icons/                # 应用图标（192 / 512 / maskable）
 ├── tests/                # 冒烟测试（smoke.html / upgrade.html + cdp_smoke.py）
-├── 学佛日记-2.10.apk      # 2.10 安卓包（内嵌 3bd08e5；2.11 未重打包；无任何权限声明）
+├── 学佛日记-2.11.apk      # 2.11 安卓包（内嵌当前 index.html；无任何权限声明）
 ├── CHANGELOG.md          # 历史版本改动
 ├── REVIEW-2026-11-16.md  # 2.10/2.11 复审报告（确认缺陷 / 文档漂移 / 验证记录）
 ├── REVIEW-2026-11-15.md  # 2.10 全量审查报告（已修 / 未修清单与验证记录）
