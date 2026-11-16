@@ -1180,6 +1180,7 @@ label.rb-row{cursor:pointer}
 .cc-num[data-count]:active{transform:scale(.96)}
 .cc-goal{display:flex;align-items:center;gap:8px;padding:12px 1px 0}
 .cc-goal .cc-bar{flex:1 1 auto}
+.cc-goal.blank{visibility:hidden}
 .cg-txt{
   flex:0 0 auto;font-size:10.5px;color:var(--ink3);
   letter-spacing:.3px;font-variant-numeric:tabular-nums;
@@ -10114,15 +10115,15 @@ var BUILTIN = {
   jing: [
     '心经', '金刚经', '地藏经', '楞严经', '法华经', '观世音菩萨普门品',
     '阿弥陀经', '吉祥经', '随念三宝经', '十善业道经', '无量寿经', '普贤行愿品', 
-    '四种决定清净明诲章', '文殊菩萨净行品', '大势至菩萨念佛圆通章',
+    '文殊菩萨净行品', '四种决定清净明诲章', '大势至菩萨念佛圆通章',
     '大乘起信论', '二十一尊度母礼赞经', '大乘离文字普光明藏经'
   ],
   zhou: [
     '楞严咒', '大悲咒', '六字大明咒', '准提咒', '文殊菩萨心咒',
-    '往生咒', '金刚萨埵百字明',
+    '往生咒', '金刚萨埵百字明', 
     '绿度母心咒', '药师灌顶真言', '大白伞盖佛母心咒'
   ],
-  yigui: ['八十八佛大忏悔文', '地藏菩萨占察忏', '禅修', '放生', '施食']
+  yigui: ['八十八佛大忏悔文', '地藏菩萨占察忏', '禅修', '施食', '放生']
 };
 /* 个别内置项的单位与所属分类默认值不同（施食、放生按“次”记，禅修按“分钟”记） */
 var BUILTIN_UNIT = { '施食': '次', '放生': '次', '禅修': '分钟' };
@@ -13375,11 +13376,16 @@ function detailCountHTML(t) {
   var g = taskGoal(t);
   var futDis = UI.date > TODAY ? ' disabled' : '';
   var pct = g ? Math.min(100, Math.round(n / g * 100)) : 0;
+  /* 未配置日目标时不画进度条，但仍留出等高的空白，避免上下内容跳动 */
   var goalHTML = g ? (
     '<div class="cc-goal">' +
       '<div class="cc-bar' + (n >= g ? ' full' : '') + '"><i style="width:' + pct + '%"></i></div>' +
       '<span class="cg-txt">' + goalPair(n, g) + '</span>' +
-    '</div>') : '';
+    '</div>') : (
+    '<div class="cc-goal blank" aria-hidden="true">' +
+      '<div class="cc-bar"><i style="width:0"></i></div>' +
+      '<span class="cg-txt">&nbsp;</span>' +
+    '</div>');
 
   var mgoal = taskMonthGoal(t);
   var mt = taskMonthTotal(t.id);
