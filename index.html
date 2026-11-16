@@ -544,22 +544,12 @@ img{max-width:100%;display:block}
 .tk-row .nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .tk-row .nm .nm-l{display:flex;align-items:center;gap:5px;min-width:0}
 .tk-row .nm b{font-weight:400;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--serif);flex:0 1 auto;min-width:0}
-/* 副标题那行的末尾常驻一只小闹钟：专修计时开着是功课红，关掉就灰着（形制不变，一眼看得出开了没有）。
-   参数文字可以省略，闹钟固定贴在右端，不会因为名字长短左右跳 */
-.tk-row .nm .nm-sub{display:flex;align-items:center;gap:5px;min-width:0}
-.tk-row .nm .ft-ico{flex:0 0 auto;margin-left:auto;display:inline-flex;align-items:center;color:var(--accent)}
-/* 关掉的状态用「次要文字色 + 略淡」：--ink3 再叠 0.5 只有 1.8:1，等于看不见 */
-.tk-row .nm .ft-ico.off{color:var(--ink2);opacity:.75}
-.tk-row .nm .ft-ico svg{
-  width:12.5px;height:12.5px;stroke:currentColor;fill:none;
-  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
-}
-/* 窄屏：副标题长就省略，不再折成两行把整行撑高（完整参数在编辑弹窗里） */
+/* 副标题：单位 · 快捷方案 · 默认增量 · 专修增量。
+   窄屏上长就省略，不再折成两行把整行撑高（完整参数在编辑弹窗里） */
 .tk-row .nm em{
   font-style:normal;font-size:10.5px;color:var(--ink3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-.tk-row .nm .nm-sub em{flex:0 1 auto;min-width:0}
 .tk-row .mini{
   flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
   color:var(--ink2);font-size:15px;line-height:1;background:var(--card2);border:1px solid var(--line);
@@ -1269,7 +1259,7 @@ label.rb-row{cursor:pointer}
   flex:0 0 auto;width:5px;height:5px;border-radius:50%;background:var(--accent);
   animation:focusPulse 1.8s ease-in-out infinite;
 }
-.focus-card .fc-state.paused i{background:var(--ink3);animation:none}
+.focus-card .fc-state.idle i{background:var(--ink3);animation:none}
 @keyframes focusPulse{0%,100%{opacity:.25}50%{opacity:1}}
 /* 每一段的起止与计时 */
 .focus-card .fc-segs{
@@ -1292,11 +1282,13 @@ label.rb-row{cursor:pointer}
   flex:1 1 0;height:38px;border-radius:10px;font-size:13px;
   background:var(--accent-soft);border:1px solid #ecd0c8;color:var(--accent);
 }
-.focus-card .fc-exit{
+.focus-card .fc-stop{
   flex:1 1 0;height:38px;border-radius:10px;font-size:13px;
   background:var(--card2);border:1px solid var(--line);color:var(--ink2);
 }
-.focus-card .fc-pause:active,.focus-card .fc-exit:active{filter:brightness(.97)}
+/* 还没开始计时时没什么可停的：整颗置灰 */
+.focus-card .fc-stop:disabled{opacity:.42;color:var(--ink3)}
+.focus-card .fc-pause:active,.focus-card .fc-stop:active{filter:brightness(.97)}
 /* 非当天：专修按钮不可点 */
 .modebtn:disabled{opacity:.38;color:var(--ink3);background:var(--card2);border-color:var(--line)}
 
@@ -10822,8 +10814,8 @@ function loadDB() {
       else delete t.bkey;
       /* 2.8：专修增量，老存档没有这个字段就按分类默认值补上（念佛 3，其余 1） */
       t.fstep = +t.fstep > 0 && isFinite(+t.fstep) ? clampStep(t.fstep) : catFocusStep(t.cat);
-      /* 专修计时开关：没存过就交给 taskFocusTimer() 按分类默认值走，不用写回存档 */
-      if (t.ftimer !== true && t.ftimer !== false) delete t.ftimer;
+      /* 专修计时开关已取消（所有功课都有计时卡）：老存档里残留的 ftimer 就地清掉 */
+      if (t.ftimer !== undefined) { delete t.ftimer; __dbMigrated = true; }
       /* 快捷增量方案：没存过就交给 taskScheme() 按分类默认值走，不用写回存档 */
       if (t.scheme !== 'big' && t.scheme !== 'small') delete t.scheme;
       if (t.name === '南无药师琉璃光如来') { t.name = '南无消灾延寿药师佛'; __dbMigrated = true; }
@@ -10987,12 +10979,8 @@ function taskFocusStep(t) {
   var g = t ? +t.fstep : 0;
   return g > 0 && isFinite(g) ? Math.floor(g) : catFocusStep(t && t.cat);
 }
-/* 专修计时：只有「行法」类功课默认打开，其余分类默认关掉。
-   关掉后仍可进专修模式，只是不显示计时、也不拦着确认退出 */
-function taskFocusTimer(t) {
-  if (t && typeof t.ftimer === 'boolean') return t.ftimer;
-  return !!(t && t.cat === 'yigui');
-}
+/* 「专修计时」不再是一项可配的开关：所有功课进专修模式都有计时卡，
+   要不要走表由计时卡上的「开始计时」决定，所以任务上的 ftimer 字段只清不复用 */
 /* 目标优先时的档位：日目标 0、月目标 1、总目标 2、都没设 3 */
 function taskGoalRank(t) {
   if (taskGoal(t)) return 0;
@@ -13220,6 +13208,7 @@ function openDetail(taskId) {
     /* 每次进详情页都从「记录模式」开始（要不要进专修由用户自己点），
        但已经坐过的专修时段存在当天记录里（rec.f），再进来照样看得见 */
     focus: false,
+    running: false,        /* 计时卡上按了「开始计时」才为真 */
     paused: false,
     segDs: UI.date,        /* 时段存在哪一天：进专修那一刻的日期，跨天不会写串 */
     range: 'day',
@@ -13623,6 +13612,7 @@ function renderDetail() {
   if (d.focus && (UI.date !== TODAY || d.segDs !== UI.date)) {
     focusEndSeg(d);
     d.focus = false;
+    d.running = false;
     d.paused = false;
   }
 
@@ -13660,12 +13650,12 @@ function toggleDetailMode() {
   else setFocusMode(true);
 }
 
-/* 退出专修模式（或离开详情页）前先确认一次，弹窗里写清今天一共坐了多少、几段。
-   没开「专修计时」的功课不用问，直接退 */
+/* 退出专修模式（或离开详情页）前确认一次：**只有正在计时才问**，
+   弹窗里写清今天一共坐了多少、几段；还没开始或已经暂停就静静退掉 */
 function confirmExitFocus(afterOk) {
   var d = UI.detail;
   if (!d || !d.focus) { if (afterOk) afterOk(); return; }
-  if (!taskFocusTimer(taskById(d.taskId))) {
+  if (focusState(d) !== 'running') {
     setFocusMode(false);
     if (afterOk) afterOk();
     return;
@@ -13683,7 +13673,7 @@ function confirmExitFocus(afterOk) {
     });
 }
 
-/* 进入 / 退出专修模式：进入时就地开第 1 段计时，退出即收尾 */
+/* 进入 / 退出专修模式：进入只是把计时卡摆出来，要按「开始计时」才真的走表；退出即收尾 */
 function setFocusMode(on) {
   var d = UI.detail;
   if (!d) return;
@@ -13691,13 +13681,14 @@ function setFocusMode(on) {
   if (on && UI.date !== TODAY) { toast('只有当天才能进入专修模式'); return; }
   if (on) {
     d.focus = true;
+    d.running = false;
     d.paused = false;
     d.hiddenSeg = null;
     d.segDs = UI.date;
-    focusStartSeg(d);
   } else {
     focusEndSeg(d);
     d.focus = false;
+    d.running = false;
     d.paused = false;
   }
   syncDetailMode();
@@ -13709,12 +13700,19 @@ function setFocusMode(on) {
 }
 
 /* ---------- 专修计时与分段 ----------
+   进入专修模式只是把计时卡摆出来，按「开始计时」才开第 1 段。
    每一段都落在当天记录里（rec.f[功课id] = [{s,e,p}]），退出详情页、重开 App 都还在：
      s 本段开始、e 本段结束（0＝还在走）、p 切后台 / 息屏被扣掉的毫秒。
    锁屏那段墙钟不算专修（与 2.9 的口径一致），但它不切段；手动「暂停 / 继续」才切段。 */
 var focusTick = null;
 function stopFocusTick() {
   if (focusTick) { clearInterval(focusTick); focusTick = null; }
+}
+/* 计时卡的状态：idle 还没开始 / running 正在走 / paused 已暂停 */
+function focusState(d) {
+  if (!d || !d.focus) return 'off';
+  if (d.paused) return 'paused';
+  return d.running ? 'running' : 'idle';
 }
 function focusSegs(ds, taskId, create) {
   if (!DB || !DB.records) return null;
@@ -13767,10 +13765,9 @@ function focusSegCount(ds, taskId) {
   }
   return n;
 }
-/* 另起一段：暂停中 / 没在专修 / 这项功课没开「专修计时」时都不动 */
+/* 另起一段：暂停中 / 没在专修时都不动 */
 function focusStartSeg(d) {
   if (!d || !d.focus || d.paused) return null;
-  if (!taskFocusTimer(taskById(d.taskId))) return null;
   var open = focusOpenSeg(d.segDs, d.taskId);
   if (open) return open;
   var arr = focusSegs(d.segDs, d.taskId, true);
@@ -13811,27 +13808,59 @@ function resumeFocusTick() {
     seg.p = (+seg.p || 0) + Math.max(0, Date.now() - (+seg.e || 0));
     seg.e = 0;
     saveSoon();
-  } else if (!d.paused) {
-    /* 段被 pagehide 之类收过尾：回前台另起一段接着走 */
+  } else if (d.running && !d.paused) {
+    /* 段被 pagehide 之类收过尾：回前台另起一段接着走（没按过「开始计时」的不在这里自动开表） */
     focusStartSeg(d);
   }
   renderFocusPanel();
 }
-/* 手动暂停 / 继续：暂停＝把这一段收尾（起止与计时都留下），继续＝另起一段 */
-function toggleFocusPause() {
+/* 计时卡上的主按钮：还没开始 → 开始计时；走字中 → 暂停；暂停中 → 继续（另起一段） */
+function focusTapTimer() {
   var d = UI.detail;
   if (!d || !d.focus) return;
-  if (d.paused) {
+  var st = focusState(d);
+  if (st === 'running') {
+    focusEndSeg(d);
+    d.running = false;
+    d.paused = true;
+    toast('已暂停计时');
+  } else if (st === 'paused') {
     d.paused = false;
+    d.running = true;
     focusStartSeg(d);
     toast('继续计时');
   } else {
-    focusEndSeg(d);
-    d.paused = true;
-    toast('已暂停计时');
+    d.paused = false;
+    d.running = true;
+    focusStartSeg(d);
+    toast('开始计时');
   }
   renderFocusPanel();
   if (navigator.vibrate) navigator.vibrate(8);
+}
+/* 计时卡上的「停止计时」：先确认一次（停下就是把这次专修收尾），确认后把这一段落定、
+   回到「还没开始」；人仍留在专修模式里，可以再点一次「开始计时」接着记，
+   退出专修模式仍走右上角的「专」 */
+function focusStopTimer() {
+  var d = UI.detail;
+  if (!d || !d.focus) return;
+  if (focusState(d) === 'idle') return;
+  var used = focusElapsedText(focusDayMs(d.segDs, d.taskId, Date.now()));
+  var segs = focusSegCount(d.segDs, d.taskId);
+  askConfirm('停止计时？',
+    '今日已专修 <b>' + used + '</b>' + (segs > 1 ? '（' + segs + ' 段）' : '') +
+      '，停止后可再点「开始计时」接着记',
+    '停止',
+    function () {
+      var dd = UI.detail;
+      if (!dd || !dd.focus) return;
+      focusEndSeg(dd);
+      dd.running = false;
+      dd.paused = false;
+      toast('已停止计时');
+      renderFocusPanel();
+      if (navigator.vibrate) navigator.vibrate(8);
+    });
 }
 function focusElapsedText(ms) {
   var s = Math.max(0, Math.floor(ms / 1000));
@@ -13879,8 +13908,11 @@ function renderFocusPanel() {
   if (!box) return;
   var d = UI.detail;
   if (!d || !d.focus) { box.innerHTML = ''; return; }
-  /* 没开「专修计时」的功课：进专修模式也不摆计时卡和退出按钮 */
-  if (!taskFocusTimer(taskById(d.taskId))) { box.innerHTML = ''; return; }
+  /* 只要进了专修模式就一定有这张卡：没开始、暂停中都摆着，只有正在走时才走字 */
+  var st = focusState(d);
+  var btnTxt = st === 'running' ? '暂停计时' : (st === 'paused' ? '继续计时' : '开始计时');
+  var stateTxt = st === 'running' ? '计时中……'
+    : (st === 'paused' ? '已暂停 · 点上方「继续计时」' : '还没开始 · 点上方「开始计时」');
   box.innerHTML =
     '<div class="focus-card">' +
       '<div class="fc-lbl">专修计时</div>' +
@@ -13888,17 +13920,17 @@ function renderFocusPanel() {
         '<div class="fc-t"><b id="focus-total">00:00</b><span>今日累计</span></div>' +
       '</div>' +
       '<div class="fc-btns">' +
-        '<button class="fc-pause" id="btn-focus-pause">' + (d.paused ? '继续计时' : '暂停计时') + '</button>' +
-        '<button class="fc-exit" id="btn-exit-focus">退出专修模式</button>' +
+        '<button class="fc-pause" id="btn-focus-pause">' + btnTxt + '</button>' +
+        '<button class="fc-stop" id="btn-focus-stop"' + (st === 'idle' ? ' disabled' : '') + '>停止计时</button>' +
       '</div>' +
-      '<div class="fc-state' + (d.paused ? ' paused' : '') + '"><i></i><span>' +
-        (d.paused ? '已暂停 · 点「继续计时」接着坐' : '计时中……') +
+      '<div class="fc-state' + (st === 'running' ? '' : ' idle') + '"><i></i><span>' +
+        stateTxt +
       '</span></div>' +
       focusSegsHTML(d) +
     '</div>';
   updateFocusTime();
-  /* 暂停时不再空转：停表就是停表 */
-  if (!d.paused && !d.hiddenSeg) focusTick = setInterval(updateFocusTime, 1000);
+  /* 没在走就不空转：停表就是停表 */
+  if (st === 'running') focusTick = setInterval(updateFocusTime, 1000);
 }
 /* 只换计数卡这一块：统计区不重算，详情页的滚动位置也不动 */
 function redrawDetailCount(t) {
@@ -14095,20 +14127,12 @@ function renderTaskSettings() {
        置顶 / 上移 / 下移 / 隐藏 / 删除都收进「更多」的底部菜单，
        一行文字才有地方，点击目标也从 24px 涨到 30px */
     list.forEach(function (t) {
-      var ftOn = taskFocusTimer(t);
       html += '<div class="tk-row' + (t.hidden ? ' hid' : '') + '" data-tid="' + esc(t.id) + '">' +
         '<div class="nm" data-tedit="' + esc(t.id) + '">' +
           '<span class="nm-l"><b>' + esc(t.name) + '</b></span>' +
-          /* 小闹钟挂在副标题那一行的末尾：开了专修计时是红的，没开就灰着，位置不跳 */
-          '<span class="nm-sub">' +
-            '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
-              ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
-            '<span class="ft-ico' + (ftOn ? '' : ' off') + '" role="img" title="' +
-              (ftOn ? '专修计时已开启' : '专修计时已关闭') + '" aria-label="' +
-              (ftOn ? '专修计时已开启' : '专修计时已关闭') + '">' +
-              '<svg viewBox="0 0 24 24"><circle cx="12" cy="13.2" r="7.2"/><path d="M12 9.4v3.8l2.6 1.6"/><path d="M9.6 2.9h4.8"/><path d="M12 2.9v2.9"/></svg>' +
-            '</span>' +
-          '</span>' +
+          /* 副标题：单位 · 快捷方案 · 默认增量 · 专修增量（专修计时不再是一项开关，故不再挂闹钟） */
+          '<em>' + esc(t.unit) + ' · 快捷 ' + SCHEME_LBL[taskScheme(t)] +
+            ' · 默认 ' + t.step + ' · 专修 ' + taskFocusStep(t) + '</em>' +
           (taskGoal(t) || taskMonthGoal(t) || taskTarget(t)
             ? '<em class="tg">' +
                 (taskGoal(t) ? '日目标 ' + taskGoal(t) : '') +
@@ -14156,7 +14180,6 @@ function openTaskEditor(taskId, cat) {
   var step = t ? t.step : c.step;
   var scheme = taskScheme(t || { cat: c.k });
   var fstep = t ? taskFocusStep(t) : catFocusStep(c.k);
-  var ftimer = taskFocusTimer(t || { cat: c.k });
   var goal = t ? taskGoal(t) : 0;
   var mgoal = t ? taskMonthGoal(t) : 0;
   var tgoal = t ? taskTarget(t) : 0;
@@ -14177,9 +14200,6 @@ function openTaskEditor(taskId, cat) {
       '</div></div>' +
     '<div class="field"><label>默认增量（「＋」弹窗里增 / 减的初始值）</label><input id="f-step" type="number" inputmode="numeric" value="' + esc(step) + '"></div>' +
     '<div class="field"><label>专修增量（专修模式下一次「＋」的增量，念佛默认 3、其余 1）</label><input id="f-fstep" type="number" inputmode="numeric" value="' + esc(fstep) + '"></div>' +
-    '<div class="field-chk" data-mftimer="1">' +
-      '<div class="lbl">专修计时<em>关掉后不显示计时，退出专修模式也不用确认</em></div>' +
-      '<span class="switch' + (ftimer ? ' on' : '') + '"></span></div>' +
     '<div class="field"><label>每日目标（可选，留空则不设）</label><input id="f-goal" type="number" inputmode="numeric" value="' + (goal || '') + '" placeholder="如 1000"></div>' +
     '<div class="field"><label>月目标（可选，留空则不设）</label><input id="f-mgoal" type="number" inputmode="numeric" value="' + (mgoal || '') + '" placeholder="如 30000"></div>' +
     '<div class="field"><label>总目标（可选，留空则不设）</label><input id="f-tgoal" type="number" inputmode="numeric" value="' + (tgoal || '') + '" placeholder="如 100000"></div>' +
@@ -14202,7 +14222,6 @@ function openTaskEditor(taskId, cat) {
       var mgl = parseInt($('#f-mgoal').value, 10);
       var tgl = parseInt($('#f-tgoal').value, 10);
       var showIt = !!(document.querySelector('#modal [data-mshow] .switch.on'));
-      var ftimerOn = !!(document.querySelector('#modal [data-mftimer] .switch.on'));
       var scEl = document.querySelector('#f-scheme button.on');
       var sch = scEl && SCHEMES[scEl.dataset.scheme] ? scEl.dataset.scheme : scheme;
       if (!nm) { toast('请填写名称'); return; }
@@ -14217,14 +14236,14 @@ function openTaskEditor(taskId, cat) {
       tgl = clampCount(tgl);
       if (isNew) {
         DB.tasks.push({ id: uid('t'), cat: c.k, name: nm, unit: un, step: st, scheme: sch, fstep: fst,
-          ftimer: ftimerOn, goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
+          goal: gl, mgoal: mgl, tgoal: tgl, builtin: false, hidden: !showIt });
       } else {
         /* 老存档的内置条目没有 bkey：顺手按当前名字补上，否则以后「添加推荐功课」会补出重复条目 */
         if (!t.bkey && t.builtin && (BUILTIN[t.cat] || []).indexOf(t.name) >= 0) {
           t.bkey = builtinKey(t.cat, t.name);
         }
         t.unit = un; t.step = st; t.scheme = sch; t.fstep = fst;
-        t.ftimer = ftimerOn;
+        delete t.ftimer;          /* 这个开关已经取消：老存档里残留的一并清掉 */
         t.goal = gl; t.mgoal = mgl; t.tgoal = tgl;
         t.hidden = !showIt;
       }
@@ -14853,9 +14872,11 @@ var REL_NOTES = [
   {
     v: '2.10', date: '2026-11-15',
     items: [
-      '专修模式里可以「暂停计时 / 继续计时」了：暂停时那一段就此收尾（起止与时长都留下），继续时另起一段，不再只能一次坐到底',
-      '专修计时卡上大字写着「今日累计」，下面按段列出每一段的起止时间与计时（正在走的那段跟着走字）；退出详情页、重开 App 都还在',
-      '功课设置里「单位 · 快捷 · 默认 · 专修」那一行的末尾常驻一只小闹钟：开了「专修计时」是功课红，关掉就置灰，参数再长也不挤掉它',
+      '专修模式下计时卡始终都在，但要按「开始计时」才真的走表；走表时可以「暂停计时」，再点「继续计时」另起一段，中断了也不影响接着记',
+      '计时卡上的另一颗按钮是「停止计时」：按下会先确认一次，确认后只把这一段收尾、回到「还没开始」，人仍留在专修模式里；要退出专修模式点右上角那颗「专」或返回即可',
+      '计时卡上大字写着「今日累计」，下面按段列出每一段的起止时间与计时（正在走的那段跟着走字）；退出详情页、重开 App 都还在',
+      '只有正在计时时退出专修模式才弹确认框（写明今日已专修多久、几段）；没开始或已暂停时退出、返回、换日期都直接走',
+      '取消功课上的「专修计时」开关：所有功课进专修模式都有计时卡，功课列表副标题行末尾那只小闹钟也一并去掉',
       '功课名称创建后不能再改：编辑弹窗里名称一栏是只读的，要改名请删除后重新添加；新增功课时同分类重名会提示',
       '写日记时翻日历、切菜单、跨天检查都不会再重建编辑框，光标、输入法正在拼的字与正文滚动位置都留在原处',
       '按住 +1/+10 这类按钮又划走（想滚列表或发现点错了）不再照旧记一次',
@@ -15274,8 +15295,8 @@ function bindEvents() {
       });
       return;
     }
-    /* 弹窗里的开关：功课的「在功课列表中显示」「专修计时」与纪念日的「每年重复」 */
-    var ms = e.target.closest('[data-mshow],[data-mftimer],[data-mtog]');
+    /* 弹窗里的开关：功课的「在功课列表中显示」与纪念日的「每年重复」 */
+    var ms = e.target.closest('[data-mshow],[data-mtog]');
     if (ms) {
       var sw = ms.querySelector('.switch');
       if (sw) sw.classList.toggle('on');
@@ -15360,10 +15381,10 @@ function bindEvents() {
 
     /* 详情页右上角：专修模式切换 / 编辑这项功课 */
     if (e.target.closest('#btn-detail-mode')) { toggleDetailMode(); return; }
-    /* 专修计时卡里的「暂停计时 / 继续计时」 */
-    if (e.target.closest('#btn-focus-pause')) { toggleFocusPause(); return; }
-    /* 专修计时卡里的「退出专修模式」 */
-    if (e.target.closest('#btn-exit-focus')) { confirmExitFocus(); return; }
+    /* 专修计时卡里的「开始计时 / 暂停计时 / 继续计时」 */
+    if (e.target.closest('#btn-focus-pause')) { focusTapTimer(); return; }
+    /* 专修计时卡里的「停止计时」：收尾这一段，人还留在专修模式里 */
+    if (e.target.closest('#btn-focus-stop')) { focusStopTimer(); return; }
     if (e.target.closest('#btn-detail-edit')) {
       if (UI.detail) openTaskEditor(UI.detail.taskId);
       return;
@@ -16479,8 +16500,7 @@ function sanitizeImport(src) {
     if (typeof t.bkey === 'string' && t.bkey.indexOf(t.cat + ':') === 0) {
       task.bkey = t.bkey.slice(0, 100);
     }
-    /* 专修计时只认布尔值；没存过就交给 taskFocusTimer() 按分类默认值走 */
-    if (t.ftimer === true || t.ftimer === false) task.ftimer = t.ftimer;
+    /* 备份里的 ftimer（已取消的「专修计时」开关）不再接收：所有功课都走同一个计时卡 */
     out.tasks.push(task);
   });
   /* 功课一项都没有也照样接收：2.9 起全新安装的列表本来就是空的，
@@ -17012,14 +17032,15 @@ if (/[?&]test=1(?:&|$)/.test(location.search)) {
     lastImportReport: function () { return lastImportReport; },
     db: function () { return DB; },
     today: function () { return TODAY; },
+    detail: function () { return UI.detail; },
     openDetail: openDetail,
     setFocusMode: setFocusMode,
-    toggleFocusPause: toggleFocusPause,
+    focusTapTimer: focusTapTimer,
+    focusState: focusState,
     renderFocusPanel: renderFocusPanel,
     focusSegs: focusSegs,
     focusDayMs: focusDayMs,
-    focusSegCount: focusSegCount,
-    taskFocusTimer: taskFocusTimer
+    focusSegCount: focusSegCount
   };
 }
 
