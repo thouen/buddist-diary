@@ -1150,6 +1150,16 @@ label.rb-row{cursor:pointer}
 .detail-day{cursor:pointer}
 /* 三行内容由 dateRowsHTML 输出，和首页共用 .dr1/.dr2/.dr3 */
 .detail-day:active .dd-main{opacity:.72}
+/* 专修模式：日信息与左右翻日按钮都藏起来（占位不动，卡片尺寸照旧），
+   正中摆一尊坐佛；这块不再响应点击，免得误触又去换日子 */
+.detail-day.focus{position:relative;pointer-events:none;cursor:default}
+.detail-day.focus .dd-main,
+.detail-day.focus .dl-nav{visibility:hidden}
+.detail-day.focus .dd-focus{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--gold);
+}
+.detail-day.focus .dd-focus svg{width:46px;height:46px}
 
 /* ---------- 详情页：当日计数 ---------- */
 .count-card{
@@ -1262,8 +1272,10 @@ label.rb-row{cursor:pointer}
 }
 .focus-card .fc-lbl{font-size:11px;letter-spacing:2px;color:var(--gold)}
 /* 计数卡与计时卡之间的莲：只是一朵线描，别让人以为能点 */
-.focus-lotus{margin:8px 0 0;text-align:center;color:var(--gold);opacity:.7;pointer-events:none}
-.focus-lotus svg{display:block;width:80px;height:auto;margin:0 auto}
+.focus-lotus{margin:8px 0 0;text-align:center;color:var(--gold);opacity:.62;pointer-events:none}
+/* 宽度按计数大按钮的六成算：卡片两侧各 12px 外边距 + 1px 描边 + 14px 内边距，
+   按钮宽 = 100% − 54px，所以莲宽 = 60% − 32px */
+.focus-lotus svg{display:block;width:calc(60% - 32px);max-width:320px;height:auto;margin:0 auto}
 /* 今日累计（这项功课当天所有时段之和）：排在两颗按钮下面 */
 .focus-card .fc-times{display:flex;gap:8px;margin:14px 0 3px}
 .focus-card .fc-t{flex:1 1 0;min-width:0}
@@ -13376,15 +13388,32 @@ function yearTableHTML(items) {
   }).join('') + '</div>';
 }
 
+/* 专修模式下日信息卡中央的那尊坐佛：线描，头光 / 头 / 披衣 / 结印 / 盘坐 */
+var FOCUS_BUDDHA_HTML =
+  '<div class="dd-focus" aria-hidden="true">' +
+    '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.7"' +
+      ' stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="32" cy="15" r="11" opacity=".3"/>' +
+      '<circle cx="32" cy="15" r="6.4"/>' +
+      '<path d="M32 21.6c-6 0-10 2.7-12 7-1.7 3.5-2.5 7.5-3 11.6h30c-.5-4.1-1.3-8.1-3-11.6-2-4.3-6-7-12-7Z"/>' +
+      '<path d="M26 36.4c1.7 1.4 3.8 2.1 6 2.1s4.3-.7 6-2.1"/>' +
+      '<path d="M13 45.4c3-3.6 10-5.5 19-5.5s16 1.9 19 5.5c-4 2.4-11.2 3.6-19 3.6s-15-1.2-19-3.6Z"/>' +
+    '</svg>' +
+  '</div>';
+
 /* 第一段：日信息（与首页同一套三行格式）。
-   功课详情页与日记编辑页各画一份，id 由调用方给，不能重名 */
-function dayNavHTML(idName) {
+   功课详情页与日记编辑页各画一份，id 由调用方给，不能重名。
+   focus = 专修模式：日信息不显示，卡片尺寸照旧，只在中央摆一尊坐佛 */
+function dayNavHTML(idName, focus) {
   var info = lunarOf(UI.date);
-  return '<div class="detail-day' + (UI.date === TODAY ? ' today' : '') +
-    '" id="' + idName + '" role="button" aria-label="选择日期">' +
+  return '<div class="detail-day' + (UI.date === TODAY ? ' today' : '') + (focus ? ' focus' : '') +
+    '" id="' + idName + '"' +
+    (focus ? ' aria-hidden="true"'
+           : ' role="button" aria-label="选择日期"') + '>' +
     '<button class="dl-nav prev" data-day="-1" aria-label="前一天"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
     '<div class="dd-main">' + dateRowsHTML(info, UI.date) + '</div>' +
     '<button class="dl-nav next" data-day="1" aria-label="后一天"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
+    (focus ? FOCUS_BUDDHA_HTML : '') +
     '</div>';
 }
 
@@ -13622,9 +13651,10 @@ function renderDetail() {
     d.focus = false;
   }
 
-  /* 日信息放在滚动区外，翻下面内容时它一直贴在标题下面 */
+  /* 日信息放在滚动区外，翻下面内容时它一直贴在标题下面；
+     专修模式下这张卡只摆一尊坐佛，尺寸照旧 */
   var slot = $('#detail-dayslot');
-  if (slot) slot.innerHTML = dayNavHTML('detail-date');
+  if (slot) slot.innerHTML = dayNavHTML('detail-date', !!d.focus);
 
   $('#detail-scroll').innerHTML =
     detailCountHTML(t) +
@@ -13694,6 +13724,9 @@ function setFocusMode(on) {
     d.focus = false;
   }
   syncDetailMode();
+  /* 日信息卡跟着换脸：专修模式换成坐佛，退出时恢复日信息 */
+  var slot = $('#detail-dayslot');
+  if (slot) slot.innerHTML = dayNavHTML('detail-date', on);
   var t = taskById(d.taskId);
   if (t) redrawDetailCount(t);
   renderFocusPanel();
