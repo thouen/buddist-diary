@@ -1261,8 +1261,11 @@ label.rb-row{cursor:pointer}
   box-shadow:0 1px 2px rgba(90,70,40,.04);
 }
 .focus-card .fc-lbl{font-size:11px;letter-spacing:2px;color:var(--gold)}
-/* 今日累计（这项功课当天所有时段之和） */
-.focus-card .fc-times{display:flex;gap:8px;margin:2px 0 3px}
+/* 计数卡与计时卡之间的莲：只是一朵线描，别让人以为能点 */
+.focus-lotus{margin:8px 0 0;text-align:center;color:var(--gold);opacity:.7;pointer-events:none}
+.focus-lotus svg{display:block;width:80px;height:auto;margin:0 auto}
+/* 今日累计（这项功课当天所有时段之和）：排在两颗按钮下面 */
+.focus-card .fc-times{display:flex;gap:8px;margin:14px 0 3px}
 .focus-card .fc-t{flex:1 1 0;min-width:0}
 .focus-card .fc-t b{
   display:block;font-family:var(--serif);font-size:32px;line-height:1.22;font-weight:600;
@@ -13904,6 +13907,22 @@ function updateFocusTime() {
   var live = document.getElementById('focus-seg-live');
   if (live) live.textContent = focusElapsedText(focusSegMs(focusLastSeg(d), now));
 }
+/* 计数卡与「专修计时」卡之间的一朵莲：纯线条画，只占位不拦点击 */
+var FOCUS_LOTUS_HTML =
+  '<div class="focus-lotus" aria-hidden="true">' +
+    '<svg viewBox="0 0 96 30" fill="none" stroke="currentColor" stroke-width="1.2"' +
+      ' stroke-linecap="round" stroke-linejoin="round">' +
+      /* 中央花瓣 */
+      '<path d="M48 3c3.6 4.4 5.4 8.2 5.4 12 0 4.6-2.6 8.3-5.4 10.6-2.8-2.3-5.4-6-5.4-10.6C42.6 11.2 44.4 7.4 48 3Z"/>' +
+      /* 左右花瓣：同一段路径镜像一次 */
+      '<path d="M37 8.2c4.8 1.8 8.2 4.6 9.8 8.2 1.6 3.6 1.8 7 1.2 9.6-3.4-.8-7-2.6-9.2-5.4-2.2-2.8-3.2-6.2-3.2-9.6.6-.8 1-1.6 1.4-2.8Z"/>' +
+      '<path d="M37 8.2c4.8 1.8 8.2 4.6 9.8 8.2 1.6 3.6 1.8 7 1.2 9.6-3.4-.8-7-2.6-9.2-5.4-2.2-2.8-3.2-6.2-3.2-9.6.6-.8 1-1.6 1.4-2.8Z"' +
+        ' transform="translate(96,0) scale(-1,1)"/>' +
+      /* 莲座底弧 */
+      '<path d="M26 27c6.6 1.8 14.6 2.7 22 2.7s15.4-.9 22-2.7" opacity=".5"/>' +
+    '</svg>' +
+  '</div>';
+
 function renderFocusPanel() {
   var box = document.getElementById('detail-focus');
   stopFocusTick();
@@ -13915,15 +13934,18 @@ function renderFocusPanel() {
   var btnTxt = st === 'running' ? '暂停计时' : (st === 'paused' ? '继续计时' : '开始计时');
   var stateTxt = st === 'running' ? '计时中……'
     : (st === 'paused' ? '已暂停 · 点上方「继续计时」' : '还没开始 · 点上方「开始计时」');
+  /* 首屏只想让人看见两颗按钮：计时信息一律排在按钮下面，
+     进了页面不用盯着走字，想看得往下滑一点 */
   box.innerHTML =
+    FOCUS_LOTUS_HTML +
     '<div class="focus-card">' +
       '<div class="fc-lbl">专修计时</div>' +
-      '<div class="fc-times">' +
-        '<div class="fc-t"><b id="focus-total">00:00</b><span>本次累计</span></div>' +
-      '</div>' +
       '<div class="fc-btns">' +
         '<button class="fc-pause" id="btn-focus-pause">' + btnTxt + '</button>' +
         '<button class="fc-stop" id="btn-focus-stop"' + (st === 'idle' ? ' disabled' : '') + '>停止计时</button>' +
+      '</div>' +
+      '<div class="fc-times">' +
+        '<div class="fc-t"><b id="focus-total">00:00</b><span>本次累计</span></div>' +
       '</div>' +
       '<div class="fc-state' + (st === 'running' ? '' : ' idle') + '"><i></i><span>' +
         stateTxt +
