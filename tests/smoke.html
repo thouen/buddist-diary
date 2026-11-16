@@ -303,6 +303,25 @@
                       'before=' + before + ' after=' + after + ' n=' + addN);
                   }
 
+                  /* 达标数按当前表统计：恢复「目标 X · 达标 N 天」，不拆连续 / 总 */
+                  var todayCount = (t.db().records[t.today()] && t.db().records[t.today()].c[ft.id]) || 10;
+                  ft.goal = todayCount;
+                  t.openDetail(ft.id);
+                  var goalNote = (doc.querySelector('#detail-stats .goal-note') || {}).textContent || '';
+                  check('按日目标恢复「达标 N 天」显示',
+                    goalNote.indexOf('达标 1 天') >= 0 && goalNote.indexOf('连续') < 0, goalNote);
+                  doc.querySelector('#view-detail [data-back]').click();
+                  ft.goal = 0;
+                  ft.mgoal = todayCount;
+                  t.openDetail(ft.id);
+                  doc.querySelector('#detail-stats [data-range="month"]').click();
+                  var mGoalNote = (doc.querySelector('#detail-stats .goal-note') || {}).textContent || '';
+                  check('按月目标恢复「达标 N 个月」显示',
+                    mGoalNote.indexOf('达标 1 个月') >= 0 && mGoalNote.indexOf('连续') < 0, mGoalNote);
+                  doc.querySelector('#view-detail [data-back]').click();
+                  ft.mgoal = 0;
+                  t.selectDate(t.today());
+
                   /* 反证：计数可见时总览仍要出卡片与功课面板 */
                   var sumBtn = doc.querySelector('#btn-mode');
                   if (sumBtn) sumBtn.click();

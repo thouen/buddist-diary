@@ -13305,20 +13305,6 @@ function detailItems(t, d) {
   return items;
 }
 
-/* 连续达标：从窗口末尾往回数。还没到的日子跳过；
-   今天 / 本月还没做满也不算断签（和「连续功课」同一个习惯） */
-function goalStreakItems(items, goal) {
-  var n = 0, counted = false;
-  for (var i = items.length - 1; i >= 0; i--) {
-    var it = items[i];
-    if (it.future) continue;
-    if (it.n >= goal) { n++; counted = true; continue; }
-    if (!counted && it.today) continue;
-    break;
-  }
-  return n;
-}
-
 /* 格子里的数字过大时用「万 / 亿」，避免撑破小格 */
 function shortNum(n) {
   n = Number(n) || 0;
@@ -13609,15 +13595,14 @@ function renderDetailStats() {
 
   /* 目标按口径分开：按日认日目标、按月认月目标；按年不显示任何目标 / 达标字样。
      总目标只是累计数字对照，不参与任何统计达标。
-     达标分两项：连续达标＝从最近往回没断过的段数，总达标＝窗口内达标的总段数。 */
+     达标数就是当前表里合计 ≥ 目标的格子数，与表头金色 ✓ 同一口径，不再拆连续 / 总两项。 */
   var goalStat = '';
   if (d.range === 'day') {
     if (goal > 0) {
       var hit = 0;
       items.forEach(function (it) { if (it.n >= goal) hit++; });
       goalStat = '<span class="goal-note">目标 <b>' + goal + '</b>' +
-        ' · 连续达标 <b>' + goalStreakItems(items, goal) + '</b> 天' +
-        ' · 总达标 <b>' + hit + '</b> 天</span>';
+        ' · 达标 <b>' + hit + '</b> 天</span>';
     }
   } else if (d.range === 'month') {
     var mgStat = taskMonthGoal(t);
@@ -13625,8 +13610,7 @@ function renderDetailStats() {
       var mhit = 0;
       items.forEach(function (it) { if (it.n >= mgStat) mhit++; });
       goalStat = '<span class="goal-note">月目标 <b>' + mgStat + '</b>' +
-        ' · 连续达标 <b>' + goalStreakItems(items, mgStat) + '</b> 个月' +
-        ' · 总达标 <b>' + mhit + '</b> 个月</span>';
+        ' · 达标 <b>' + mhit + '</b> 个月</span>';
     }
   }
 
@@ -14943,7 +14927,7 @@ var REL_NOTES = [
     items: [
       '日记页元信息行右侧新增铅笔按钮：点开是整页编辑页，日信息钉在顶部、下面是整片书写区；左右箭头、点日期、系统日期选择器换日都留在本页，撤回 / 重做、地点天气与首页共用',
       '节日编辑弹窗的「归到哪一类」可以直接选「纪念日」：纪念日不再单独开窗，在纪念日分段里点添加时默认就落在纪念日',
-      '详情页统计新增「连续达标」与「总达标」：前者从最近往回数没断过几天 / 几个月，后者数当前表里一共达标几天 / 几个月；「本月 / 今年 / 近年」按钮已经在当前期时不再显示',
+      '详情页的「本月 / 今年 / 近年」按钮在已经在当前期时不再显示，省掉一次没有作用的点击',
       '专修模式布局重排：计时卡的两颗按钮移到最上面，进页面先看到「开始计时 / 暂停计时 / 继续计时」与「停止计时」，「本次累计」、状态与分段列表依次排在下面',
       '专修模式下计数卡只留「总计」与数字：日进度条、月合计 / 累计收起（留白保持高度），+专修增量按钮一直顶到月合计那一行；日信息卡中央显示放大的功课名，计数卡与计时卡之间加了一朵小莲花，切换模式时卡片高度不跳',
       '修：某项功课被隐藏后，只有它计数的那一天在总览里不再出现一张只有日期的空卡片；记录都因显示开关不可见时，总览会说明「记录被显示开关藏起来了」',
