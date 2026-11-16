@@ -1229,13 +1229,13 @@ label.rb-row{cursor:pointer}
   line-height:1.15;
 }
 .bigadd.solo .solo-num{font-family:var(--serif);font-size:40px;font-weight:600;letter-spacing:1px}
-/* 专修模式下，中间按钮还要占掉「日进度条」和「月合计 / 累计」两行：
-   这两行不显示但仍留在流里（visibility:hidden）撑住各自高度，按钮跨过三行拉满，
+/* 专修模式下，中间按钮占掉「月合计 / 累计」那一行，日进度条那行留成空白，
+   按钮与今日总计之间留出呼吸的间隙；两行都不显示但仍留在流里撑住高度，
    于是卡片总高与记录模式一致，切换模式时上下内容不跳动；
    专修时只留一个日总计数在动，月与累计不晃眼 */
 .count-card.focus .cc-mid{
   display:grid;grid-template-columns:1fr;
-  /* 28px = 日进度条行，41px = 月合计 / 累计行，最后一行 = 记录模式里按钮区的高度 */
+  /* 28px = 日进度条行（留白），41px = 月合计 / 累计行，最后一行 = 记录模式里按钮区的高度 */
   grid-template-rows:28px 41px calc(clamp(96px,19vh,150px) + 53px);
 }
 .count-card.focus .cc-goal{grid-area:1/1}
@@ -1243,7 +1243,7 @@ label.rb-row{cursor:pointer}
 .count-card.focus .cc-goal,
 .count-card.focus .cc-tot{visibility:hidden;pointer-events:none}
 .count-card.focus .bigadd.solo{
-  grid-area:1/1/span 3/1;align-self:stretch;
+  grid-area:2/1/span 2/1;align-self:stretch;
   height:auto;min-height:0;margin-bottom:0;
 }
 
@@ -13437,8 +13437,8 @@ function detailCountHTML(t) {
       '</div>';
   }
 
-  /* 专修模式：日进度条、月合计 / 累计两行不显示，
-     但仍留在 DOM 里撑住高度，由 CSS 让中间的大按钮跨过这两行把它们占掉，
+  /* 专修模式：日进度条、月合计 / 累计两行都不显示，
+     但仍留在 DOM 里撑住高度；进度条那行当留白，月合计那行的位置让中间的大按钮占掉，
      这样卡片高度与记录模式一致，切换时不会跳动 */
   var isFocus = !!(UI.detail && UI.detail.focus);
   return '<div class="count-card' + (n > 0 ? ' has' : '') + (isFocus ? ' focus' : '') + '">' +
