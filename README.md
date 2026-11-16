@@ -211,6 +211,7 @@ xuefo-diary/
 ├── tests/                # 冒烟测试（smoke.html / upgrade.html + cdp_smoke.py）
 ├── 学佛日记-2.10.apk      # 安卓安装包（内嵌 3bd08e5 版页面，早于 2.10 后续改动；无任何权限声明）
 ├── CHANGELOG.md          # 历史版本改动
+├── REVIEW-2026-11-16.md  # 2.10 复审报告（本轮确认缺陷 / 文档漂移 / 验证记录）
 ├── REVIEW-2026-11-15.md  # 2.10 全量审查报告（已修 / 未修清单与验证记录）
 ├── REVIEW-2026-11-14.md  # 2.9 全面审查报告（问题清单与修复对照）
 └── README.md
