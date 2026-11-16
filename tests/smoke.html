@@ -172,30 +172,30 @@
                   kids[0] === 'diary-meta' && kids[1] === 'diary-bar' && kids[2] === 'blocks',
                   kids.join(','));
 
-                /* 专修计时：进模式不自动走表 + 开始 / 暂停 / 继续 + 分段 */
+                /* 专修计时：进模式不自动走表 + 开始 / 暂停 / 停止 + 段列表倒序 + 退出即清空 */
                 var ft = t.db().tasks[0];
                 check('有可以试计时的功课', !!ft);
                 if (ft) {
-                  var ds = t.today();
+                  var D = function () { return t.detail(); };
                   t.openDetail(ft.id);
                   t.setFocusMode(true);
-                  var segs0 = t.focusSegs(ds, ft.id, false);
+                  var segs0 = t.focusSegs(D(), false);
                   check('进专修模式不自动开始计时',
                     !segs0 || segs0.length === 0, 'len=' + (segs0 ? segs0.length : 'null'));
-                  check('计时卡始终在，且只有一个「今日累计」大数',
-                    !!doc.querySelector('#focus-total') && !doc.querySelector('#focus-time'));
+                  check('计时卡始终在，且只有一个「本次累计」大数',
+                    !!doc.querySelector('#focus-total') &&
+                    (doc.querySelector('#detail-focus .fc-t span') || {}).textContent === '本次累计');
                   check('未开始时按钮写「开始计时」',
                     (doc.querySelector('#btn-focus-pause') || {}).textContent === '开始计时');
-                  check('未开始时状态是 idle', t.focusState(t.detail()) === 'idle',
-                    'got=' + t.focusState(t.detail()));
+                  check('未开始时状态是 idle', t.focusState(D()) === 'idle',
+                    'got=' + t.focusState(D()));
                   check('未开始时「停止计时」置灰不可点',
                     !!(doc.querySelector('#btn-focus-stop') || {}).disabled &&
                     (doc.querySelector('#btn-focus-stop') || {}).textContent === '停止计时');
 
                   /* 点「开始计时」才开第 1 段 */
-                  var pb = doc.querySelector('#btn-focus-pause');
-                  if (pb) pb.click();
-                  var segs = t.focusSegs(ds, ft.id, false);
+                  doc.querySelector('#btn-focus-pause').click();
+                  var segs = t.focusSegs(D(), false);
                   check('点「开始计时」才开第 1 段',
                     !!segs && segs.length === 1 && !segs[0].e,
                     'len=' + (segs ? segs.length : 'null'));
@@ -204,71 +204,85 @@
                   check('走表时「停止计时」可点',
                     !(doc.querySelector('#btn-focus-stop') || {}).disabled);
 
+                  /* 暂停 → 继续，凑出两段（不真等，直接改时间） */
                   doc.querySelector('#btn-focus-pause').click();
                   check('暂停后这一段当场收尾（e 已写）', segs[0].e > 0);
                   check('暂停后按钮写「继续计时」',
                     (doc.querySelector('#btn-focus-pause') || {}).textContent === '继续计时');
-
-                  /* 「停止计时」：先确认，确认后收尾并回到「还没开始」，人仍留在专修模式里 */
-                  doc.querySelector('#btn-focus-stop').click();
-                  check('停止计时要弹确认', doc.querySelector('#modal').classList.contains('on'));
-                  check('停止确认框写明今日已专修',
-                    doc.querySelector('#modal-box').textContent.indexOf('今日已专修') >= 0);
-                  var stopCancel = doc.querySelector('#modal [data-ack-cancel]');
-                  if (stopCancel) stopCancel.click();
-                  check('取消停止后仍是暂停态',
-                    !doc.querySelector('#modal').classList.contains('on') &&
-                    t.focusState(t.detail()) === 'paused');
-
-                  doc.querySelector('#btn-focus-stop').click();
-                  var stopOk = doc.querySelector('#modal [data-mok]');
-                  if (stopOk) stopOk.click();
-                  check('确认停止后回到 idle、卡片还在',
-                    t.focusState(t.detail()) === 'idle' &&
-                    !!doc.querySelector('#detail-focus .focus-card') &&
-                    (doc.querySelector('#btn-focus-pause') || {}).textContent === '开始计时');
-
-                  /* 没在计时时点「专」退出：不该弹确认框，直接就退 */
-                  doc.querySelector('#btn-detail-mode').click();
-                  check('没在计时时退出不弹确认', !doc.querySelector('#modal').classList.contains('on'));
-                  check('退出后计时卡收起', !doc.querySelector('#detail-focus .focus-card'));
-
-                  /* 重新进模式 → 开始 → 再点「专」退出：正在计时就要确认 */
-                  t.setFocusMode(true);
-                  doc.querySelector('#btn-focus-pause').click();
-                  segs = t.focusSegs(ds, ft.id, false);
-                  check('重进模式后又开了新的一段', segs.length === 2 && !segs[1].e,
-                    'len=' + segs.length);
-                  doc.querySelector('#btn-detail-mode').click();
-                  check('正在计时时退出要确认', doc.querySelector('#modal').classList.contains('on'));
-                  check('确认框写明今日已专修',
-                    doc.querySelector('#modal-box').textContent.indexOf('今日已专修') >= 0);
-                  var cancelBtn = doc.querySelector('#modal [data-ack-cancel]');
-                  if (cancelBtn) cancelBtn.click();
-                  check('取消后仍留在专修模式并接着走表',
-                    !doc.querySelector('#modal').classList.contains('on') &&
-                    t.focusState(t.detail()) === 'running' &&
-                    (doc.querySelector('#btn-focus-pause') || {}).textContent === '暂停计时');
-
-                  /* 不真等 65 秒：直接把第一段拉开，检查段列表与累计 */
-                  segs[0].e = segs[0].s + 65000;
-                  segs[1].s = Date.now() - 30000;
+                  segs[0].e = segs[0].s + 65000;                 /* 第 1 段算 1 分 5 秒 */
+                  doc.querySelector('#btn-focus-pause').click();  /* 继续 → 第 2 段 */
+                  check('继续计时另起一段', segs.length === 2 && !segs[1].e, 'len=' + segs.length);
+                  segs[1].s = Date.now() - 30000;                /* 第 2 段已走 30 秒 */
                   t.renderFocusPanel();
-                  check('段列表按段列出两行',
-                    doc.querySelectorAll('#detail-focus .fc-seg').length === 2,
-                    'rows=' + doc.querySelectorAll('#detail-focus .fc-seg').length);
-                  check('段数统计为 2', t.focusSegCount(ds, ft.id) === 2,
-                    'got=' + t.focusSegCount(ds, ft.id));
-                  check('今日累计＝两段之和（约 95 秒）',
-                    t.focusDayMs(ds, ft.id) >= 94000,
-                    'got=' + t.focusDayMs(ds, ft.id));
-                  check('今日累计写在卡上（01:35 上下）',
+
+                  var rowsEl = doc.querySelectorAll('#detail-focus .fc-seg');
+                  check('段列表列出两行', rowsEl.length === 2, 'rows=' + rowsEl.length);
+                  check('最近的一段排在最上面（第 2 段 · 计时中）',
+                    /第2段/.test((rowsEl[0] || {}).textContent || '') &&
+                    /计时中/.test((rowsEl[0] || {}).textContent || ''),
+                    (rowsEl[0] || {}).textContent);
+                  check('较早的一段排在下面（第 1 段）',
+                    /第1段/.test((rowsEl[1] || {}).textContent || ''),
+                    (rowsEl[1] || {}).textContent);
+                  check('段数统计为 2', t.focusSegCount(D()) === 2, 'got=' + t.focusSegCount(D()));
+                  check('本次累计＝两段之和（约 95 秒）',
+                    t.focusTotalMs(D()) >= 94000, 'got=' + t.focusTotalMs(D()));
+                  check('本次累计写在卡上（01:35 上下）',
                     /^01:3[3-9]$/.test((doc.querySelector('#focus-total') || {}).textContent || ''),
                     'got=' + (doc.querySelector('#focus-total') || {}).textContent);
 
-                  t.setFocusMode(false);
-                  check('退出专修模式后最后一段也收尾', segs[1].e > 0);
-                  check('退出后计时卡再次收起', !doc.querySelector('#detail-focus .focus-card'));
+                  /* 停止计时：先确认，取消后原样继续，确认后回到 idle 但列表还在 */
+                  doc.querySelector('#btn-focus-stop').click();
+                  check('停止计时要弹确认', doc.querySelector('#modal').classList.contains('on'));
+                  check('停止确认框写明本次已专修',
+                    doc.querySelector('#modal-box').textContent.indexOf('本次已专修') >= 0);
+                  var stopCancel = doc.querySelector('#modal [data-ack-cancel]');
+                  if (stopCancel) stopCancel.click();
+                  check('取消停止后仍在走表',
+                    !doc.querySelector('#modal').classList.contains('on') &&
+                    t.focusState(D()) === 'running');
+                  doc.querySelector('#btn-focus-stop').click();
+                  var stopOk = doc.querySelector('#modal [data-mok]');
+                  if (stopOk) stopOk.click();
+                  check('确认停止后回到 idle，卡片与段列表都还在',
+                    t.focusState(D()) === 'idle' &&
+                    !!doc.querySelector('#detail-focus .focus-card') &&
+                    (doc.querySelector('#btn-focus-pause') || {}).textContent === '开始计时' &&
+                    doc.querySelectorAll('#detail-focus .fc-seg').length === 2,
+                    'rows=' + doc.querySelectorAll('#detail-focus .fc-seg').length);
+
+                  /* 退出专修模式（idle 时不问）→ 计时列表整份清空 */
+                  doc.querySelector('#btn-detail-mode').click();
+                  check('没在计时时退出不弹确认', !doc.querySelector('#modal').classList.contains('on'));
+                  check('退出后计时卡收起', !doc.querySelector('#detail-focus .focus-card'));
+                  check('退出专修模式即清空计时列表',
+                    (t.focusSegs(D(), false) || []).length === 0 && t.focusTotalMs(D()) === 0,
+                    'segs=' + (t.focusSegs(D(), false) || []).length);
+
+                  /* 重新进专修模式：列表从空开始，重新编「第 1 段」 */
+                  t.setFocusMode(true);
+                  check('重进模式后列表是空的',
+                    (t.focusSegs(D(), false) || []).length === 0 &&
+                    !doc.querySelector('#detail-focus .fc-seg'));
+                  doc.querySelector('#btn-focus-pause').click();
+                  check('重进模式后从第 1 段重新开始',
+                    (t.focusSegs(D(), false) || []).length === 1 &&
+                    /第1段/.test((doc.querySelector('#detail-focus .fc-seg') || {}).textContent || ''),
+                    (doc.querySelector('#detail-focus .fc-seg') || {}).textContent);
+
+                  /* 离开页面＝退出专修模式：走表中点返回先确认，确认后退回首页 */
+                  doc.querySelector('#view-detail [data-back]').click();
+                  check('走表中点返回要确认', doc.querySelector('#modal').classList.contains('on'));
+                  var backOk = doc.querySelector('#modal [data-mok]');
+                  if (backOk) backOk.click();
+                  check('确认后退回首页', t.view() === 'home' && !t.detail(),
+                    'view=' + t.view());
+
+                  /* 再进详情页：专修模式是关着的，也没有残留的段 */
+                  t.openDetail(ft.id);
+                  check('重新进详情页即不在专修模式',
+                    !t.detail().focus && !doc.querySelector('#detail-focus .focus-card') &&
+                    (t.focusSegs(t.detail(), false) || []).length === 0);
                 }
               } catch (e2) {
                 failed++;
