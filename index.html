@@ -1275,11 +1275,11 @@ label.rb-row{cursor:pointer}
   box-shadow:0 1px 2px rgba(90,70,40,.04);
 }
 .focus-card .fc-lbl{font-size:11px;letter-spacing:2px;color:var(--gold)}
-/* 计数卡与计时卡之间的莲：只是一朵线描，别让人以为能点 */
-.focus-lotus{margin:8px 0 0;text-align:center;color:var(--gold);opacity:.62;pointer-events:none}
-/* 宽度按计数大按钮的六成算：卡片两侧各 12px 外边距 + 1px 描边 + 14px 内边距，
-   按钮宽 = 100% − 54px，所以莲宽 = 60% − 32px */
-.focus-lotus svg{display:block;width:calc(60% - 32px);max-width:320px;height:auto;margin:0 auto}
+/* 计数卡与计时卡之间的一朵小莲：淡金线描，只占位不拦点击。
+   三瓣互相重叠用底色填充压住，所以整块不能加 opacity（半透明的填充会透出后面的线） */
+.focus-lotus{margin:10px 0 0;text-align:center;color:rgba(169,128,58,.62);pointer-events:none}
+.focus-lotus .fl-petal{fill:var(--bg)}
+.focus-lotus svg{display:block;width:74px;height:auto;margin:0 auto}
 /* 今日累计（这项功课当天所有时段之和）：排在两颗按钮下面 */
 .focus-card .fc-times{display:flex;gap:8px;margin:14px 0 3px}
 .focus-card .fc-t{flex:1 1 0;min-width:0}
@@ -13932,31 +13932,24 @@ function updateFocusTime() {
   var live = document.getElementById('focus-seg-live');
   if (live) live.textContent = focusElapsedText(focusSegMs(focusLastSeg(d), now));
 }
-/* 计数卡与「专修计时」卡之间的一朵莲：纯线条画，只占位不拦点击。
-   一朵摊开的大莲：七片花瓣都从同一个花心（70,48）长出来，靠旋转 + 缩放摆开，
-   外两瓣最长最平（86°），中层次之，内三瓣较立，整体宽约高的三倍 */
-var FOCUS_LOTUS_PETAL =
-  'M70 48c-6.6-5.2-9.9-13.2-8.7-20.2C62.4 22.4 65.8 15.6 70 8c4.2 7.6 7.6 14.4 8.7 19.8 1.2 7-2.1 15-8.7 20.2Z';
+/* 计数卡与「专修计时」卡之间的一朵莲：一笔简笔莲座，三瓣 + 一道浅托，
+   小而干净，只占位不拦点击。左右两瓣与中间那瓣重叠，用底色填充压住，接缝才不糊 */
+var FOCUS_LOTUS_PETAL = 'M40 46C34 38 31 30 33 22C34.6 15.4 37 10.6 40 7.5C43 10.6 45.4 15.4 47 22' +
+  'C49 30 46 38 40 46Z';
 var FOCUS_LOTUS_HTML =
   '<div class="focus-lotus" aria-hidden="true">' +
-    '<svg viewBox="0 0 140 56" fill="none" stroke="currentColor" stroke-width="1.25"' +
+    '<svg viewBox="0 0 80 62" fill="none" stroke="currentColor" stroke-width="1.8"' +
       ' stroke-linecap="round" stroke-linejoin="round">' +
-      /* 外层：最宽，几乎摊平 */
-      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".5"' +
-        ' transform="translate(70 48) rotate(-86) scale(1.45) translate(-70 -48)"/>' +
-      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".5"' +
-        ' transform="translate(70 48) rotate(86) scale(1.45) translate(-70 -48)"/>' +
-      /* 中层 */
-      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".78"' +
-        ' transform="translate(70 48) rotate(-58) scale(1.2) translate(-70 -48)"/>' +
-      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".78"' +
-        ' transform="translate(70 48) rotate(58) scale(1.2) translate(-70 -48)"/>' +
-      /* 内层：三瓣较立 */
-      '<path d="' + FOCUS_LOTUS_PETAL + '"' +
-        ' transform="translate(70 48) rotate(-30) scale(.95) translate(-70 -48)"/>' +
-      '<path d="' + FOCUS_LOTUS_PETAL + '"' +
-        ' transform="translate(70 48) rotate(30) scale(.95) translate(-70 -48)"/>' +
-      '<path d="' + FOCUS_LOTUS_PETAL + '"/>' +
+      /* 左瓣 */
+      '<path class="fl-petal" d="' + FOCUS_LOTUS_PETAL + '"' +
+        ' transform="translate(40 46) rotate(-42) scale(.9) translate(-40 -46)"/>' +
+      /* 右瓣 */
+      '<path class="fl-petal" d="' + FOCUS_LOTUS_PETAL + '"' +
+        ' transform="translate(40 46) rotate(42) scale(.9) translate(-40 -46)"/>' +
+      /* 中央一瓣 */
+      '<path class="fl-petal" d="' + FOCUS_LOTUS_PETAL + '"/>' +
+      /* 莲座：一道浅托 */
+      '<path d="M18 49C26 55 34 57.5 40 57.5C46 57.5 54 55 62 49"/>' +
     '</svg>' +
   '</div>';
 
