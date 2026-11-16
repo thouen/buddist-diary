@@ -1151,15 +1151,19 @@ label.rb-row{cursor:pointer}
 /* 三行内容由 dateRowsHTML 输出，和首页共用 .dr1/.dr2/.dr3 */
 .detail-day:active .dd-main{opacity:.72}
 /* 专修模式：日信息与左右翻日按钮都藏起来（占位不动，卡片尺寸照旧），
-   正中摆一尊坐佛；这块不再响应点击，免得误触又去换日子 */
+   正中写功课名——标题从顶栏搬进这张卡，专修时眼里少一行；
+   这块不再响应点击，免得误触又去换日子 */
 .detail-day.focus{position:relative;pointer-events:none;cursor:default}
 .detail-day.focus .dd-main,
 .detail-day.focus .dl-nav{visibility:hidden}
 .detail-day.focus .dd-focus{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  color:var(--gold);
+  padding:0 14px;
 }
-.detail-day.focus .dd-focus svg{width:46px;height:46px}
+.detail-day.focus .dd-focus .fx-title{
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:var(--serif);font-size:22px;font-weight:600;letter-spacing:2px;color:var(--ink);
+}
 
 /* ---------- 详情页：当日计数 ---------- */
 .count-card{
@@ -13388,23 +13392,10 @@ function yearTableHTML(items) {
   }).join('') + '</div>';
 }
 
-/* 专修模式下日信息卡中央的那尊坐佛：线描，头光 / 头 / 披衣 / 结印 / 盘坐 */
-var FOCUS_BUDDHA_HTML =
-  '<div class="dd-focus" aria-hidden="true">' +
-    '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.7"' +
-      ' stroke-linecap="round" stroke-linejoin="round">' +
-      '<circle cx="32" cy="15" r="11" opacity=".3"/>' +
-      '<circle cx="32" cy="15" r="6.4"/>' +
-      '<path d="M32 21.6c-6 0-10 2.7-12 7-1.7 3.5-2.5 7.5-3 11.6h30c-.5-4.1-1.3-8.1-3-11.6-2-4.3-6-7-12-7Z"/>' +
-      '<path d="M26 36.4c1.7 1.4 3.8 2.1 6 2.1s4.3-.7 6-2.1"/>' +
-      '<path d="M13 45.4c3-3.6 10-5.5 19-5.5s16 1.9 19 5.5c-4 2.4-11.2 3.6-19 3.6s-15-1.2-19-3.6Z"/>' +
-    '</svg>' +
-  '</div>';
-
 /* 第一段：日信息（与首页同一套三行格式）。
    功课详情页与日记编辑页各画一份，id 由调用方给，不能重名。
-   focus = 专修模式：日信息不显示，卡片尺寸照旧，只在中央摆一尊坐佛 */
-function dayNavHTML(idName, focus) {
+   focus = 专修模式：日信息不显示，卡片尺寸照旧，正中只写功课名（标题搬进这张卡） */
+function dayNavHTML(idName, focus, title) {
   var info = lunarOf(UI.date);
   return '<div class="detail-day' + (UI.date === TODAY ? ' today' : '') + (focus ? ' focus' : '') +
     '" id="' + idName + '"' +
@@ -13413,7 +13404,7 @@ function dayNavHTML(idName, focus) {
     '<button class="dl-nav prev" data-day="-1" aria-label="前一天"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
     '<div class="dd-main">' + dateRowsHTML(info, UI.date) + '</div>' +
     '<button class="dl-nav next" data-day="1" aria-label="后一天"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
-    (focus ? FOCUS_BUDDHA_HTML : '') +
+    (focus ? '<div class="dd-focus"><span class="fx-title">' + esc(title || '') + '</span></div>' : '') +
     '</div>';
 }
 
@@ -13642,8 +13633,6 @@ function renderDetail() {
   var t = taskById(d.taskId);
   if (!t) { UI.view = 'home'; renderView(); return; }
 
-  $('#detail-title').textContent = t.name;
-
   /* 专修模式只在当天可用；翻到别的日子（或过了零点）还留着状态就强制退掉，
      这一次的段列表也一并清空 */
   if (d.focus && UI.date !== TODAY) {
@@ -13651,10 +13640,13 @@ function renderDetail() {
     d.focus = false;
   }
 
+  /* 顶栏标题照旧保留；专修模式下额外在下面这张日信息卡中央再写一份放大字号的 */
+  $('#detail-title').textContent = t.name;
+
   /* 日信息放在滚动区外，翻下面内容时它一直贴在标题下面；
-     专修模式下这张卡只摆一尊坐佛，尺寸照旧 */
+     专修模式下这张卡只写功课名，尺寸照旧 */
   var slot = $('#detail-dayslot');
-  if (slot) slot.innerHTML = dayNavHTML('detail-date', !!d.focus);
+  if (slot) slot.innerHTML = dayNavHTML('detail-date', !!d.focus, t.name);
 
   $('#detail-scroll').innerHTML =
     detailCountHTML(t) +
@@ -13724,10 +13716,10 @@ function setFocusMode(on) {
     d.focus = false;
   }
   syncDetailMode();
-  /* 日信息卡跟着换脸：专修模式换成坐佛，退出时恢复日信息 */
-  var slot = $('#detail-dayslot');
-  if (slot) slot.innerHTML = dayNavHTML('detail-date', on);
+  /* 日信息卡跟着换脸：专修时卡里写功课名（顶栏那份照旧留着），退出时恢复日信息 */
   var t = taskById(d.taskId);
+  var slot = $('#detail-dayslot');
+  if (slot) slot.innerHTML = dayNavHTML('detail-date', on, t ? t.name : '');
   if (t) redrawDetailCount(t);
   renderFocusPanel();
   if (navigator.vibrate) navigator.vibrate(8);
@@ -13940,19 +13932,31 @@ function updateFocusTime() {
   var live = document.getElementById('focus-seg-live');
   if (live) live.textContent = focusElapsedText(focusSegMs(focusLastSeg(d), now));
 }
-/* 计数卡与「专修计时」卡之间的一朵莲：纯线条画，只占位不拦点击 */
+/* 计数卡与「专修计时」卡之间的一朵莲：纯线条画，只占位不拦点击。
+   一朵摊开的大莲：七片花瓣都从同一个花心（70,48）长出来，靠旋转 + 缩放摆开，
+   外两瓣最长最平（86°），中层次之，内三瓣较立，整体宽约高的三倍 */
+var FOCUS_LOTUS_PETAL =
+  'M70 48c-6.6-5.2-9.9-13.2-8.7-20.2C62.4 22.4 65.8 15.6 70 8c4.2 7.6 7.6 14.4 8.7 19.8 1.2 7-2.1 15-8.7 20.2Z';
 var FOCUS_LOTUS_HTML =
   '<div class="focus-lotus" aria-hidden="true">' +
-    '<svg viewBox="0 0 96 30" fill="none" stroke="currentColor" stroke-width="1.2"' +
+    '<svg viewBox="0 0 140 56" fill="none" stroke="currentColor" stroke-width="1.25"' +
       ' stroke-linecap="round" stroke-linejoin="round">' +
-      /* 中央花瓣 */
-      '<path d="M48 3c3.6 4.4 5.4 8.2 5.4 12 0 4.6-2.6 8.3-5.4 10.6-2.8-2.3-5.4-6-5.4-10.6C42.6 11.2 44.4 7.4 48 3Z"/>' +
-      /* 左右花瓣：同一段路径镜像一次 */
-      '<path d="M37 8.2c4.8 1.8 8.2 4.6 9.8 8.2 1.6 3.6 1.8 7 1.2 9.6-3.4-.8-7-2.6-9.2-5.4-2.2-2.8-3.2-6.2-3.2-9.6.6-.8 1-1.6 1.4-2.8Z"/>' +
-      '<path d="M37 8.2c4.8 1.8 8.2 4.6 9.8 8.2 1.6 3.6 1.8 7 1.2 9.6-3.4-.8-7-2.6-9.2-5.4-2.2-2.8-3.2-6.2-3.2-9.6.6-.8 1-1.6 1.4-2.8Z"' +
-        ' transform="translate(96,0) scale(-1,1)"/>' +
-      /* 莲座底弧 */
-      '<path d="M26 27c6.6 1.8 14.6 2.7 22 2.7s15.4-.9 22-2.7" opacity=".5"/>' +
+      /* 外层：最宽，几乎摊平 */
+      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".5"' +
+        ' transform="translate(70 48) rotate(-86) scale(1.45) translate(-70 -48)"/>' +
+      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".5"' +
+        ' transform="translate(70 48) rotate(86) scale(1.45) translate(-70 -48)"/>' +
+      /* 中层 */
+      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".78"' +
+        ' transform="translate(70 48) rotate(-58) scale(1.2) translate(-70 -48)"/>' +
+      '<path d="' + FOCUS_LOTUS_PETAL + '" opacity=".78"' +
+        ' transform="translate(70 48) rotate(58) scale(1.2) translate(-70 -48)"/>' +
+      /* 内层：三瓣较立 */
+      '<path d="' + FOCUS_LOTUS_PETAL + '"' +
+        ' transform="translate(70 48) rotate(-30) scale(.95) translate(-70 -48)"/>' +
+      '<path d="' + FOCUS_LOTUS_PETAL + '"' +
+        ' transform="translate(70 48) rotate(30) scale(.95) translate(-70 -48)"/>' +
+      '<path d="' + FOCUS_LOTUS_PETAL + '"/>' +
     '</svg>' +
   '</div>';
 
