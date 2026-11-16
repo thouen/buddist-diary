@@ -283,6 +283,63 @@
                   check('重新进详情页即不在专修模式',
                     !t.detail().focus && !doc.querySelector('#detail-focus .focus-card') &&
                     (t.focusSegs(t.detail(), false) || []).length === 0);
+
+                  /* 键盘 / 读屏激活 +N：click 没有 pointer 事件，也要加数 */
+                  doc.querySelector('#view-detail [data-back]').click();
+                  check('返回首页以测计数', t.view() === 'home', 'view=' + t.view());
+                  var ftTab = doc.querySelector('#home-tabs [data-tab="' + ft.cat + '"]');
+                  if (ftTab) ftTab.click();
+                  var addBtn = doc.querySelector('#home-body .task[data-id="' + ft.id + '"] .btn[data-act="add"]');
+                  check('首页有这项功课的 +N 按钮', !!addBtn);
+                  if (addBtn) {
+                    var today = t.today();
+                    var recBefore = t.db().records[today];
+                    var before = (recBefore && recBefore.c && recBefore.c[ft.id]) || 0;
+                    var addN = +addBtn.dataset.n || 1;
+                    addBtn.click();
+                    var recAfter = t.db().records[today];
+                    var after = (recAfter && recAfter.c && recAfter.c[ft.id]) || 0;
+                    check('键盘 / 读屏点击 +N 也能加数', after === before + addN,
+                      'before=' + before + ' after=' + after + ' n=' + addN);
+                  }
+
+                  /* 反证：计数可见时总览仍要出卡片与功课面板 */
+                  var sumBtn = doc.querySelector('#btn-mode');
+                  if (sumBtn) sumBtn.click();
+                  check('可见计数仍在总览里出卡片',
+                    doc.querySelectorAll('#home-body .sum-day').length === 1 &&
+                    !!doc.querySelector('#home-body .sum-day .panel.tasks'),
+                    'cards=' + doc.querySelectorAll('#home-body .sum-day').length);
+                  if (sumBtn) sumBtn.click();
+
+                  /* 隐藏功课后：只有它计数的那一天不该在总览留一张空卡片 */
+                  ft.hidden = true;
+                  t.selectDate(t.today());
+                  check('隐藏后首页不再列出这项功课',
+                    !doc.querySelector('#home-body .task[data-id="' + ft.id + '"]'));
+                  var modeBtn = doc.querySelector('#btn-mode');
+                  if (modeBtn) modeBtn.click();
+                  var sumCards = doc.querySelectorAll('#home-body .sum-day').length;
+                  check('只有隐藏功课计数的那天不出空卡片', sumCards === 0, 'cards=' + sumCards);
+                  check('总览说明记录被隐藏，而不是「还没有任何记录」',
+                    (doc.querySelector('#home-body .empty-state') || {}).textContent.indexOf('显示开关藏起来了') >= 0,
+                    (doc.querySelector('#home-body .empty-state') || {}).textContent);
+                  if (modeBtn) modeBtn.click();
+                  ft.hidden = false;
+                  t.selectDate(t.today());
+
+                  /* 旧日期进详情，按年窗口要包含正在看的年份 */
+                  t.selectDate('2018-05-05');
+                  t.openDetail(ft.id);
+                  var yearBtn = doc.querySelector('#detail-stats [data-range="year"]');
+                  if (yearBtn) yearBtn.click();
+                  var yearPt = (doc.querySelector('#detail-stats .period .pt') || {}).textContent || '';
+                  check('旧日期进详情后按年窗口含该年', yearPt.indexOf('2018') >= 0, 'pt=' + yearPt);
+                  check('该年在按年表中高亮',
+                    doc.querySelectorAll('#detail-stats .ycell.on').length === 1 &&
+                    /2018/.test((doc.querySelector('#detail-stats .ycell.on') || {}).textContent || ''));
+                  doc.querySelector('#view-detail [data-back]').click();
+                  t.selectDate(t.today());
                 }
               } catch (e2) {
                 failed++;
